@@ -1,12 +1,18 @@
 # Fink
-source /sw/bin/init.sh
+if test -f /sw/bin/init.sh; then
+    source /sw/bin/init.sh
+fi
 
 # Path
 export PATH=$HOME/bin:/usr/local/bin:$PATH
-fpath=( ~/.zsh/functions /usr/share/zsh/site-functions /usr/share/zsh/$ZSH_VERSION/functions)
+fpath=(~/.zsh/functions $fpath)
 
 # Alias
-alias ls='ls -wF'
+if ls --version | grep GNU >& /dev/null; then
+    alias ls='ls -F'
+else
+    alias ls='ls -wF'
+fi
 
 # History
 HISTFILE=~/.zsh/history
