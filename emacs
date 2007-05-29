@@ -94,22 +94,22 @@
 (server-start)
 
 ;; Region
-(transient-mark-mode)
+(transient-mark-mode t)
 (set-face-background 'region "#ccc")
 
 ;; Minibuffer
-(require 'minibuf-isearch)
+(require 'minibuf-isearch nil t)
 
 ;; Paren
-(require 'mic-paren)
-(paren-activate)
-(set-face-foreground 'paren-face-match "#ccc")
-(set-face-background 'paren-face-match nil)
+(when (require 'mic-paren nil t)
+  (paren-activate)
+  (set-face-foreground 'paren-face-match "#ccc")
+  (set-face-background 'paren-face-match nil))
 
 ;; Tramp 	
-(require 'tramp)
-(add-to-list 'backup-directory-alist
-             (cons tramp-file-name-regexp nil))
+(when (require 'tramp nil t)
+  (add-to-list 'backup-directory-alist
+               (cons tramp-file-name-regexp nil)))
 
 ;; Ruby
 (autoload 'ruby-mode "ruby-mode"
@@ -147,9 +147,9 @@
 
 
 
-(require 'haskell-mode)
-(setq auto-mode-alist
-      (append '(("\\.hs$" . haskell-mode)) auto-mode-alist))
+(when (require 'haskell-mode nil t)
+  (setq auto-mode-alist
+        (append '(("\\.hs$" . haskell-mode)) auto-mode-alist)))
 
 ;; CSS
 (autoload 'css-mode "css-mode" "Mode for editing CSS files" t)
