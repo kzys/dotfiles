@@ -8,10 +8,10 @@ export PATH=$HOME/bin:/usr/local/bin:$PATH
 fpath=(~/.zsh/functions $fpath)
 
 # Alias
-if ls --version | grep GNU >& /dev/null; then
-    alias ls='ls -F'
-else
+if ls -wF >& /dev/null; then
     alias ls='ls -wF'
+else
+    alias ls='ls -F'
 fi
 
 # History
