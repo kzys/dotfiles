@@ -36,9 +36,12 @@ RPROMPT='%~ '
 setopt extended_glob
 # autoload -U url-quote-magic
 # zle -N self-insert url-quote-magic
+bindkey -e
 
 # ENV
-export LANG=ja_JP.UTF-8
+export LANG=C
+export LC_CTYPE=ja_JP.UTF-8
+
 export WWW_HOME=http://www.google.co.jp/
 export CVS_RSH=ssh
 export RUBYLIB=/usr/local/lib/ruby/site_ruby/1.8/
