@@ -126,7 +126,12 @@
 
 ;; Window System
 (if (not window-system)
-    (menu-bar-mode nil))
+    (progn
+      (set-face-foreground 'font-lock-keyword-face "magenta")
+      (set-face-foreground 'font-lock-constant-face "black")
+      (set-face-foreground 'font-lock-comment-face "green")
+      (set-face-foreground 'font-lock-string-face "blue")
+      (menu-bar-mode nil)))
 
 (if (eq window-system 'mac)
     (progn
