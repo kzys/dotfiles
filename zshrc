@@ -14,6 +14,10 @@ else
     alias ls='ls -F'
 fi
 
+if which emacs-nox >& /dev/null; then
+    alias emacs='emacs-nox'
+fi
+
 # History
 HISTFILE=~/.zsh/history
 HISTSIZE=10000
