@@ -95,8 +95,12 @@
   (function (lambda ()
               (define-key c++-mode-map "\C-c\C-p" 'ff-find-other-file)
               (define-key c++-mode-map "\C-c\C-n" 'ff-find-other-file))))
+;; Objective-C and Objective-C++
 (setq auto-mode-alist
       (append '(("\\.mm?$" . objc-mode)) auto-mode-alist))
+;; C++
+(setq auto-mode-alist
+      (append '(("\\.h$" . c++-mode)) auto-mode-alist))
 
 
 
