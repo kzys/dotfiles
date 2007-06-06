@@ -50,3 +50,11 @@ export FTP_PASSIVE=1
 export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/sw/lib/freetype219/lib/pkgconfig:/sw/lib/pkgconfig:/usr/lib/pkgconfig
 
 export SVN_EDITOR=vi
+
+set-title() {
+  echo -ne "\ek$1\e\\"
+}
+
+preexec () {
+  set-title $1
+}
