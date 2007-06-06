@@ -2,9 +2,13 @@ escape ^Tt
 vbell off
 startup_message off
 
-hardstatus alwayslastline %w
+hardstatus alwayslastline "%` %-w%{=b gw}%n %t%{-}%+w"
 autodetach on
 
+## disable keys
+# lock screen
 bind ^X
 bind x
-
+# bell
+bind ^G
+bind g
