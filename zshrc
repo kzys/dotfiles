@@ -51,9 +51,14 @@ export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/sw/lib/freetype219/lib/pkgconfi
 
 export SVN_EDITOR=vi
 
-set-title() {
-  echo -ne "\ek$1\e\\"
-}
+if test $TERM = screen; then
+
+  set-title() {
+    echo -ne "\ek$1\e\\"
+  }
+else
+  set-title() {}
+fi
 
 preexec () {
   set-title $1
