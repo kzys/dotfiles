@@ -34,9 +34,6 @@ RPROMPT='%~ '
 
 # Misc
 setopt extended_glob
-# autoload -U url-quote-magic
-# zle -N self-insert url-quote-magic
-bindkey -e
 
 # ENV
 export LANG=C
@@ -49,17 +46,20 @@ export PERL5LIB=$HOME/CPAN/lib/perl5/site_perl/:$PERL5LIB
 export FTP_PASSIVE=1
 export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/sw/lib/freetype219/lib/pkgconfig:/sw/lib/pkgconfig:/usr/lib/pkgconfig
 
-export SVN_EDITOR=vi
+export EDITOR=vi
+bindkey -e
 
 if test $TERM = screen; then
-
-  set-title() {
-    echo -ne "\ek$1\e\\"
-  }
+    set-title() {
+      echo -ne "\ek$1\e\\"
+    }
 else
   set-title() {}
 fi
 
 preexec () {
   set-title $1
+}
+precmd () {
+  set-title $(print -n -P '%~')
 }
