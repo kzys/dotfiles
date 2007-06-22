@@ -12,3 +12,5 @@ bind x
 # bell
 bind ^G
 bind g
+
+defencoding utf-8

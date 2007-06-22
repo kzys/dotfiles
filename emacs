@@ -1,7 +1,14 @@
 ;; ~/.emacs.el
 (setq load-path (cons (expand-file-name "~/.emacs.d/lisp") load-path))
 (setq user-mail-address "kzys@8-p.info")
+
+(require 'un-define)
 (set-language-environment 'Japanese)
+(prefer-coding-system 'utf-8-unix)
+(set-keyboard-coding-system 'utf-8-unix)
+(set-terminal-coding-system 'utf-8-unix)
+(auto-compression-mode t)
+
 
 ;; Misc
 (column-number-mode t)
@@ -116,9 +123,9 @@
 (setq cssm-indent-function #'cssm-c-style-indenter)
 
 ;; JavaScript and ActionScript
-(add-to-list 'auto-mode-alist '("\\.js\\'" . javascript-mode))
-(add-to-list 'auto-mode-alist '("\\.as\\'" . javascript-mode))
 (autoload 'javascript-mode "javascript" nil t)
+(add-to-list 'auto-mode-alist '("\\.js\\'" . javascript-mode))
+(add-to-list 'auto-mode-alist '("\\.as\\'" . java-mode))
 
 ;; Reload
 (add-hook 'after-save-hook 'reload-browsers)
@@ -126,7 +133,7 @@
   (if (string-match "\.\\(css\\|js\\|html\\)[^/]*$" (buffer-name))
       (do-applescript "tell application \"Safari\" to do JavaScript \"location.reload(true)\" in document 1\n")))
 (defun reload-browsers())
-
+                            
 
 ;; Window System
 (if (not window-system)
