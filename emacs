@@ -19,6 +19,9 @@
 (set-cursor-color "black")
 (blink-cursor-mode 0)
 
+(when (boundp 'show-trailing-whitespace)
+  (setq-default show-trailing-whitespace t))
+
 ;; Indent
 (setq-default indent-tabs-mode nil)
 (global-set-key "\r" 'newline-and-indent)
