@@ -2,7 +2,7 @@
 (setq load-path (cons (expand-file-name "~/.emacs.d/lisp") load-path))
 (setq user-mail-address "kzys@8-p.info")
 
-(require 'un-define)
+(require 'un-define nil t)
 (set-language-environment 'Japanese)
 (prefer-coding-system 'utf-8-unix)
 (set-keyboard-coding-system 'utf-8-unix)
