@@ -23,7 +23,7 @@
   (setq-default show-trailing-whitespace t))
 
 ;; Indent
-(setq-default indent-tabs-mode nil)
+
 (global-set-key "\r" 'newline-and-indent)
 
 (global-set-key "\C-ch" 'help)
@@ -93,13 +93,6 @@
 (require 'cc-mode)
 
 (setq c-default-style "k&r")
-
-(add-hook 'c-mode-common-hook
-          '(lambda ()
-             (progn
-               (setq indent-width 4
-                     c-basic-offset 4
-                     indent-tabs-mode nil))))
 
 (add-hook 'c++-mode-hook
   (function (lambda ()
@@ -194,3 +187,16 @@
       (global-set-key [(alt left)] 'beginning-of-line)
       (global-set-key [(alt right)] 'end-of-line)
       (global-set-key [(alt b)] 'compile)))
+
+
+;; Company
+(if (string-match "ce-lab\.net$" (getenv "HOSTNAME"))
+	(progn
+	  (setq-default tab-width 4)
+	  (add-hook 'c-mode-common-hook
+				'(lambda ()
+				   (progn
+					 (setq indent-width 4
+						   c-basic-offset 4
+						   indent-tabs-mode t)))))
+  (setq indent-tabs-mode nil))
