@@ -73,7 +73,7 @@
 (when (require 'psvn nil t)
   (add-to-list 'exec-path "/sw/bin"))
 
-;; Tramp 	
+;; Tramp
 (when (require 'tramp nil t)
   (add-to-list 'backup-directory-alist
                (cons tramp-file-name-regexp nil)))
@@ -138,11 +138,11 @@
 
 ;; Reload
 (add-hook 'after-save-hook 'reload-browsers)
-(defun reload-browsers() 
+(defun reload-browsers()
   (if (string-match "\.\\(css\\|js\\|html\\)[^/]*$" (buffer-name))
       (do-applescript "tell application \"Safari\" to do JavaScript \"location.reload(true)\" in document 1\n")))
 (defun reload-browsers())
-                            
+
 
 ;; Window System
 (if (not window-system)
@@ -159,11 +159,11 @@
             (append (list '(width . 90)
                           '(height . 20))
 		    default-frame-alist))
-      
+
 
       (setenv "PATH"
               (concat (expand-file-name "~/bin") ":" (getenv "PATH")))
-       
+
       (set-default-coding-systems 'utf-8-unix)
       (set-terminal-coding-system 'utf-8)
       (set-keyboard-coding-system 'sjis-mac)
@@ -171,16 +171,16 @@
       (set-file-name-coding-system 'utf-8)
 
       (set-face-background 'region "#ccc")
-      
+
       (require 'carbon-font)
-      
+
       (set-default-font
        "-*-*-medium-r-normal--14-*-*-*-*-*-fontset-hiraginokaku")
-      
+
       (add-to-list
        'default-frame-alist
        '(font . "-*-*-medium-r-normal--14-*-*-*-*-*-fontset-hiraginokaku"))
-      
+
       (setq mac-allow-anti-aliasing t)
 
       (setq mac-command-key-is-meta nil)
