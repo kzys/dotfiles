@@ -69,6 +69,10 @@
   (set-face-foreground 'paren-face-match "#ccc")
   (set-face-background 'paren-face-match nil))
 
+;; Subversion
+(when (require 'psvn nil t)
+  (add-to-list 'exec-path "/sw/bin"))
+
 ;; Tramp 	
 (when (require 'tramp nil t)
   (add-to-list 'backup-directory-alist
@@ -92,20 +96,29 @@
 ;; C
 (require 'cc-mode)
 
-(setq c-default-style "k&r")
-
-(add-hook 'c++-mode-hook
+(add-hook 'c-mode-common-hook
   (function (lambda ()
-              (define-key c++-mode-map "\C-c\C-p" 'ff-find-other-file)
-              (define-key c++-mode-map "\C-c\C-n" 'ff-find-other-file))))
+	      (setq indent-width 4
+		       c-basic-offset 4
+		       indent-tabs-mode nil)
+              (define-key c-mode-base-map "\C-c\C-n" 'ff-find-other-file))))
+
 ;; Objective-C and Objective-C++
-(setq auto-mode-alist
-      (append '(("\\.mm?$" . objc-mode)) auto-mode-alist))
+(when (require 'objc-c-mode nil t)
+  (setq auto-mode-alist
+	(append '(("\\.mm?$" . objc-mode)) auto-mode-alist)))
+
 ;; C++
 (setq auto-mode-alist
       (append '(("\\.h$" . c++-mode)) auto-mode-alist))
 
-
+(setq c-default-style '((objc-mode . "objc")
+			(c-mode . "k&r")))
+(setq c-default-style '((objc-mode . "objc")
+			(c-mode . "k&r")))
+(setq cc-other-file-alist
+      '(("\\.mm?$" (".h"))
+	("\\.h$" (".c" ".cpp" ".m" ".mm"))))
 
 (when (require 'haskell-mode nil t)
   (setq auto-mode-alist
@@ -190,13 +203,10 @@
 
 
 ;; Company
-(if (string-match "ce-lab\.net$" (getenv "HOSTNAME"))
+(if (string-match "ce-lab\.net$" (or (getenv "HOSTNAME") ""))
 	(progn
 	  (setq-default tab-width 4)
 	  (add-hook 'c-mode-common-hook
 				'(lambda ()
-				   (progn
-					 (setq indent-width 4
-						   c-basic-offset 4
-						   indent-tabs-mode t)))))
-  (setq indent-tabs-mode nil))
+				   (setq indent-tabs-mode t)))))
+
