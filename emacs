@@ -19,16 +19,28 @@
 (set-cursor-color "black")
 (blink-cursor-mode 0)
 
+(defconst *dmacro-key* "\C-c\C-d")
+(global-set-key *dmacro-key* 'dmacro-exec)
+(autoload 'dmacro-exec "dmacro" nil t)
+
 (when (boundp 'show-trailing-whitespace)
   (setq-default show-trailing-whitespace t))
 
 ;; Indent
 
 (global-set-key "\r" 'newline-and-indent)
-
+(global-set-key "\C-a" 'beggining-of-line-or-indented-line)
+(defun beggining-of-line-or-indented-line (current-point)
+  (interactive "d")
+  (if (bolp)
+      (back-to-indentation)
+    (beginning-of-line)))
 (global-set-key "\C-ch" 'help)
 
 (put 'downcase-region 'disabled nil)
+
+(require 'dabbrev-expand-multiple)
+(global-set-key "\M-/" 'dabbrev-expand-multiple)
 
 ;; Buffer
 (iswitchb-mode t)
@@ -96,6 +108,7 @@
 ;; C
 (require 'cc-mode)
 
+(setq-default indent-tabs-mode nil)
 (add-hook 'c-mode-common-hook
   (function (lambda ()
 	      (setq indent-width 4
