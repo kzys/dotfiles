@@ -43,12 +43,13 @@
     (beginning-of-line)))
 (defun indent-line-or-dabbrev-expand ()
   (interactive)
-  (if (save-excursion
-        (backward-char 1)
-        (looking-at "[-A-Za-z]"))
+  (if (and (or (eolp) (looking-at "[ ;\"()<>]"))
+           (save-excursion
+             (backward-char 1)
+             (looking-at "[-A-Za-z]")))
       (if (string-match "lisp" (symbol-name major-mode))
           (lisp-complete-symbol)
-        (dabbrev-expand nil))
+        (dabbrev-expand t))
     (indent-according-to-mode)))
 
 (global-set-key "\t" 'indent-line-or-dabbrev-expand)
@@ -125,12 +126,14 @@
 (require 'cc-mode)
 
 (setq-default indent-tabs-mode nil)
+
+(setq-default tab-width 4)
 (add-hook 'c-mode-common-hook
-  (function (lambda ()
-	      (setq indent-width 4
-		       c-basic-offset 4
-		       indent-tabs-mode nil)
-              (define-key c-mode-base-map "\C-c\C-n" 'ff-find-other-file))))
+		  '(lambda ()
+			 (setq indent-width 4
+				   c-basic-offset 4)
+			 (setq indent-tabs-mode (numberp (string-match "ce-lab\.net$" (or (getenv "HOSTNAME") ""))))))
+(define-key c-mode-base-map "\C-c\C-n" 'ff-find-other-file)
 
 ;; Objective-C and Objective-C++
 (when (require 'objc-c-mode nil t)
@@ -229,13 +232,4 @@
       (global-set-key [(alt left)] 'beginning-of-line)
       (global-set-key [(alt right)] 'end-of-line)
       (global-set-key [(alt b)] 'compile)))
-
-
-;; Company
-(if (string-match "ce-lab\.net$" (or (getenv "HOSTNAME") ""))
-	(progn
-	  (setq-default tab-width 4)
-	  (add-hook 'c-mode-common-hook
-				'(lambda ()
-				   (setq indent-tabs-mode t)))))
 
