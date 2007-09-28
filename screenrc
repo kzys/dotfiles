@@ -1,4 +1,5 @@
 escape ^z^z
+bind ^a other
 vbell off
 startup_message off
 
