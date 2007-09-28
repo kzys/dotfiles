@@ -11,6 +11,10 @@
 
 
 ;; Misc
+(global-set-key "\C-ch" 'help)
+(global-set-key "\C-cb" 'compile)
+(global-set-key "\C-h" 'backward-delete-char-untabify)
+
 (column-number-mode t)
 (tool-bar-mode nil)
 
@@ -19,6 +23,9 @@
 (set-cursor-color "black")
 (blink-cursor-mode 0)
 
+(put 'downcase-region 'disabled nil)
+
+;; Dynamic Macro
 (defconst *dmacro-key* "\C-c\C-d")
 (global-set-key *dmacro-key* 'dmacro-exec)
 (autoload 'dmacro-exec "dmacro" nil t)
@@ -27,7 +34,6 @@
   (setq-default show-trailing-whitespace t))
 
 ;; Indent
-
 (global-set-key "\r" 'newline-and-indent)
 (global-set-key "\C-a" 'beggining-of-line-or-indented-line)
 (defun beggining-of-line-or-indented-line (current-point)
@@ -35,12 +41,18 @@
   (if (bolp)
       (back-to-indentation)
     (beginning-of-line)))
-(global-set-key "\C-ch" 'help)
+(defun indent-line-or-dabbrev-expand ()
+  (interactive)
+  (if (save-excursion
+        (backward-char 1)
+        (looking-at "[-A-Za-z]"))
+      (if (string-match "lisp" (symbol-name major-mode))
+          (lisp-complete-symbol)
+        (dabbrev-expand nil))
+    (indent-according-to-mode)))
 
-(put 'downcase-region 'disabled nil)
-
-(require 'dabbrev-expand-multiple)
-(global-set-key "\M-/" 'dabbrev-expand-multiple)
+(global-set-key "\t" 'indent-line-or-dabbrev-expand)
+(define-key lisp-mode-shared-map "\t" 'indent-line-or-dabbrev-expand)
 
 ;; Buffer
 (iswitchb-mode t)
@@ -74,6 +86,10 @@
 
 ;; Minibuffer
 (require 'minibuf-isearch nil t)
+(mapcar (lambda (keymap)
+          (define-key keymap "\C-n" 'next-history-element)
+          (define-key keymap "\C-p" 'previous-history-element))
+        (list minibuffer-local-map minibuffer-local-ns-map minibuffer-local-completion-map))
 
 ;; Paren
 (when (require 'mic-paren nil t)
@@ -160,10 +176,10 @@
 ;; Window System
 (if (not window-system)
     (progn
-      (set-face-foreground 'font-lock-keyword-face "magenta")
-      (set-face-foreground 'font-lock-constant-face "black")
-      (set-face-foreground 'font-lock-comment-face "green")
-      (set-face-foreground 'font-lock-string-face "blue")
+;;       (set-face-foreground 'font-lock-keyword-face "magenta")
+;;       (set-face-foreground 'font-lock-constant-face "black")
+;;       (set-face-foreground 'font-lock-comment-face "green")
+;;       (set-face-foreground 'font-lock-string-face "blue")
       (menu-bar-mode nil)))
 
 (if (eq window-system 'mac)
