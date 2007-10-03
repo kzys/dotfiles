@@ -2,8 +2,13 @@
 (setq load-path (cons (expand-file-name "~/.emacs.d/lisp") load-path))
 (setq user-mail-address "kzys@8-p.info")
 
+(defun community-engine-p ()
+  (numberp (string-match "ce-lab\.net$" (or (getenv "HOSTNAME") ""))))
+
 (require 'un-define nil t)
 (set-language-environment 'Japanese)
+(if (community-engine-p)
+    (set-default-coding-systems 'utf-8-dos))
 (prefer-coding-system 'utf-8-unix)
 (set-keyboard-coding-system 'utf-8-unix)
 (set-terminal-coding-system 'utf-8-unix)
@@ -132,7 +137,7 @@
 		  '(lambda ()
 			 (setq indent-width 4
 				   c-basic-offset 4)
-			 (setq indent-tabs-mode (numberp (string-match "ce-lab\.net$" (or (getenv "HOSTNAME") ""))))))
+			 (setq indent-tabs-mode (community-engine-p))))
 (define-key c-mode-base-map "\C-c\C-n" 'ff-find-other-file)
 
 ;; Objective-C and Objective-C++
