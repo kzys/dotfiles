@@ -18,6 +18,9 @@
 ;; Misc
 (global-set-key "\C-ch" 'help)
 (global-set-key "\C-cb" 'compile)
+(global-set-key "\C-cv" 'svn-status)
+(global-set-key "\C-cg" 'grep)
+(global-set-key "\C-co" 'occur)
 (global-set-key "\C-h" 'backward-delete-char-untabify)
 
 (column-number-mode t)
