@@ -1,6 +1,9 @@
 ;; -*- emacs-lisp -*-
 ;; ~/.emacs.el
-(setq load-path (cons (expand-file-name "~/.emacs.d/lisp") load-path))
+
+(mapc (lambda (path)
+        (setq load-path (cons (expand-file-name path) load-path)))
+      '("~/.emacs.d/lisp" "~/.emacs.d/lisp/howm" "~/share/emacs/site-lisp"))
 (setq user-mail-address "kzys@8-p.info")
 
 (defun community-engine-p ()
@@ -184,6 +187,14 @@
   (if (string-match "\.\\(css\\|js\\|html\\)[^/]*$" (buffer-name))
       (do-applescript "tell application \"Safari\" to do JavaScript \"location.reload(true)\" in document 1\n")))
 (defun reload-browsers())
+
+;; Howm
+(setq howm-menu-lang 'ja)
+(global-set-key "\C-c,," 'howm-menu)
+(autoload 'howm-menu "howm-mode" "Hitori Otegaru Wiki Modoki" t)
+(setq howm-template "= <<< %title%cursor\n\n")
+(setq howm-menu-expiry-hours 2)
+(setq howm-menu-refresh-after-save nil)
 
 
 ;; Window System
