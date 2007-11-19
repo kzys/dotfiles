@@ -1,3 +1,4 @@
+;; -*- emacs-lisp -*-
 ;; ~/.emacs.el
 (setq load-path (cons (expand-file-name "~/.emacs.d/lisp") load-path))
 (setq user-mail-address "kzys@8-p.info")
@@ -108,6 +109,7 @@
 
 ;; Subversion
 (when (require 'psvn nil t)
+  (setq svn-status-svn-environment-var-list '("LANG=C"))
   (add-to-list 'exec-path "/sw/bin"))
 
 ;; Tramp
@@ -195,11 +197,10 @@
 
 (if (eq window-system 'mac)
     (progn
-      (setq default-frame-alist
-            (append (list '(width . 90)
-                          '(height . 20))
-		    default-frame-alist))
-
+      (modify-frame-parameters nil
+                               '((top . 0)
+                                 (width . 90)
+                                 (height . 38)))
 
       (setenv "PATH"
               (concat (expand-file-name "~/bin") ":" (getenv "PATH")))
