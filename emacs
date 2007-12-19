@@ -196,6 +196,11 @@
 (setq howm-menu-expiry-hours 2)
 (setq howm-menu-refresh-after-save nil)
 
+;; MozRepl
+(autoload 'moz-minor-mode "moz" "Mozilla Minor and Inferior Mozilla Modes" t)
+
+;; Flymake
+(require 'flymake)
 
 ;; Window System
 (if (not window-system)
@@ -224,14 +229,19 @@
 
       (set-face-background 'region "#ccc")
 
-      (require 'carbon-font)
+      ;; Font
+      (create-fontset-from-mac-roman-font
+       "-apple-monaco-medium-r-normal--14-*-*-*-*-*-iso10646-1"
+       nil "monospace")
+      (set-fontset-font "fontset-monospace"
+                        'japanese-jisx0208
+                        '("ヒラギノ角ゴ pro w4*" . "jisx0208.*"))
+      (set-fontset-font "fontset-monospace"
+                        'katakana-jisx0201
+                        '("ヒラギノ角ゴ pro w4*" . "jisx0201.*"))
+      (set-frame-font "fontset-monospace")
 
-      (set-default-font
-       "-*-*-medium-r-normal--14-*-*-*-*-*-fontset-hiraginokaku")
-
-      (add-to-list
-       'default-frame-alist
-       '(font . "-*-*-medium-r-normal--14-*-*-*-*-*-fontset-hiraginokaku"))
+      (mac-input-method-mode t)
 
       (setq mac-allow-anti-aliasing t)
 
