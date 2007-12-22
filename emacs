@@ -202,6 +202,16 @@
 ;; Flymake
 (require 'flymake)
 
+;; Auto Insert
+(setq auto-insert-directory  ;; don't forget last slash!
+      (expand-file-name "~/.emacs.d/template/"))
+(auto-insert-mode t)
+(setq auto-insert-alist
+      '(("\\.pl$" . "_.pl")
+        ("\\.rb$" . "_.rb")))
+(add-hook 'find-file-hooks 'auto-insert)
+(setq auto-insert-query nil)
+
 ;; Window System
 (if (not window-system)
     (progn
