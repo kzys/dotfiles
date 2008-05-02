@@ -5,7 +5,7 @@
 
 # Path
 # export PATH=$HOME/bin:/usr/local/bin:$PATH
-export PATH=$HOME/bin:/usr/local/bin:/opt/local/bin:/usr/bin:/bin
+export PATH=$HOME/local/bin:/usr/local/bin:/opt/local/bin:/usr/bin:/bin
 fpath=(~/.zsh/functions $fpath)
 
 # Alias
@@ -45,8 +45,8 @@ export LC_MESSAGES=C
 export WWW_HOME=http://www.google.co.jp/
 export CVS_RSH=ssh
 export RUBYLIB=/usr/local/lib/ruby/site_ruby/1.8
-export PERL5LIB=$HOME/lib/perl5/site_perl
-export PYTHONPATH=$HOME/lib/python
+export PERL5LIB=$HOME/local/lib/perl5/site_perl
+export PYTHONPATH=$HOME/local/lib/python
 export FTP_PASSIVE=1
 export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/lib/pkgconfig
 # export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/sw/lib/freetype219/lib/pkgconfig:/sw/lib/pkgconfig:/usr/lib/pkgconfig
