@@ -3,21 +3,19 @@
 
 (mapc (lambda (path)
         (setq load-path (cons (expand-file-name path) load-path)))
-      '("~/.emacs.d/lisp" "~/.emacs.d/lisp/howm" "~/share/emacs/site-lisp"))
-(setq user-mail-address "kzys@8-p.info")
+      '("~/.emacs.d/lisp" "~/.emacs.d/lisp/howm" "~/local/share/emacs/site-lisp"))
 
-(defun community-engine-p ()
-  (numberp (string-match "ce-lab\.net$" (or (getenv "HOSTNAME") ""))))
+(setq user-mail-address "kzys@8-p.info")
 
 (require 'un-define nil t)
 (set-language-environment 'Japanese)
-(if (community-engine-p)
-    (set-default-coding-systems 'utf-8-dos))
 (prefer-coding-system 'utf-8-unix)
 (set-keyboard-coding-system 'utf-8-unix)
 (set-terminal-coding-system 'utf-8-unix)
 (auto-compression-mode t)
 
+(setq-default indent-tabs-mode nil)
+(setq-default tab-width 4)
 
 ;; Misc
 (global-set-key "\C-ch" 'help)
@@ -113,7 +111,12 @@
 ;; Subversion
 (when (require 'psvn nil t)
   (setq svn-status-svn-environment-var-list '("LANG=C"))
-  (add-to-list 'exec-path "/sw/bin"))
+  )
+
+;; Mercurial in ~/local
+(setq exec-path
+      (cons (expand-file-name "~/local/bin") exec-path))
+(setenv "PYTHONPATH" (expand-file-name "~/local/lib/python"))
 
 ;; Tramp
 (when (require 'tramp nil t)
@@ -137,33 +140,28 @@
 
 ;; C
 (require 'cc-mode)
+(setq c-default-style '((c-mode . "k&r")))
 
-(setq-default indent-tabs-mode nil)
-
-(setq-default tab-width 4)
 (add-hook 'c-mode-common-hook
 		  '(lambda ()
 			 (setq indent-width 4
-				   c-basic-offset 4)
-			 (setq indent-tabs-mode (community-engine-p))))
+				   c-basic-offset 4)))
 (define-key c-mode-base-map "\C-c\C-n" 'ff-find-other-file)
 
 ;; Objective-C and Objective-C++
 (when (require 'objc-c-mode nil t)
-  (setq auto-mode-alist
-	(append '(("\\.mm?$" . objc-mode)) auto-mode-alist)))
+  (setq c-default-style
+        (cons '(objc-mode . "objc") c-default-style)
+        auto-mode-alist
+        (cons '("\\.mm?$" . objc-mode) auto-mode-alist)))
 
 ;; C++
 (setq auto-mode-alist
       (append '(("\\.h$" . c++-mode)) auto-mode-alist))
 
-(setq c-default-style '((objc-mode . "objc")
-			(c-mode . "k&r")))
-(setq c-default-style '((objc-mode . "objc")
-			(c-mode . "k&r")))
 (setq cc-other-file-alist
       '(("\\.mm?$" (".h"))
-	("\\.h$" (".c" ".cpp" ".m" ".mm"))))
+        ("\\.h$" (".c" ".cpp" ".m" ".mm"))))
 
 (when (require 'haskell-mode nil t)
   (setq auto-mode-alist
@@ -176,10 +174,9 @@
               auto-mode-alist))
 (setq cssm-indent-function #'cssm-c-style-indenter)
 
-;; JavaScript and ActionScript
-(autoload 'javascript-mode "javascript" nil t)
-(add-to-list 'auto-mode-alist '("\\.js\\'" . javascript-mode))
-(add-to-list 'auto-mode-alist '("\\.as\\'" . java-mode))
+;; JavaScript
+(require 'js2-mode)
+(add-to-list 'auto-mode-alist '("\\.js\\'" . js2-mode))
 
 ;; Reload
 (add-hook 'after-save-hook 'reload-browsers)
@@ -212,6 +209,22 @@
 (add-hook 'find-file-hooks 'auto-insert)
 (setq auto-insert-query nil)
 
+;; Anything
+(require 'anything)
+(global-set-key "\C-x\C-a" 'anything)
+(define-key anything-map "\C-n" 'anything-next-line)
+(define-key anything-map "\C-p" 'anything-previous-line)
+
+;; Perl
+(setq auto-mode-alist
+      (append '(("\\.p[lm]$" . cperl-mode)) auto-mode-alist))
+;; Perl Best Practices 2.11
+(setq cperl-close-paren-offset -4
+      cperl-continued-statement-offset 4
+      cperl-indent-level 4
+      cperl-indent-parens-as-block t
+      cperl-tab-always-indent t)
+
 ;; Window System
 (if (not window-system)
     (progn
@@ -225,8 +238,8 @@
     (progn
       (modify-frame-parameters nil
                                '((top . 0)
-                                 (width . 90)
-                                 (height . 38)))
+                                 (width . 100)
+                                 (height . 40)))
 
       (setenv "PATH"
               (concat (expand-file-name "~/bin") ":" (getenv "PATH")))
