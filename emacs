@@ -17,11 +17,12 @@
 (setq-default tab-width 4)
 
 ;; Misc
+(global-set-key "\C-h" 'backward-delete-char-untabify)
 (global-set-key "\C-ch" 'help)
+
 (global-set-key "\C-cb" 'compile)
 (global-set-key "\C-cg" 'grep)
 (global-set-key "\C-co" 'occur)
-(global-set-key "\C-h" 'backward-delete-char-untabify)
 
 (column-number-mode t)
 (tool-bar-mode -1)
@@ -50,19 +51,6 @@
   (if (bolp)
       (back-to-indentation)
     (beginning-of-line)))
-(defun indent-line-or-dabbrev-expand ()
-  (interactive)
-  (if (and (or (eolp) (looking-at "[ ;\"()<>]"))
-           (save-excursion
-             (backward-char 1)
-             (looking-at "[-A-Za-z]")))
-      (if (string-match "lisp" (symbol-name major-mode))
-          (lisp-complete-symbol)
-        (dabbrev-expand t))
-    (indent-according-to-mode)))
-
-(global-set-key "\t" 'indent-line-or-dabbrev-expand)
-(define-key lisp-mode-shared-map "\t" 'indent-line-or-dabbrev-expand)
 
 ;; Buffer
 (require 'uniquify)
