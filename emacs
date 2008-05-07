@@ -65,7 +65,6 @@
 (define-key lisp-mode-shared-map "\t" 'indent-line-or-dabbrev-expand)
 
 ;; Buffer
-(iswitchb-mode t)
 (require 'uniquify)
 (setq uniquify-buffer-name-style 'post-forward-angle-brackets)
 
@@ -221,10 +220,19 @@
 (setq auto-insert-query nil)
 
 ;; Anything
-(require 'anything)
-(global-set-key "\C-x\C-a" 'anything)
-(define-key anything-map "\C-n" 'anything-next-line)
-(define-key anything-map "\C-p" 'anything-previous-line)
+(setq anything-c-use-standard-keys t)
+(when (require 'anything-config nil t)
+  (global-set-key "\C-xb" 'anything)
+
+  (setq anything-sources
+      (list anything-c-source-buffers
+            anything-c-source-calculation-result
+            anything-c-source-file-name-history
+            anything-c-source-info-pages
+            anything-c-source-man-pages
+            anything-c-source-locate
+            anything-c-source-emacs-commands)))
+
 
 ;; Perl
 (setq auto-mode-alist
