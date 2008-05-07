@@ -19,13 +19,13 @@
 ;; Misc
 (global-set-key "\C-ch" 'help)
 (global-set-key "\C-cb" 'compile)
-(global-set-key "\C-cv" 'svn-status)
 (global-set-key "\C-cg" 'grep)
 (global-set-key "\C-co" 'occur)
 (global-set-key "\C-h" 'backward-delete-char-untabify)
 
 (column-number-mode t)
-(tool-bar-mode nil)
+(tool-bar-mode -1)
+(menu-bar-mode (if window-system 0 -1))
 
 (global-font-lock-mode t)
 
@@ -108,8 +108,8 @@
 
 ;; Subversion
 (when (require 'psvn nil t)
-  (setq svn-status-svn-environment-var-list '("LANG=C"))
-  )
+  (setq svn-status-svn-environment-var-list '("LANG=ja_JP.UTF-8"))
+  (global-set-key "\C-cv" 'svn-status))
 
 ;; Mercurial
 ;; installed on ~/local
@@ -245,15 +245,7 @@
       cperl-indent-parens-as-block t
       cperl-tab-always-indent t)
 
-;; Window System
-(if (not window-system)
-    (progn
-;;       (set-face-foreground 'font-lock-keyword-face "magenta")
-;;       (set-face-foreground 'font-lock-constant-face "black")
-;;       (set-face-foreground 'font-lock-comment-face "green")
-;;       (set-face-foreground 'font-lock-string-face "blue")
-      (menu-bar-mode nil)))
-
+;; Mac
 (if (eq window-system 'mac)
     (progn
       (modify-frame-parameters nil
