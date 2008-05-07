@@ -1,9 +1,8 @@
 ;; -*- emacs-lisp -*-
 ;; ~/.emacs.el
 
-(mapc (lambda (path)
-        (setq load-path (cons (expand-file-name path) load-path)))
-      '("~/.emacs.d/lisp" "~/.emacs.d/lisp/howm" "~/local/share/emacs/site-lisp"))
+(setq load-path
+      (cons (expand-file-name "~/.emacs.d/lisp") load-path))
 
 (setq user-mail-address "kzys@8-p.info")
 
@@ -113,10 +112,14 @@
   (setq svn-status-svn-environment-var-list '("LANG=C"))
   )
 
-;; Mercurial in ~/local
+;; Mercurial
+;; installed on ~/local
 (setq exec-path
       (cons (expand-file-name "~/local/bin") exec-path))
 (setenv "PYTHONPATH" (expand-file-name "~/local/lib/python"))
+
+(when (require 'vc-hg nil t)
+ (setq vc-handled-backends (cons 'HG vc-handled-backends)))
 
 ;; Tramp
 (when (require 'tramp nil t)
@@ -140,12 +143,19 @@
 
 ;; C
 (require 'cc-mode)
+(c-add-style "mlterm" '((indent-tabs-mode . t)
+                        (c-basic-offset . 4)) nil)
 (setq c-default-style '((c-mode . "k&r")))
 
 (add-hook 'c-mode-common-hook
 		  '(lambda ()
-			 (setq indent-width 4
-				   c-basic-offset 4)))
+             (if (and (string-match "/mlterm/" buffer-file-name)
+                      (not (string-match "/mac/" buffer-file-name)))
+                 (c-set-style "mlterm")
+               (c-set-style "k&r")
+               (setq indent-tabs-mode nil
+                     indent-width 4
+                     c-basic-offset 4))))
 (define-key c-mode-base-map "\C-c\C-n" 'ff-find-other-file)
 
 ;; Objective-C and Objective-C++
@@ -170,8 +180,7 @@
 ;; CSS
 (autoload 'css-mode "css-mode" "Mode for editing CSS files" t)
 (setq auto-mode-alist
-      (append '(("\\.css$" . css-mode))
-              auto-mode-alist))
+      (cons '("\\.css$" . css-mode) auto-mode-alist))
 (setq cssm-indent-function #'cssm-c-style-indenter)
 
 ;; JavaScript
@@ -186,9 +195,11 @@
 (defun reload-browsers())
 
 ;; Howm
-(setq howm-menu-lang 'ja)
+(setq load-path
+      (cons (expand-file-name "~/local/share/emacs/site-lisp/howm") load-path))
+(autoload 'howm-menu "howm" "Hitori Otegaru Wiki Modoki" t)
 (global-set-key "\C-c,," 'howm-menu)
-(autoload 'howm-menu "howm-mode" "Hitori Otegaru Wiki Modoki" t)
+(setq howm-menu-lang 'ja)
 (setq howm-template "= <<< %title%cursor\n\n")
 (setq howm-menu-expiry-hours 2)
 (setq howm-menu-refresh-after-save nil)
@@ -217,7 +228,8 @@
 
 ;; Perl
 (setq auto-mode-alist
-      (append '(("\\.p[lm]$" . cperl-mode)) auto-mode-alist))
+      (append '(("\\.p[lm]$" . cperl-mode)
+                ("\\.t$" . cperl-mode)) auto-mode-alist))
 ;; Perl Best Practices 2.11
 (setq cperl-close-paren-offset -4
       cperl-continued-statement-offset 4
