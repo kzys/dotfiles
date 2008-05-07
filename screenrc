@@ -2,9 +2,15 @@ escape ^z^z
 bind ^a other
 vbell off
 startup_message off
-
-hardstatus alwayslastline "%` %-w%{=b gw}%n %t%{-}%+w"
 autodetach on
+
+# show selected window on title-bar
+termcapinfo xterm* "hs:ts=\E]2;:fs=\007:ds=\E]0"
+hardstatus string "%t"
+msgwait 1
+
+# show all window on bottom
+caption always " %-w%{= d.}%n:%t%{-}%+w"
 
 ## disable keys
 # lock screen
@@ -13,5 +19,8 @@ bind x
 # bell
 bind ^G
 bind g
+
+# C-z . -> reload ~/.screenrc
+bind . eval "source $HOME/.screenrc"
 
 defencoding utf-8
