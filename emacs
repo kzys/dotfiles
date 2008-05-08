@@ -208,27 +208,27 @@
 (setq auto-insert-query nil)
 
 ;; Anything
-(setq anything-type-attributes
-  '((file (action . (("Find File" . find-file)
-                     ("Find File?" . (lambda (file)
-                                       (find-file (read-file-name "Find file: " file file t))))
-                     ("Delete File" . (lambda (file)
-                                        (if (y-or-n-p (format "Really delete file %s? "
-                                                              file))
-                                            (delete-file file)))))))
-    (buffer (action . (("Switch to Buffer" . switch-to-buffer)
-                       ("Pop to Buffer"    . pop-to-buffer)
-                       ("Display Buffer"   . display-buffer)
-                       ("Kill Buffer"      . kill-buffer))))))
-
 (setq anything-c-use-standard-keys t)
 (when (require 'anything-config nil t)
   (global-set-key "\C-xb" 'anything)
 
+  (setq anything-type-attributes
+        '((file (action . (("Find File" . find-file)
+                           ("Find File?" . (lambda (file)
+                                             (find-file (read-file-name "Find file: " file file t))))
+                           ("Delete File" . (lambda (file)
+                                              (if (y-or-n-p (format "Really delete file %s? "
+                                                                    file))
+                                                  (delete-file file)))))))
+          (buffer (action . (("Switch to Buffer" . switch-to-buffer)
+                             ("Pop to Buffer"    . pop-to-buffer)
+                             ("Display Buffer"   . display-buffer)
+                             ("Kill Buffer"      . kill-buffer))))))
+
   (defun anything-select-action-or-execute-2nd-action ()
     (interactive)
     (when anything-saved-sources
-      (anything-next-line)
+      (anything-next-line) ;; FIXME: fragile...
       (exit-minibuffer))
     (anything-select-action))
   (define-key anything-map "\t" 'anything-select-action-or-execute-2nd-action)
