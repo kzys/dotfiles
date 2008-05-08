@@ -13,8 +13,10 @@
 (set-terminal-coding-system 'utf-8-unix)
 (auto-compression-mode t)
 
-(setq-default indent-tabs-mode nil)
-(setq-default tab-width 4)
+(setq-default indent-tabs-mode nil
+              tab-width 4)
+(when (boundp 'show-trailing-whitespace)
+  (setq-default show-trailing-whitespace t))
 
 ;; Misc
 (global-set-key "\C-h" 'backward-delete-char-untabify)
@@ -39,9 +41,6 @@
 (defconst *dmacro-key* "\C-c\C-d")
 (global-set-key *dmacro-key* 'dmacro-exec)
 (autoload 'dmacro-exec "dmacro" nil t)
-
-(when (boundp 'show-trailing-whitespace)
-  (setq-default show-trailing-whitespace t))
 
 ;; Indent
 (global-set-key "\r" 'newline-and-indent)
@@ -117,9 +116,9 @@
 (autoload 'ruby-mode "ruby-mode"
   "Mode for editing ruby source files" t)
 (setq auto-mode-alist
-      (append '(("\\.rb$" . ruby-mode)) auto-mode-alist))
-(setq interpreter-mode-alist (append '(("ruby" . ruby-mode))
-                                     interpreter-mode-alist))
+      (cons '("\\.rb$" . ruby-mode) auto-mode-alist))
+(setq interpreter-mode-alist
+      (cons '("ruby" . ruby-mode) interpreter-mode-alist))
 (autoload 'run-ruby "inf-ruby"
   "Run an inferior Ruby process")
 (autoload 'inf-ruby-keys "inf-ruby"
@@ -149,12 +148,13 @@
 (when (require 'objc-c-mode nil t)
   (setq c-default-style
         (cons '(objc-mode . "objc") c-default-style)
+
         auto-mode-alist
         (cons '("\\.mm?$" . objc-mode) auto-mode-alist)))
 
 ;; C++
 (setq auto-mode-alist
-      (append '(("\\.h$" . c++-mode)) auto-mode-alist))
+      (cons '("\\.h$" . c++-mode) auto-mode-alist))
 
 (setq cc-other-file-alist
       '(("\\.mm?$" (".h"))
@@ -162,7 +162,7 @@
 
 (when (require 'haskell-mode nil t)
   (setq auto-mode-alist
-        (append '(("\\.hs$" . haskell-mode)) auto-mode-alist)))
+        (cons '("\\.hs$" . haskell-mode) auto-mode-alist)))
 
 ;; CSS
 (autoload 'css-mode "css-mode" "Mode for editing CSS files" t)
