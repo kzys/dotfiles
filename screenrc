@@ -20,6 +20,9 @@ bind x
 bind ^G
 bind g
 
+# don't use flow control
+defflow off
+
 # C-z . -> reload ~/.screenrc
 bind . eval "source $HOME/.screenrc"
 
