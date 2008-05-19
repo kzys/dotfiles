@@ -34,7 +34,7 @@ PROMPT='%# '
 RPROMPT='%~ '
 
 # Misc
-setopt extended_glob print_eight_bit
+setopt extended_glob print_eight_bit noflow_control
 # unsetopt prompt_cr
 WORDCHARS='*?_-.[]~=&;!#$%^(){}<>:'
 
