@@ -30,8 +30,11 @@ autoload -U compinit
 compinit
 
 # Prompt
-PROMPT='%# '
-RPROMPT='%~ '
+autoload -U colors
+colors
+PROMPT="$fg[green]%~$reset_color
+%# "
+# RPROMPT="%~ "
 
 # Misc
 setopt extended_glob print_eight_bit noflow_control
