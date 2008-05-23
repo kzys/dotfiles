@@ -45,10 +45,11 @@ WORDCHARS='*?_-.[]~=&;!#$%^(){}<>:'
 export LANG=ja_JP.UTF-8
 export LC_MESSAGES=C
 
+export PAGER=less
 export WWW_HOME=http://www.google.co.jp/
 export CVS_RSH=ssh
 export RUBYLIB=/usr/local/lib/ruby/site_ruby/1.8
-export PERL5LIB=$HOME/local/lib/perl5/site_perl
+export PERL5LIB=$HOME/local/lib/perl5/site_perl/5.8.8
 export PYTHONPATH=$HOME/local/lib/python
 export FTP_PASSIVE=1
 export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/lib/pkgconfig
