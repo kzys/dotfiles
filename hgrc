@@ -1,0 +1,6 @@
+[ui]
+username = KATO Kazuyoshi <kzys@8-p.info>
+
+[extensions]
+hgext.mq =
+hgext.convert =
