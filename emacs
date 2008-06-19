@@ -43,7 +43,7 @@
 (autoload 'dmacro-exec "dmacro" nil t)
 
 ;; Indent
-(global-set-key "\r" 'newline-and-indent)
+(global-set-key "\C-m" 'newline-and-indent)
 (global-set-key "\C-a" 'beggining-of-line-or-indented-line)
 (defun beggining-of-line-or-indented-line (current-point)
   (interactive "d")
@@ -188,9 +188,9 @@
       (skip-chars-forward "\s " point-of-indentation)))
   (define-key js2-mode-map "\C-i" 'indent-and-back-to-indentation)
 
-  (define-key js2-mode-map "\C-m" 'newline-and-indent)
+  (define-key js2-mode-map "\C-m" nil)
 
-  (add-to-list 'auto-mode-alist '("\\.js\\'" . js2-mode)))
+  (add-to-list 'auto-mode-alist '("\\.js$" . js2-mode)))
 
 ;; Reload
 (add-hook 'after-save-hook 'reload-browsers)
