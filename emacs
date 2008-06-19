@@ -129,6 +129,7 @@
 
 ;; C
 (require 'cc-mode)
+(setq-default c-basic-offset 4)
 (c-add-style "mlterm" '((indent-tabs-mode . t)
                         (c-basic-offset . 4)) nil)
 (setq c-default-style '((c-mode . "k&r")))
@@ -140,8 +141,7 @@
                  (c-set-style "mlterm")
                (c-set-style "k&r")
                (setq indent-tabs-mode nil
-                     indent-width 4
-                     c-basic-offset 4))))
+                     indent-width 4))))
 (define-key c-mode-base-map "\C-c\C-n" 'ff-find-other-file)
 
 ;; Objective-C and Objective-C++
@@ -171,8 +171,26 @@
 (setq cssm-indent-function #'cssm-c-style-indenter)
 
 ;; JavaScript
-(require 'js2-mode nil t)
-(add-to-list 'auto-mode-alist '("\\.js\\'" . js2-mode))
+(when (load "js2" t)
+  ;;(setq-default js2-basic-offset 4)
+
+  (setq js2-cleanup-whitespace nil
+        js2-mirror-mode nil
+        js2-bounce-indent-flag nil)
+
+  (defun indent-and-back-to-indentation ()
+    (interactive)
+    (indent-for-tab-command)
+    (let ((point-of-indentation
+           (save-excursion
+             (back-to-indentation)
+             (point))))
+      (skip-chars-forward "\s " point-of-indentation)))
+  (define-key js2-mode-map "\C-i" 'indent-and-back-to-indentation)
+
+  (define-key js2-mode-map "\C-m" 'newline-and-indent)
+
+  (add-to-list 'auto-mode-alist '("\\.js\\'" . js2-mode)))
 
 ;; Reload
 (add-hook 'after-save-hook 'reload-browsers)
@@ -235,7 +253,6 @@
 
   (setq anything-sources
       (list anything-c-source-buffers
-            anything-c-source-calculation-result
             anything-c-source-file-name-history
             anything-c-source-info-pages
             anything-c-source-man-pages
