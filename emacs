@@ -130,32 +130,27 @@
 ;; C
 (require 'cc-mode)
 (setq-default c-basic-offset 4)
+(add-to-list 'c-default-style '(c-mode . "k&r"))
 (c-add-style "mlterm" '((indent-tabs-mode . t)
                         (c-basic-offset . 4)) nil)
-(setq c-default-style '((c-mode . "k&r")))
 
 (add-hook 'c-mode-common-hook
 		  '(lambda ()
              (if (and (string-match "/mlterm/" buffer-file-name)
                       (not (string-match "/mac/" buffer-file-name)))
-                 (c-set-style "mlterm")
-               (c-set-style "k&r")
-               (setq indent-tabs-mode nil
-                     indent-width 4))))
-(define-key c-mode-base-map "\C-c\C-n" 'ff-find-other-file)
+               (c-set-style "mlterm"))))
 
 ;; Objective-C and Objective-C++
 (when (require 'objc-c-mode nil t)
-  (setq c-default-style
-        (cons '(objc-mode . "objc") c-default-style)
-
-        auto-mode-alist
-        (cons '("\\.mm?$" . objc-mode) auto-mode-alist)))
+  (add-to-list 'c-default-style '(objc-mode . "objc"))
+  (add-to-list 'auto-mode-alist '("\\.mm?$" . objc-mode)))
 
 ;; C++
 (setq auto-mode-alist
       (cons '("\\.h$" . c++-mode) auto-mode-alist))
 
+;; Easy-to-switch header and impl.
+(define-key c-mode-base-map "\C-c\C-n" 'ff-find-other-file)
 (setq cc-other-file-alist
       '(("\\.mm?$" (".h"))
         ("\\.h$" (".c" ".cpp" ".m" ".mm"))))
