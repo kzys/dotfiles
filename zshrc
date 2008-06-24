@@ -32,7 +32,7 @@ compinit
 # Prompt
 autoload -U colors
 colors
-PROMPT="$fg[green]%~$reset_color
+PROMPT="$fg[green]%~ @ `hostname`$reset_color
 %# "
 # RPROMPT="%~ "
 
@@ -72,5 +72,5 @@ preexec () {
   set-title $1
 }
 precmd () {
-  set-title $(print -n -P '%~')
+  set-title "$(print -n -P '%~') @ $(hostname)"
 }
