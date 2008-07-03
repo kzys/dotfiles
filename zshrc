@@ -69,7 +69,7 @@ else
 fi
 
 preexec () {
-  set-title $1
+  set-title "$1 @ $(hostname)"
 }
 precmd () {
   set-title "$(print -n -P '%~') @ $(hostname)"
