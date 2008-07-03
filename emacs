@@ -94,7 +94,7 @@
   (set-face-background 'paren-face-match nil))
 
 ;; Subversion
-(when (require 'psvn nil t)
+(when (require 'dsvn nil t)
   (setq svn-status-svn-environment-var-list '("LANG=ja_JP.UTF-8"))
   (global-set-key "\C-cv" 'svn-status))
 
@@ -143,15 +143,11 @@
 (add-to-list 'auto-mode-alist '("\\.mm?$" . objc-mode))
 (defun objc-header-file-p ()
   (save-excursion
-    (search-forward "@interface" nil t)))
+    (search-forward "@end" nil t)))
 (add-to-list 'magic-mode-alist
              '(objc-header-file-p . objc-mode))
 (when (require 'objc-c-mode nil t)
   (add-to-list 'c-default-style '(objc-mode . "objc")))
-
-;; C++
-(setq auto-mode-alist
-      (cons '("\\.h$" . c++-mode) auto-mode-alist))
 
 ;; Easy-to-switch header and impl.
 (define-key c-mode-base-map "\C-c\C-n" 'ff-find-other-file)
@@ -224,6 +220,13 @@
 (add-hook 'find-file-hooks 'auto-insert)
 (setq auto-insert-query nil)
 
+;; Incremental Search on Minibuffer
+(when (require 'minibuf-isearch nil t)
+  (mapcar (lambda (keymap)
+            (define-key keymap "\C-n" 'next-history-element)
+            (define-key keymap "\C-p" 'previous-history-element))
+          (list minibuffer-local-map minibuffer-local-ns-map minibuffer-local-completion-map)))
+
 ;; Anything
 (setq anything-c-use-standard-keys t)
 (when (require 'anything-config nil t)
@@ -271,6 +274,26 @@
       cperl-indent-level 4
       cperl-indent-parens-as-block t
       cperl-tab-always-indent t)
+
+(when (eq system-type 'darwin)
+  (defun pasteboard-copy (beg end)
+    (interactive "r")
+    (call-process-region beg end shell-file-name
+                         nil nil nil shell-command-switch "pbcopy"))
+
+  (defadvice kill-region
+    (before pasteboard-sync (beg end) activate)
+    (pasteboard-copy beg end))
+
+  (defadvice copy-region-as-kill
+    (before pasteboard-sync (beg end) activate)
+    (pasteboard-copy beg end))
+
+  (defun pasteboard-yank ()
+    (interactive)
+    (call-process-shell-command "pbpaste" nil t))
+
+  (global-set-key "\C-y" 'pasteboard-yank) )
 
 
 ;; Mac
