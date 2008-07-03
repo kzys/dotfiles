@@ -3,6 +3,10 @@
 #    source /sw/bin/init.sh
 #fi
 
+if test ! -d ~/.zsh; then
+  mkdir ~/.zsh
+fi
+
 # Path
 # export PATH=$HOME/bin:/usr/local/bin:$PATH
 export PATH=$HOME/local/bin:/usr/local/bin:/opt/local/bin:/usr/bin:/bin
@@ -71,6 +75,10 @@ fi
 preexec () {
   set-title "$1 @ $(hostname)"
 }
+
+original_prompt="%~ @ $(hostname)"
 precmd () {
+  PROMPT="%{%(?.$fg[green].$fg[red])%}$original_prompt$reset_color
+%# "
   set-title "$(print -n -P '%~') @ $(hostname)"
 }
