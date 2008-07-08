@@ -93,6 +93,9 @@
   (set-face-foreground 'paren-face-match "#ccc")
   (set-face-background 'paren-face-match nil))
 
+;; VC
+(setq vc-follow-symlinks t)
+
 ;; Subversion
 (when (require 'dsvn nil t)
   (setq svn-status-svn-environment-var-list '("LANG=ja_JP.UTF-8"))
@@ -234,8 +237,9 @@
 
   (setq anything-type-attributes
         '((file (action . (("Find File" . find-file)
-                           ("Find File?" . (lambda (file)
-                                             (find-file (read-file-name "Find file: " file file t))))
+                           ("Find File (Prompt)" .
+                            (lambda (file)
+                              (find-file (read-file-name "Find file: " file file))))
                            ("Delete File" . (lambda (file)
                                               (if (y-or-n-p (format "Really delete file %s? "
                                                                     file))
@@ -248,7 +252,7 @@
   (defun anything-select-action-or-execute-2nd-action ()
     (interactive)
     (when anything-saved-sources
-      (anything-next-line) ;; FIXME: fragile...
+      (anything-next-line)
       (exit-minibuffer))
     (anything-select-action))
   (define-key anything-map "\t" 'anything-select-action-or-execute-2nd-action)
