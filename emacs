@@ -257,19 +257,19 @@
 
   (defun anything-select-action-or-execute-2nd-action ()
     (interactive)
-    (when anything-saved-sources
+    (when (get-buffer-window anything-action-buffer 'visible)
       (anything-next-line)
       (exit-minibuffer))
     (anything-select-action))
   (define-key anything-map "\t" 'anything-select-action-or-execute-2nd-action)
 
   (setq anything-sources
-      (list anything-c-source-buffers
-            anything-c-source-file-name-history
-            anything-c-source-info-pages
-            anything-c-source-man-pages
-            anything-c-source-locate
-            anything-c-source-emacs-commands)))
+        '(anything-c-source-buffers
+          anything-c-source-file-name-history
+          anything-c-source-info-pages
+          anything-c-source-man-pages
+          anything-c-source-locate
+          anything-c-source-emacs-commands)))
 
 
 ;; Perl
