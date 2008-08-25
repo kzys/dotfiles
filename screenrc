@@ -30,3 +30,6 @@ defencoding utf-8
 
 # emacs-like copy mode
 markkeys h=^b:l=^f:$=^e
+
+defscrollback 10000
+
