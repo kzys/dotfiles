@@ -6,6 +6,10 @@
 
 (setq user-mail-address "kzys@8-p.info")
 
+(defun require-safety (symbol &rest body)
+  (when (require symbol nil t)
+    body))
+
 (require 'un-define nil t)
 (set-language-environment 'Japanese)
 (prefer-coding-system 'utf-8-unix)
@@ -24,7 +28,9 @@
 
 (global-set-key "\C-cb" 'compile)
 (global-set-key "\C-cg" 'grep)
-(global-set-key "\C-co" 'occur)
+(require-safety
+ 'color-moccur
+ (global-set-key "\M-o" 'moccur))
 
 (column-number-mode t)
 (tool-bar-mode -1)
