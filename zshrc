@@ -62,7 +62,7 @@ export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/lib/pkgconfig
 export EDITOR=vi
 bindkey -e
 
-if test $TERM = screen; then
+if test $WINDOW; then
     set-title() {
       echo -ne "\ek$1\e\\"
     }

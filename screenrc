@@ -33,3 +33,5 @@ markkeys h=^b:l=^f:$=^e
 
 defscrollback 10000
 
+term xterm
+
