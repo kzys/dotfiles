@@ -53,8 +53,21 @@ export PAGER=less
 export WWW_HOME=http://www.google.co.jp/
 export CVS_RSH=ssh
 export RUBYLIB=/usr/local/lib/ruby/site_ruby/1.8
-export PERL5LIB=$HOME/local/lib/perl5/site_perl
-export PYTHONPATH=$HOME/local/lib/python
+
+PERL5LIB=''
+for i in $HOME/local/lib*/**/site_perl
+do
+  PERL5LIB="$i:$PERL5LIB"
+done
+export PERL5LIB
+
+PYTHONPATH=''
+for i in $HOME/local/lib*/python*/site-packages
+do
+    PYTHONPATH="$i:$PYTHONPATH"
+done
+export PYTHONPATH
+
 export FTP_PASSIVE=1
 export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/lib/pkgconfig
 # export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/sw/lib/freetype219/lib/pkgconfig:/sw/lib/pkgconfig:/usr/lib/pkgconfig
