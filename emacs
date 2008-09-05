@@ -284,3 +284,14 @@
       cperl-indent-level 4
       cperl-indent-parens-as-block t
       cperl-tab-always-indent t)
+
+(require-safety
+ 'set-perl5lib
+ (add-hook 'cperl-mode-hook
+           '(lambda ()
+              (let ((path (concat (file-name-directory (buffer-file-name)) "lib")))
+                (if (file-directory-p path)
+                    (setenv "PERL5LIB" path)
+                  (set-perl5lib)))
+              (flymake-mode 1))))
+(add-to-list 'flymake-allowed-file-name-masks '("\\.pm\\'" flymake-perl-init))
