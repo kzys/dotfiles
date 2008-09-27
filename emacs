@@ -206,12 +206,14 @@
 ;; Howm
 (setq load-path
       (cons (expand-file-name "~/local/share/emacs/site-lisp/howm") load-path))
-(autoload 'howm-menu "howm" "Hitori Otegaru Wiki Modoki" t)
-(global-set-key "\C-c,," 'howm-menu)
-(setq howm-menu-lang 'ja)
-(setq howm-template "= <<< %title%cursor\n\n")
-(setq howm-menu-expiry-hours 2)
-(setq howm-menu-refresh-after-save nil)
+(require-safety
+ 'howm
+ (global-set-key "\C-c,," 'howm-menu)
+ (setq howm-menu-lang 'ja)
+ (setq howm-template "= <<< %title%cursor\n\n")
+ (setq howm-menu-expiry-hours 2)
+ (setq howm-menu-refresh-after-save nil)
+ (add-to-list 'auto-mode-alist '("\\.howm$" . howm-mode)) )
 
 ;; MozRepl
 (autoload 'moz-minor-mode "moz" "Mozilla Minor and Inferior Mozilla Modes" t)
@@ -263,13 +265,22 @@
     (anything-select-action))
   (define-key anything-map "\t" 'anything-select-action-or-execute-2nd-action)
 
+  (setq anything-c-source-howm-recent-menu
+    '((name . "howm")
+      (candidates . (lambda ()
+                      (mapcar (lambda (i)
+                                (cons (nth 1 i) (car i)))
+                              (howm-recent-menu 100))))
+      (type . file)))
+
   (setq anything-sources
-        '(anything-c-source-buffers
+        `(anything-c-source-buffers
           anything-c-source-file-name-history
           anything-c-source-info-pages
           anything-c-source-man-pages
           anything-c-source-locate
-          anything-c-source-emacs-commands)))
+          anything-c-source-emacs-commands
+          ,(if (featurep 'howm-mode) anything-c-source-howm-recent-menu))) )
 
 
 ;; Perl
