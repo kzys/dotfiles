@@ -298,6 +298,14 @@
 
 ;; Perl + Flymake
 (require 'flymake)
+
+(mapcar
+ (lambda (face)
+   (set-face-background face nil)
+   (set-face-foreground face "red")
+   (set-face-underline face t))
+ (list 'flymake-errline 'flymake-warnline))
+
 (add-hook 'cperl-mode-hook
           '(lambda ()
              (flymake-mode 1)))
