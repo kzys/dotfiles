@@ -308,4 +308,17 @@
 (add-to-list 'flymake-allowed-file-name-masks '("\\.pm\\'" flymake-perl-init))
 
 (when (require 'auto-complete nil t)
-  (global-auto-complete-mode t))
+  (global-auto-complete-mode t)
+
+  ;; http://d.hatena.ne.jp/buzztaiki/20081111/1226425889
+  (defun ac-lisp-enum-candidates (target)
+    (loop for x in (all-completions target obarray)
+          repeat ac-candidate-max
+          collect x))
+
+  (mapcar (lambda (hook)
+            (add-hook hook
+                      '(lambda ()
+                         (setq ac-enum-candidates-function 'ac-lisp-enum-candidates))))
+          (list 'emacs-lisp-mode-hook 'lisp-interaction-mode-hook)) )
+
