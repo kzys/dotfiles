@@ -218,9 +218,6 @@
 ;; MozRepl
 (autoload 'moz-minor-mode "moz" "Mozilla Minor and Inferior Mozilla Modes" t)
 
-;; Flymake
-(require 'flymake)
-
 ;; Auto Insert
 (setq auto-insert-directory  ;; don't forget last slash!
       (expand-file-name "~/.emacs.d/template/"))
@@ -282,13 +279,13 @@
           anything-c-source-emacs-commands
           ,(if (featurep 'howm-mode) anything-c-source-howm-recent-menu))) )
 
-
 ;; Perl
 (setq auto-mode-alist
       (append '(("\\.p[lm]$" . cperl-mode)
                 ("\\.t$" . cperl-mode)) auto-mode-alist))
 (setq auto-mode-alist
       (cons '("\\.tt$" . html-mode) auto-mode-alist))
+
 ;; Perl Best Practices 2.11
 (setq cperl-close-paren-offset -4
       cperl-continued-statement-offset 4
@@ -296,17 +293,22 @@
       cperl-indent-parens-as-block t
       cperl-tab-always-indent t)
 
-(require-safety
- 'set-perl5lib
- (add-hook 'cperl-mode-hook
-           '(lambda ()
-              (let ((path (concat (file-name-directory (buffer-file-name)) "lib")))
-                (if (file-directory-p path)
-                    (setenv "PERL5LIB" path)
-                  (set-perl5lib)))
-              (flymake-mode 1))))
+;; Perl + Flymake
+(require 'flymake)
+(add-hook 'cperl-mode-hook
+          '(lambda ()
+             (flymake-mode 1)))
 (add-to-list 'flymake-allowed-file-name-masks '("\\.pm\\'" flymake-perl-init))
 
+(defun display-current-flymake-error ()
+  (interactive)
+  (let ((e (car (car
+                 (flymake-find-err-info flymake-err-info (flymake-current-line-no)) ))))
+    (if e
+        (message "%s" (flymake-ler-text e))) ))
+(run-with-idle-timer 1 t 'display-current-flymake-error)
+
+;; auto-complete
 (when (require 'auto-complete nil t)
   (global-auto-complete-mode t)
 
@@ -321,4 +323,3 @@
                       '(lambda ()
                          (setq ac-enum-candidates-function 'ac-lisp-enum-candidates))))
           (list 'emacs-lisp-mode-hook 'lisp-interaction-mode-hook)) )
-
