@@ -306,3 +306,6 @@
                   (set-perl5lib)))
               (flymake-mode 1))))
 (add-to-list 'flymake-allowed-file-name-masks '("\\.pm\\'" flymake-perl-init))
+
+(when (require 'auto-complete nil t)
+  (global-auto-complete-mode t))
