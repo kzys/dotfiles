@@ -6,9 +6,11 @@
 
 (setq user-mail-address "kzys@8-p.info")
 
-(defun require-safety (symbol &rest body)
-  (when (require symbol nil t)
-    body))
+(defmacro require-safety (symbol &rest body)
+  `(cond ((require ,symbol nil t)
+          ,@body)
+         (t
+          (message "Failed to load %s." ,symbol)) ))
 
 (require 'un-define nil t)
 (set-language-environment 'Japanese)
@@ -69,15 +71,16 @@
 
 ;; Session
 ;; http://d.hatena.ne.jp/higepon/20061230/1167447339
-(when (require 'session nil t)
-  (setq session-initialize t)
-  (setq session-save-file (expand-file-name "~/.emacs.d/session"))
-  (setq session-globals-include '((kill-ring 50)
-                                  (session-file-alist 500 t)
-                                  (file-name-history 10000)))
-  (setq session-globals-max-string 100000000)
-  (setq history-length t)
-  (add-hook 'after-init-hook 'session-initialize))
+(require-safety
+ 'session
+ (setq session-initialize t)
+ (setq session-save-file (expand-file-name "~/.emacs.d/session"))
+ (setq session-globals-include '((kill-ring 50)
+                                 (session-file-alist 500 t)
+                                 (file-name-history 10000)))
+ (setq session-globals-max-string 100000000)
+ (setq history-length t)
+ (add-hook 'after-init-hook 'session-initialize))
 
 ;; Server
 (require 'server)
@@ -87,25 +90,28 @@
 (transient-mark-mode t)
 
 ;; Minibuffer
-(require 'minibuf-isearch nil t)
-(mapcar (lambda (keymap)
-          (define-key keymap "\C-n" 'next-history-element)
-          (define-key keymap "\C-p" 'previous-history-element))
-        (list minibuffer-local-map minibuffer-local-ns-map minibuffer-local-completion-map))
+(require-safety
+ 'minibuf-isearch
+ (mapcar (lambda (keymap)
+           (define-key keymap "\C-n" 'next-history-element)
+           (define-key keymap "\C-p" 'previous-history-element))
+         (list minibuffer-local-map minibuffer-local-ns-map minibuffer-local-completion-map)) )
 
 ;; Paren
-(when (require 'mic-paren nil t)
-  (paren-activate)
-  (set-face-foreground 'paren-face-match "#ccc")
-  (set-face-background 'paren-face-match nil))
+(require-safety
+ 'mic-paren
+ (paren-activate)
+ (set-face-foreground 'paren-face-match "yellow")
+ (set-face-background 'paren-face-match nil))
 
 ;; VC
 (setq vc-follow-symlinks t)
 
 ;; Subversion
-(when (require 'dsvn nil t)
-  (setq svn-status-svn-environment-var-list '("LANG=ja_JP.UTF-8"))
-  (global-set-key "\C-cv" 'svn-status))
+(require-safety
+ 'dsvn
+ (setq svn-status-svn-environment-var-list '("LANG=ja_JP.UTF-8"))
+ (global-set-key "\C-cv" 'svn-status))
 
 ;; Mercurial
 ;; installed on ~/local
@@ -113,13 +119,15 @@
       (cons (expand-file-name "~/local/bin") exec-path))
 (setenv "PYTHONPATH" (expand-file-name "~/local/lib/python"))
 
-(when (require 'vc-hg nil t)
+(require-safety
+ 'vc-hg
  (setq vc-handled-backends (cons 'HG vc-handled-backends)))
 
 ;; Tramp
-(when (require 'tramp nil t)
-  (add-to-list 'backup-directory-alist
-               (cons tramp-file-name-regexp nil)))
+(require-safety
+ 'tramp
+ (add-to-list 'backup-directory-alist
+              (cons tramp-file-name-regexp nil)))
 
 ;; Ruby
 (autoload 'ruby-mode "ruby-mode"
@@ -155,8 +163,9 @@
     (search-forward "@end" nil t)))
 (add-to-list 'magic-mode-alist
              '(objc-header-file-p . objc-mode))
-(when (require 'objc-c-mode nil t)
-  (add-to-list 'c-default-style '(objc-mode . "objc")))
+(require-safety
+ 'objc-c-mode
+ (add-to-list 'c-default-style '(objc-mode . "objc")))
 
 ;; Easy-to-switch header and impl.
 (define-key c-mode-base-map "\C-c\C-n" 'ff-find-other-file)
@@ -164,9 +173,10 @@
       '(("\\.mm?$" (".h"))
         ("\\.h$" (".c" ".cpp" ".m" ".mm"))))
 
-(when (require 'haskell-mode nil t)
-  (setq auto-mode-alist
-        (cons '("\\.hs$" . haskell-mode) auto-mode-alist)))
+(require-safety
+ 'haskell-mode
+ (setq auto-mode-alist
+       (cons '("\\.hs$" . haskell-mode) auto-mode-alist)))
 
 ;; CSS
 (autoload 'css-mode "css-mode" "Mode for editing CSS files" t)
@@ -229,58 +239,62 @@
 (setq auto-insert-query nil)
 
 ;; Incremental Search on Minibuffer
-(when (require 'minibuf-isearch nil t)
-  (mapcar (lambda (keymap)
-            (define-key keymap "\C-n" 'next-history-element)
-            (define-key keymap "\C-p" 'previous-history-element))
-          (list minibuffer-local-map minibuffer-local-ns-map minibuffer-local-completion-map)))
+(require-safety
+ 'minibuf-isearch
+ (mapcar (lambda (keymap)
+           (define-key keymap "\C-n" 'next-history-element)
+           (define-key keymap "\C-p" 'previous-history-element))
+         (list minibuffer-local-map
+               minibuffer-local-ns-map
+               minibuffer-local-completion-map)))
 
 ;; Anything
 (setq anything-c-use-standard-keys t)
-(when (require 'anything-config nil t)
-  (global-set-key "\C-xb" 'anything)
+(require-safety
+ 'anything-config
+ (global-set-key "\C-xb" 'anything)
 
-  (setq anything-type-attributes
-        '((file (action . (("Find File" . find-file)
-                           ("Find File (Prompt)" .
-                            (lambda (file)
-                              (find-file (read-file-name "Find file: " file file))))
-                           ("Delete File" . (lambda (file)
-                                              (if (y-or-n-p (format "Really delete file %s? "
-                                                                    file))
-                                                  (delete-file file)))))))
-          (buffer (action . (("Switch to Buffer" . switch-to-buffer)
-                             ("Pop to Buffer"    . pop-to-buffer)
-                             ("Display Buffer"   . display-buffer)
-                             ("Kill Buffer"      . kill-buffer))))))
+ (setq anything-type-attributes
+       '((file (action . (("Find File" . find-file)
+                          ("Find File (Prompt)" .
+                           (lambda (file)
+                             (find-file (read-file-name "Find file: " file file))))
+                          ("Delete File" . (lambda (file)
+                                             (if (y-or-n-p (format "Really delete file %s? "
+                                                                   file))
+                                                 (delete-file file)))))))
+         (buffer (action . (("Switch to Buffer" . switch-to-buffer)
+                            ("Pop to Buffer"    . pop-to-buffer)
+                            ("Display Buffer"   . display-buffer)
+                            ("Kill Buffer"      . kill-buffer))))))
 
-  (defun anything-select-action-or-execute-2nd-action ()
-    (interactive)
-    (when (get-buffer-window anything-action-buffer 'visible)
-      (anything-next-line)
-      (exit-minibuffer))
-    (anything-select-action))
-  (define-key anything-map "\t" 'anything-select-action-or-execute-2nd-action)
+ (defun anything-select-action-or-execute-2nd-action ()
+   (interactive)
+   (when (get-buffer-window anything-action-buffer 'visible)
+     (anything-next-line)
+     (exit-minibuffer))
+   (anything-select-action))
+ (define-key anything-map "\t" 'anything-select-action-or-execute-2nd-action)
 
-  (setq anything-c-source-howm-recent-menu
-    '((name . "howm")
-      (candidates . (lambda ()
-                      (mapcar (lambda (i)
-                                (cons (nth 1 i) (car i)))
-                              (howm-recent-menu 100))))
-      (type . file)))
+ (setq anything-c-source-howm-recent-menu
+       '((name . "howm")
+         (candidates . (lambda ()
+                         (mapcar (lambda (i)
+                                   (cons (nth 1 i) (car i)))
+                                 (howm-recent-menu 100))))
+         (type . file)))
 
-  (require 'anything-c-source-imenu)
+ (require 'anything-c-source-imenu)
 
-  (setq anything-sources
-        `(anything-c-source-imenu
-          anything-c-source-buffers
-          anything-c-source-file-name-history
-          anything-c-source-info-pages
-          anything-c-source-man-pages
-          anything-c-source-locate
-          anything-c-source-emacs-commands
-          ,(if (featurep 'howm-mode) anything-c-source-howm-recent-menu))) )
+ (setq anything-sources
+       `(anything-c-source-imenu
+         anything-c-source-buffers
+         anything-c-source-file-name-history
+         anything-c-source-info-pages
+         anything-c-source-man-pages
+         anything-c-source-locate
+         anything-c-source-emacs-commands
+         ,(if (featurep 'howm-mode) anything-c-source-howm-recent-menu))) )
 
 ;; Perl
 (setq auto-mode-alist
@@ -320,17 +334,18 @@
 (run-with-idle-timer 1 t 'display-current-flymake-error)
 
 ;; auto-complete
-(when (require 'auto-complete nil t)
-  (global-auto-complete-mode t)
+(require-safety
+ 'auto-complete
+ (global-auto-complete-mode t)
 
-  ;; http://d.hatena.ne.jp/buzztaiki/20081111/1226425889
-  (defun ac-lisp-enum-candidates (target)
-    (loop for x in (all-completions target obarray)
-          repeat ac-candidate-max
-          collect x))
+ ;; http://d.hatena.ne.jp/buzztaiki/20081111/1226425889
+ (defun ac-lisp-enum-candidates (target)
+   (loop for x in (all-completions target obarray)
+         repeat ac-candidate-max
+         collect x))
 
-  (mapcar (lambda (hook)
-            (add-hook hook
-                      '(lambda ()
-                         (setq ac-enum-candidates-function 'ac-lisp-enum-candidates))))
-          (list 'emacs-lisp-mode-hook 'lisp-interaction-mode-hook)) )
+ (mapcar (lambda (hook)
+           (add-hook hook
+                     '(lambda ()
+                        (setq ac-enum-candidates-function 'ac-lisp-enum-candidates))))
+         (list 'emacs-lisp-mode-hook 'lisp-interaction-mode-hook)) )
