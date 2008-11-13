@@ -6,9 +6,11 @@
 
 (setq user-mail-address "kzys@8-p.info")
 
-(defun require-safety (symbol &rest body)
-  (when (require symbol nil t)
-    body))
+(defmacro require-safety (symbol &rest body)
+  `(cond ((require ,symbol nil t)
+          ,@body)
+         (t
+          (message "Failed to load %s." ,symbol))))
 
 (require 'un-define nil t)
 (set-language-environment 'Japanese)
@@ -69,7 +71,7 @@
 
 ;; Session
 ;; http://d.hatena.ne.jp/higepon/20061230/1167447339
-(when (require 'session nil t)
+(require-safety 'session
   (setq session-initialize t)
   (setq session-save-file (expand-file-name "~/.emacs.d/session"))
   (setq session-globals-include '((kill-ring 50)
@@ -94,7 +96,7 @@
         (list minibuffer-local-map minibuffer-local-ns-map minibuffer-local-completion-map))
 
 ;; Paren
-(when (require 'mic-paren nil t)
+(require-safety 'mic-paren
   (paren-activate)
   (set-face-foreground 'paren-face-match "#ccc")
   (set-face-background 'paren-face-match nil))
@@ -103,7 +105,7 @@
 (setq vc-follow-symlinks t)
 
 ;; Subversion
-(when (require 'dsvn nil t)
+(require-safety 'dsvn
   (setq svn-status-svn-environment-var-list '("LANG=ja_JP.UTF-8"))
   (global-set-key "\C-cv" 'svn-status))
 
@@ -113,11 +115,11 @@
       (cons (expand-file-name "~/local/bin") exec-path))
 (setenv "PYTHONPATH" (expand-file-name "~/local/lib/python"))
 
-(when (require 'vc-hg nil t)
+(require-safety 'vc-hg
  (setq vc-handled-backends (cons 'HG vc-handled-backends)))
 
 ;; Tramp
-(when (require 'tramp nil t)
+(require-safety 'tramp
   (add-to-list 'backup-directory-alist
                (cons tramp-file-name-regexp nil)))
 
@@ -155,7 +157,7 @@
     (search-forward "@end" nil t)))
 (add-to-list 'magic-mode-alist
              '(objc-header-file-p . objc-mode))
-(when (require 'objc-c-mode nil t)
+(require-safety 'objc-c-mode
   (add-to-list 'c-default-style '(objc-mode . "objc")))
 
 ;; Easy-to-switch header and impl.
@@ -164,7 +166,7 @@
       '(("\\.mm?$" (".h"))
         ("\\.h$" (".c" ".cpp" ".m" ".mm"))))
 
-(when (require 'haskell-mode nil t)
+(require-safety 'haskell-mode
   (setq auto-mode-alist
         (cons '("\\.hs$" . haskell-mode) auto-mode-alist)))
 
@@ -229,7 +231,7 @@
 (setq auto-insert-query nil)
 
 ;; Incremental Search on Minibuffer
-(when (require 'minibuf-isearch nil t)
+(require-safety 'minibuf-isearch
   (mapcar (lambda (keymap)
             (define-key keymap "\C-n" 'next-history-element)
             (define-key keymap "\C-p" 'previous-history-element))
@@ -237,7 +239,7 @@
 
 ;; Anything
 (setq anything-c-use-standard-keys t)
-(when (require 'anything-config nil t)
+(require-safety 'anything-config
   (global-set-key "\C-xb" 'anything)
 
   (setq anything-type-attributes
@@ -311,6 +313,15 @@
              (flymake-mode 1)))
 (add-to-list 'flymake-allowed-file-name-masks '("\\.pm\\'" flymake-perl-init))
 
+(utf-translate-cjk-set-unicode-range
+ '((#x25a0 . #x25a1)
+   (#x2190 . #x2193)
+   (#x203b . #x203b)))
+
+(when (not window-system)
+  (xterm-mouse-mode 1)
+  (mouse-wheel-mode 1))
+
 (defun display-current-flymake-error ()
   (interactive)
   (let ((e (car (car
@@ -320,7 +331,7 @@
 (run-with-idle-timer 1 t 'display-current-flymake-error)
 
 ;; auto-complete
-(when (require 'auto-complete nil t)
+(require-safety 'auto-complete
   (global-auto-complete-mode t)
 
   ;; http://d.hatena.ne.jp/buzztaiki/20081111/1226425889
