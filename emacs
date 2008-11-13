@@ -89,11 +89,13 @@
 (transient-mark-mode t)
 
 ;; Minibuffer
-(require 'minibuf-isearch nil t)
-(mapcar (lambda (keymap)
-          (define-key keymap "\C-n" 'next-history-element)
-          (define-key keymap "\C-p" 'previous-history-element))
-        (list minibuffer-local-map minibuffer-local-ns-map minibuffer-local-completion-map))
+(require-safety
+ 'minibuf-isearch
+ (setq minibuf-isearch-use-migemo nil)
+ (mapcar (lambda (keymap)
+           (define-key keymap "\C-n" 'next-history-element)
+           (define-key keymap "\C-p" 'previous-history-element))
+         (list minibuffer-local-map minibuffer-local-ns-map minibuffer-local-completion-map)))
 
 ;; Paren
 (require-safety 'mic-paren
@@ -298,8 +300,26 @@
       cperl-indent-parens-as-block t
       cperl-tab-always-indent t)
 
+(defun perl-root-directory (path)
+  (cond
+   ((string-match "^\\(.*?/\\)\\(lib\\|t\\)" path)
+    (match-string 1 path))
+   (t
+    (file-name-directory path)) ))
+
 ;; Perl + Flymake
 (require 'flymake)
+
+(require-safety
+ 'set-perl5lib
+ (add-hook 'cperl-mode-hook
+           '(lambda ()
+              (let ((path (perl-root-directory (buffer-file-name))))
+                (if path
+                    (setenv "PERL5LIB" (concat path "/lib"))))
+              (flymake-mode 1))))
+(add-to-list 'flymake-allowed-file-name-masks '("\\.pm$" flymake-perl-init))
+(add-to-list 'flymake-allowed-file-name-masks '("\\.t$" flymake-perl-init))
 
 (mapcar
  (lambda (face)
@@ -307,11 +327,6 @@
    (set-face-foreground face "red")
    (set-face-underline face t))
  (list 'flymake-errline 'flymake-warnline))
-
-(add-hook 'cperl-mode-hook
-          '(lambda ()
-             (flymake-mode 1)))
-(add-to-list 'flymake-allowed-file-name-masks '("\\.pm\\'" flymake-perl-init))
 
 (utf-translate-cjk-set-unicode-range
  '((#x25a0 . #x25a1)
