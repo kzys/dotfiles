@@ -61,11 +61,7 @@ do
 done
 export PERL5LIB
 
-PYTHONPATH=''
-for i in $HOME/local/lib*/python*/site-packages
-do
-    PYTHONPATH="$i:$PYTHONPATH"
-done
+PYTHONPATH="$HOME/local/lib/python:$HOME/local/lib/python2.6"
 export PYTHONPATH
 
 export FTP_PASSIVE=1
