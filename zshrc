@@ -54,12 +54,7 @@ export WWW_HOME=http://www.google.co.jp/
 export CVS_RSH=ssh
 export RUBYLIB=/usr/local/lib/ruby/site_ruby/1.8
 
-PERL5LIB=''
-for i in $HOME/local/lib*/**/site_perl
-do
-  PERL5LIB="$i:$PERL5LIB"
-done
-export PERL5LIB
+export PERL5LIB="$HOME/local/lib/perl5/site_perl"
 
 PYTHONPATH="$HOME/local/lib/python:$HOME/local/lib/python2.6"
 export PYTHONPATH
