@@ -185,12 +185,13 @@
 (setq cssm-indent-function #'cssm-c-style-indenter)
 
 ;; JavaScript
+(setq js2-cleanup-whitespace nil
+      js2-mirror-mode nil
+      js2-bounce-indent-flag t
+      js2-auto-indent-flag nil
+      js2-electric-keys nil)
 (when (load "js2" t)
   ;;(setq-default js2-basic-offset 4)
-
-  (setq js2-cleanup-whitespace nil
-        js2-mirror-mode nil
-        js2-bounce-indent-flag nil)
 
   (defun indent-and-back-to-indentation ()
     (interactive)
@@ -200,9 +201,7 @@
              (back-to-indentation)
              (point))))
       (skip-chars-forward "\s " point-of-indentation)))
-  (define-key js2-mode-map "\C-i" 'indent-and-back-to-indentation)
-
-  (define-key js2-mode-map "\C-m" nil)
+  ;; (define-key js2-mode-map "\C-i" 'indent-and-back-to-indentation)
 
   (add-to-list 'auto-mode-alist '("\\.js$" . js2-mode)))
 
