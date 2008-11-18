@@ -201,7 +201,6 @@
              (back-to-indentation)
              (point))))
       (skip-chars-forward "\s " point-of-indentation)))
-  ;; (define-key js2-mode-map "\C-i" 'indent-and-back-to-indentation)
 
   (add-to-list 'auto-mode-alist '("\\.js$" . js2-mode)))
 
@@ -309,8 +308,26 @@
       cperl-indent-parens-as-block t
       cperl-tab-always-indent t)
 
+(defun perl-root-directory (path)
+  (cond
+   ((string-match "^\\(.*?/\\)\\(lib\\|t\\)" path)
+    (match-string 1 path))
+   (t
+    (file-name-directory path)) ))
+
 ;; Perl + Flymake
 (require 'flymake)
+
+(require-safety
+ 'set-perl5lib
+ (add-hook 'cperl-mode-hook
+           '(lambda ()
+              (let ((path (perl-root-directory (buffer-file-name))))
+                (if path
+                    (setenv "PERL5LIB" (concat path "/lib"))))
+              (flymake-mode 1))))
+(add-to-list 'flymake-allowed-file-name-masks '("\\.pm$" flymake-perl-init))
+(add-to-list 'flymake-allowed-file-name-masks '("\\.t$" flymake-perl-init))
 
 (mapcar
  (lambda (face)
@@ -319,10 +336,10 @@
    (set-face-underline face t))
  (list 'flymake-errline 'flymake-warnline))
 
-(add-hook 'cperl-mode-hook
-          '(lambda ()
-             (flymake-mode 1)))
-(add-to-list 'flymake-allowed-file-name-masks '("\\.pm\\'" flymake-perl-init))
+
+(when (not window-system)
+  (xterm-mouse-mode 1)
+  (mouse-wheel-mode 1))
 
 (defun display-current-flymake-error ()
   (interactive)
