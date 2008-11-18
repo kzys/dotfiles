@@ -363,5 +363,6 @@
  (mapcar (lambda (hook)
            (add-hook hook
                      '(lambda ()
+                        (make-variable-buffer-local 'ac-enum-candidates-function)
                         (setq ac-enum-candidates-function 'ac-lisp-enum-candidates))))
          (list 'emacs-lisp-mode-hook 'lisp-interaction-mode-hook)) )
