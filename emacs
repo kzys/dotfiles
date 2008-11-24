@@ -366,3 +366,5 @@
                         (make-variable-buffer-local 'ac-enum-candidates-function)
                         (setq ac-enum-candidates-function 'ac-lisp-enum-candidates))))
          (list 'emacs-lisp-mode-hook 'lisp-interaction-mode-hook)) )
+
+(load (expand-file-name "~/.emacs.d/lisp/local.el") t t)
