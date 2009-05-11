@@ -19,6 +19,23 @@
 (set-terminal-coding-system 'utf-8-unix)
 (auto-compression-mode t)
 
+
+;; http://steve.yegge.googlepages.com/effective-emacs
+(global-set-key "\C-x\C-m" 'execute-extended-command)
+(global-set-key "\C-c\C-m" 'execute-extended-command)
+
+(global-set-key "\C-w" 'backward-kill-word)
+(global-set-key "\C-x\C-k" 'kill-region)
+(global-set-key "\C-c\C-k" 'kill-region)
+
+(tool-bar-mode -1)
+(menu-bar-mode (if window-system 0 -1))
+
+(defalias 'qrr 'query-replace-regexp)
+
+(global-set-key [f5] 'call-last-kbd-macro)
+
+
 (setq-default indent-tabs-mode nil
               tab-width 4)
 (when (boundp 'show-trailing-whitespace)
@@ -35,8 +52,6 @@
  (global-set-key "\M-o" 'moccur))
 
 (column-number-mode t)
-(tool-bar-mode -1)
-(menu-bar-mode (if window-system 0 -1))
 
 (global-font-lock-mode t)
 
