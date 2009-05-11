@@ -21,14 +21,8 @@
 
 ;; Perl + Flymake
 
-(require-safety
- 'set-perl5lib
- (add-hook 'cperl-mode-hook
-           '(lambda ()
-              (let ((path (perl-root-directory (buffer-file-name))))
-                (if path
-                    (setenv "PERL5LIB" (concat path "/lib"))))
-              (flymake-mode 1))))
+(add-hook 'cperl-mode-hook
+          '(lambda ()
+             (flymake-mode 1)))
 (add-to-list 'flymake-allowed-file-name-masks '("\\.pm$" flymake-perl-init))
 (add-to-list 'flymake-allowed-file-name-masks '("\\.t$" flymake-perl-init))
-
