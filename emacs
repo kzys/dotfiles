@@ -282,8 +282,6 @@
                                  (howm-recent-menu 100))))
          (type . file)))
 
- (require 'anything-c-source-imenu)
-
  (setq anything-sources
        `(anything-c-source-buffers
          anything-c-source-imenu
