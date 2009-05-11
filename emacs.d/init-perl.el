@@ -1,0 +1,34 @@
+;; Perl
+(setq auto-mode-alist
+      (append '(("\\.p[lm]$" . cperl-mode)
+                ("\\.t$" . cperl-mode)) auto-mode-alist))
+(setq auto-mode-alist
+      (cons '("\\.tt$" . html-mode) auto-mode-alist))
+
+;; Perl Best Practices 2.11
+(setq cperl-close-paren-offset -4
+      cperl-continued-statement-offset 4
+      cperl-indent-level 4
+      cperl-indent-parens-as-block t
+      cperl-tab-always-indent t)
+
+(defun perl-root-directory (path)
+  (cond
+   ((string-match "^\\(.*?/\\)\\(lib\\|t\\)" path)
+    (match-string 1 path))
+   (t
+    (file-name-directory path)) ))
+
+;; Perl + Flymake
+
+(require-safety
+ 'set-perl5lib
+ (add-hook 'cperl-mode-hook
+           '(lambda ()
+              (let ((path (perl-root-directory (buffer-file-name))))
+                (if path
+                    (setenv "PERL5LIB" (concat path "/lib"))))
+              (flymake-mode 1))))
+(add-to-list 'flymake-allowed-file-name-masks '("\\.pm$" flymake-perl-init))
+(add-to-list 'flymake-allowed-file-name-masks '("\\.t$" flymake-perl-init))
+
