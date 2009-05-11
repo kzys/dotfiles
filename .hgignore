@@ -1,0 +1,4 @@
+syntax:regexp
+^emacs.d/lisp/
+~$
+\.DS_Store

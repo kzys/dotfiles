@@ -135,18 +135,11 @@
                minibuffer-local-ns-map
                minibuffer-local-completion-map)))
 
-(require 'flymake)
-(mapcar
- (lambda (face)
-   (set-face-background face nil)
-   (set-face-foreground face "red")
-   (set-face-underline face t))
- (list 'flymake-errline 'flymake-warnline))
-
 (mapcar
  (lambda (name)
    (load (expand-file-name (format "~/.emacs.d/init-%s.el" name))))
  (list
+  "flymake"
   "version-control"
   "howm"
   "anything"
@@ -158,14 +151,6 @@
 (when (not window-system)
   (xterm-mouse-mode 1)
   (mouse-wheel-mode 1))
-
-(defun display-current-flymake-error ()
-  (interactive)
-  (let ((e (car (car
-                 (flymake-find-err-info flymake-err-info (flymake-current-line-no)) ))))
-    (if e
-        (message "%s" (flymake-ler-text e))) ))
-(run-with-idle-timer 1 t 'display-current-flymake-error)
 
 ;; auto-complete
 (require-safety
