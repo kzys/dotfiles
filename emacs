@@ -73,10 +73,6 @@
       (back-to-indentation)
     (beginning-of-line)))
 
-;; Buffer
-(require 'uniquify)
-(setq uniquify-buffer-name-style 'post-forward-angle-brackets)
-
 ;; Window
 (windmove-default-keybindings)
 
@@ -102,14 +98,6 @@
 
 ;; Region
 (transient-mark-mode t)
-
-;; Minibuffer
-(require-safety
- 'minibuf-isearch
- (mapcar (lambda (keymap)
-           (define-key keymap "\C-n" 'next-history-element)
-           (define-key keymap "\C-p" 'previous-history-element))
-         (list minibuffer-local-map minibuffer-local-ns-map minibuffer-local-completion-map)) )
 
 ;; Paren
 (require-safety
@@ -139,22 +127,13 @@
 (add-hook 'find-file-hooks 'auto-insert)
 (setq auto-insert-query nil)
 
-;; Incremental Search on Minibuffer
-(require-safety
- 'minibuf-isearch
- (mapcar (lambda (keymap)
-           (define-key keymap "\C-n" 'next-history-element)
-           (define-key keymap "\C-p" 'previous-history-element))
-         (list minibuffer-local-map
-               minibuffer-local-ns-map
-               minibuffer-local-completion-map)))
-
 (mapcar
  (lambda (name)
    (load (expand-file-name (format "~/.emacs.d/init-%s.el" name))))
  (list
   "flymake"
   "version-control"
+  "buffer"
   "howm"
   "anything"
   "c"
