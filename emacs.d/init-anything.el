@@ -1,7 +1,7 @@
 ;; Anything
 (setq anything-c-use-standard-keys t)
-(require-safety
- 'anything-config
+(require 'anything-config)
+
  (global-set-key "\C-xb" 'anything)
 
  (setq anything-type-attributes
@@ -34,12 +34,22 @@
                                  (howm-recent-menu 100))))
          (type . file)))
 
- (setq anything-sources
-       `(anything-c-source-buffers
+(setq anything-c-source-buffers++
+  '((name . "Buffers")
+    (candidates . anything-c-buffer-list)
+    (volatile)
+    (type . buffer)
+    (candidate-transformer anything-c-skip-current-buffer
+                           anything-c-skip-boring-buffers)
+    (persistent-action . anything-c-buffers+-persistent-action)))
+
+(setq anything-sources
+       `(anything-c-source-buffers++
          anything-c-source-imenu
          anything-c-source-file-name-history
          anything-c-source-info-pages
          anything-c-source-man-pages
          anything-c-source-locate
          anything-c-source-emacs-commands
-         ,(if (featurep 'howm-mode) anything-c-source-howm-recent-menu))) )
+         ,(if (featurep 'howm-mode) anything-c-source-howm-recent-menu)))
+
