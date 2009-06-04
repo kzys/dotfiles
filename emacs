@@ -139,6 +139,7 @@
   "c"
   "perl"
   "ruby"
+  "scala"
   "web-development"))
 
 (when (not window-system)
