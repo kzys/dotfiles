@@ -9,7 +9,7 @@ fi
 
 # Path
 # export PATH=$HOME/bin:/usr/local/bin:$PATH
-export PATH=$HOME/bin:$HOME/local/bin:/usr/local/bin:/opt/local/bin:/usr/bin:/bin
+export PATH=$HOME/bin:$HOME/local/bin:$HOME/src/scala-2.7.4.final/bin:/usr/local/bin:/opt/local/bin:/usr/bin:/bin
 fpath=(~/.zsh/functions $fpath)
 
 # Alias
