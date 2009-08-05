@@ -1,7 +1,7 @@
 
 ;; Howm
 (setq load-path
-      (cons (expand-file-name "~/local/share/emacs/site-lisp/howm") load-path))
+      (cons (expand-file-name "~/src/howm-1.3.5") load-path))
 (require-safety
  'howm
  (global-set-key "\C-c,," 'howm-menu)
