@@ -12,3 +12,4 @@
                minibuffer-local-ns-map
                minibuffer-local-completion-map)))
 
+(setq minibuf-isearch-use-migemo nil)
