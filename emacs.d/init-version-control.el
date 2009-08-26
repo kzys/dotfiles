@@ -3,7 +3,7 @@
 
 ;; Subversion
 (require 'dsvn)
-(setq svn-program "svn-with-lv")
+(setq svn-program (expand-file-name "~/dotfile/emacs.d/svn-with-lv"))
 
 
 ;; Mercurial
