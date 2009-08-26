@@ -2,10 +2,9 @@
 (setq vc-follow-symlinks t)
 
 ;; Subversion
-(require-safety
- 'dsvn
- (setq svn-status-svn-environment-var-list '("LANG=ja_JP.UTF-8"))
- (global-set-key "\C-cv" 'svn-status))
+(require 'dsvn)
+(setq svn-program "svn-with-lv")
+
 
 ;; Mercurial
 ;; installed on ~/local
