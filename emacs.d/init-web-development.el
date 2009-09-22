@@ -25,8 +25,8 @@
 
   (add-to-list 'auto-mode-alist '("\\.js$" . js2-mode)))
 
-(require 'espresso)
-(add-to-list 'auto-mode-alist '("\\.js$" . espresso-mode))
+; (require 'espresso)
+; (add-to-list 'auto-mode-alist '("\\.js$" . espresso-mode))
 
 ;; Reload
 (add-hook 'after-save-hook 'reload-browsers)
