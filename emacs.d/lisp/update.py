@@ -7,7 +7,6 @@ list = [
     'http://www.emacswiki.org/cgi-bin/wiki/download/anything.el',
     'http://svn.collab.net/repos/svn/trunk/contrib/client-side/emacs/dsvn.el',
     'http://www.foldr.org/~michaelw/objective-c/objc-c-mode.el',
-    'http://sourceforge.net/project/downloading.php?group_id=46019&filename=session-2.2a.tar.gz',
     'http://howm.sourceforge.jp/a/howm-1.3.6.tar.gz',
     'http://www.bookshelf.jp/elc/color-moccur.el',
     'http://www.emacswiki.org/cgi-bin/wiki/download/auto-complete.el',
