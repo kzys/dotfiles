@@ -27,7 +27,8 @@
 (global-set-key "\C-k" 'backward-kill-word)
 (global-set-key "\C-x\C-k" 'kill-line)
 
-(tool-bar-mode -1)
+(if window-system
+    (tool-bar-mode -1))
 (menu-bar-mode (if window-system 0 -1))
 
 (defalias 'qrr 'query-replace-regexp)
