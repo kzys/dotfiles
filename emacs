@@ -152,17 +152,10 @@
  'auto-complete
  (global-auto-complete-mode t)
 
- ;; http://d.hatena.ne.jp/buzztaiki/20081111/1226425889
- (defun ac-lisp-enum-candidates (target)
-   (loop for x in (all-completions target obarray)
-         repeat ac-candidate-max
-         collect x))
-
  (mapcar (lambda (hook)
            (add-hook hook
                      '(lambda ()
-                        (make-variable-buffer-local 'ac-enum-candidates-function)
-                        (setq ac-enum-candidates-function 'ac-lisp-enum-candidates))))
+                        (setq ac-sources '(ac-source-symbols)))))
          (list 'emacs-lisp-mode-hook 'lisp-interaction-mode-hook)) )
 
 (load (expand-file-name "~/.emacs.d/lisp/local.el") t t)
