@@ -166,3 +166,8 @@
          (list 'emacs-lisp-mode-hook 'lisp-interaction-mode-hook)) )
 
 (load (expand-file-name "~/.emacs.d/lisp/local.el") t t)
+
+(require 'wdired)
+(define-key dired-mode-map "r" 'wdired-change-to-wdired-mode)
+
+(require 'moccur-edit)

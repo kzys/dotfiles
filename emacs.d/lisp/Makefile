@@ -1,6 +1,6 @@
 session_version = 2.2
 
-all: download session.el ruby-mode.el
+all: download session.el ruby-mode.el moccur-edit.el
 
 download:
 	python update.py
@@ -16,3 +16,6 @@ session.el: session
 
 ruby-mode.el:
 	svn export http://svn.ruby-lang.org/repos/ruby/trunk/misc/ruby-mode.el
+
+moccur-edit.el:
+	curl -O http://www.bookshelf.jp/elc/moccur-edit.el
