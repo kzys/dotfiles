@@ -1,6 +1,6 @@
 session_version = 2.2
 
-all: download session.el
+all: download session.el ruby-mode.el
 
 download:
 	python update.py
@@ -13,3 +13,6 @@ session: session-$(session_version).tar.gz
 
 session.el: session
 	cp session/lisp/session.el .
+
+ruby-mode.el:
+	svn export http://svn.ruby-lang.org/repos/ruby/trunk/misc/ruby-mode.el
