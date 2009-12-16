@@ -164,3 +164,9 @@
 (define-key dired-mode-map "r" 'wdired-change-to-wdired-mode)
 
 (require 'moccur-edit)
+
+(defun my:test-current-buffer ()
+  (interactive)
+  (if (eq major-mode 'ruby-mode)
+      (compile "rake test")))
+(global-set-key "\C-c\C-t" 'my:test-current-buffer)
