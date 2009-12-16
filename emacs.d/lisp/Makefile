@@ -1,6 +1,6 @@
 session_version = 2.2
 
-all: download session.el ruby-mode.el moccur-edit.el
+all: download session.el ruby-mode.el moccur-edit.el espresso.el
 
 download:
 	python update.py
@@ -19,3 +19,6 @@ ruby-mode.el:
 
 moccur-edit.el:
 	curl -O http://www.bookshelf.jp/elc/moccur-edit.el
+
+espresso.el:
+	curl -O http://download.savannah.gnu.org/releases-noredirect/espresso/espresso.el
