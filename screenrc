@@ -35,3 +35,5 @@ defscrollback 10000
 
 term xterm
 
+shell /bin/zsh
+
