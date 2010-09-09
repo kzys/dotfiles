@@ -1,0 +1,5 @@
+emacs.d/session
+emacs.d/lisp/*.el
+emacs.d/lisp/session
+emacs.d/lisp/*.gz
+emacs.d/auto-save-list
