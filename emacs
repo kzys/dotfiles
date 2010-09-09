@@ -128,6 +128,9 @@
 (add-hook 'find-file-hooks 'auto-insert)
 (setq auto-insert-query nil)
 
+(if (not (functionp 'declare-function))
+    (defmacro declare-function (&rest args)))
+
 (mapcar
  (lambda (name)
    (load (expand-file-name (format "~/.emacs.d/init-%s.el" name))))
