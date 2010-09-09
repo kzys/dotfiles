@@ -132,6 +132,7 @@
  (lambda (name)
    (load (expand-file-name (format "~/.emacs.d/init-%s.el" name))))
  (list
+  "flymake"
   "version-control"
   "buffer"
   "howm"
