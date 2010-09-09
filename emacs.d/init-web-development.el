@@ -6,8 +6,8 @@
 (setq cssm-indent-function #'cssm-c-style-indenter)
 
 ;; JavaScript
-(require 'espresso)
-(add-to-list 'auto-mode-alist '("\\.js$" . espresso-mode))
+(require 'js)
+(add-to-list 'auto-mode-alist '("\\.js$" . js-mode))
 
 ;; Reload
 (add-hook 'after-save-hook 'reload-browsers)

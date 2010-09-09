@@ -5,7 +5,6 @@ list = [
     'http://www.sodan.org/~knagano/emacs/minibuf-isearch/minibuf-isearch.el',
     'http://www.emacswiki.org/cgi-bin/wiki/download/anything-config.el',
     'http://www.emacswiki.org/cgi-bin/wiki/download/anything.el',
-    'http://svn.collab.net/repos/svn/trunk/contrib/client-side/emacs/dsvn.el',
     'http://www.foldr.org/~michaelw/objective-c/objc-c-mode.el',
     'http://howm.sourceforge.jp/a/howm-1.3.6.tar.gz',
     'http://www.bookshelf.jp/elc/color-moccur.el',
