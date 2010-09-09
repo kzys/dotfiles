@@ -5,7 +5,6 @@ startup_message off
 autodetach on
 
 # show selected window on title-bar
-termcapinfo xterm* "hs:ts=\E]2;:fs=\007:ds=\E]0"
 hardstatus string "%t"
 msgwait 1
 
