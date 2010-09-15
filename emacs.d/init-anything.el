@@ -1,6 +1,7 @@
 ;; Anything
 (setq anything-c-use-standard-keys t)
 (setq anything-command-map-prefix-key "C-^")
+(require 'image) ; image-load-path
 (require 'anything-config)
 
  (global-set-key "\C-xb" 'anything)
