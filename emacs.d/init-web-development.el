@@ -6,6 +6,8 @@
 (setq cssm-indent-function #'cssm-c-style-indenter)
 
 ;; JavaScript
+(if (eq emacs-major-version 22)
+    (defmacro syntax-propertize-rules (&rest args)))
 (require 'js)
 (add-to-list 'auto-mode-alist '("\\.js$" . js-mode))
 
