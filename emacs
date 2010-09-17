@@ -122,9 +122,16 @@
 (setq auto-insert-directory  ;; don't forget last slash!
       (expand-file-name "~/.emacs.d/template/"))
 (auto-insert-mode t)
+
 (setq auto-insert-alist
-      '(("\\.pl$" . "_.pl")
-        ("\\.rb$" . "_.rb")))
+      (remove-if 'null
+                 (mapcar
+                  (lambda (basename)
+                    (if (string-match "^default\\.\\(.*[^~]\\)$" basename)
+                        (cons
+                         (concat "\\." (match-string 1 basename) "$")
+                         basename)))
+                  (directory-files auto-insert-directory))))
 (add-hook 'find-file-hooks 'auto-insert)
 (setq auto-insert-query nil)
 
