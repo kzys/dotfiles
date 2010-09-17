@@ -1,4 +1,4 @@
-;; C
+;; -*- Emacs-Lisp -*-
 (require 'cc-mode)
 (setq-default c-basic-offset 4)
 (add-to-list 'c-default-style '(c-mode . "k&r"))
