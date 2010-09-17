@@ -138,10 +138,10 @@
 (if (not (functionp 'declare-function))
     (defmacro declare-function (&rest args)))
 
-(let ((dir (expand-file-name "~/.emacs.d/")))
+(let ((dir (expand-file-name "~/.emacs.d/init/")))
   (mapcar
    (lambda (basename)
-     (if (string-match "^init-.*\\.el$" basename)
+     (if (string-match "^.*\\.el$" basename)
          (load (concat dir basename))))
    (directory-files dir)))
 
