@@ -103,9 +103,9 @@
 ;; Paren
 (require-safety
  'mic-paren
- (paren-activate)
- (set-face-foreground 'paren-face-match "yellow")
- (set-face-background 'paren-face-match nil))
+ (set-face-foreground 'paren-face-match nil)
+ (set-face-background 'paren-face-match "green")
+ (paren-activate))
 
 ;; Tramp
 (require-safety
