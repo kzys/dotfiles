@@ -131,20 +131,12 @@
 (if (not (functionp 'declare-function))
     (defmacro declare-function (&rest args)))
 
-(mapcar
- (lambda (name)
-   (load (expand-file-name (format "~/.emacs.d/init-%s.el" name))))
- (list
-  "flymake"
-  "version-control"
-  "buffer"
-  "howm"
-  "anything"
-  "c"
-  "perl"
-  "ruby"
-  "scala"
-  "web-development"))
+(let ((dir (expand-file-name "~/.emacs.d/")))
+  (mapcar
+   (lambda (basename)
+     (if (string-match "^init-.*\\.el$" basename)
+         (load (concat dir basename))))
+   (directory-files dir)))
 
 (when (not window-system)
   (xterm-mouse-mode 1)
