@@ -139,7 +139,6 @@
    (directory-files dir)))
 
 (when (not window-system)
-  (xterm-mouse-mode 1)
   (mouse-wheel-mode 1))
 
 ;; auto-complete
