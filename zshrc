@@ -66,9 +66,9 @@ export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/lib/pkgconfig
 export EDITOR=vi
 bindkey -e
 
-if test $WINDOW; then
+if test x$WINDOW != x; then
     set-title() {
-      echo -ne "\ek$1\e\\"
+      screen -X eval "title '$1'"
     }
 else
   set-title() {
