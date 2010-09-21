@@ -99,6 +99,8 @@
 
 ;; Region
 (transient-mark-mode t)
+(set-face-background 'region "gray")
+(set-face-foreground 'region nil)
 
 ;; Paren
 (require-safety
