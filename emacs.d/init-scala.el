@@ -1,4 +1,4 @@
-(let ((path (expand-file-name "~/src/scala-2.7.6.final")))
+(let ((path (expand-file-name "~/src/scala-2.8.0.final")))
   (cond ((file-directory-p path)
          (setq load-path
                (cons (concat path "/misc/scala-tool-support/emacs/")
