@@ -27,9 +27,12 @@
 (global-set-key "\C-k" 'backward-kill-word)
 (global-set-key "\C-x\C-k" 'kill-line)
 
-(if window-system
-    (tool-bar-mode -1))
-(menu-bar-mode (if window-system 0 -1))
+(cond (window-system
+       nil)
+      (t
+       (tool-bar-mode -1)
+       (menu-bar-mode -1)
+       (mouse-wheel-mode 1)))
 
 (defalias 'qrr 'query-replace-regexp)
 
@@ -146,9 +149,6 @@
      (if (string-match "^.*\\.el$" basename)
          (load (concat dir basename))))
    (directory-files dir)))
-
-(when (not window-system)
-  (mouse-wheel-mode 1))
 
 ;; auto-complete
 (require-safety
