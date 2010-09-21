@@ -15,3 +15,5 @@
 (require-safety
  'vc-hg
  (setq vc-handled-backends (cons 'HG vc-handled-backends)))
+
+(require 'git)

@@ -4,6 +4,10 @@
 (require 'image) ; image-load-path
 (require 'anything-config)
 
+(require 'anything-project)
+(global-set-key "\C-c\C-f" 'anything-project)
+
+
  (global-set-key "\C-xb" 'anything)
 
  (setq anything-type-attributes

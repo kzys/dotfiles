@@ -27,9 +27,12 @@
 (global-set-key "\C-k" 'backward-kill-word)
 (global-set-key "\C-x\C-k" 'kill-line)
 
-(if window-system
-    (tool-bar-mode -1))
-(menu-bar-mode (if window-system 0 -1))
+(cond (window-system
+       nil)
+      (t
+       (tool-bar-mode -1)
+       (menu-bar-mode -1)
+       (mouse-wheel-mode 1)))
 
 (defalias 'qrr 'query-replace-regexp)
 
@@ -99,13 +102,15 @@
 
 ;; Region
 (transient-mark-mode t)
+(set-face-background 'region "gray")
+(set-face-foreground 'region nil)
 
 ;; Paren
 (require-safety
  'mic-paren
- (paren-activate)
- (set-face-foreground 'paren-face-match "yellow")
- (set-face-background 'paren-face-match nil))
+ (set-face-foreground 'paren-face-match nil)
+ (set-face-background 'paren-face-match "green")
+ (paren-activate))
 
 ;; Tramp
 (require-safety
@@ -122,25 +127,28 @@
 (setq auto-insert-directory  ;; don't forget last slash!
       (expand-file-name "~/.emacs.d/template/"))
 (auto-insert-mode t)
+
 (setq auto-insert-alist
-      '(("\\.pl$" . "_.pl")
-        ("\\.rb$" . "_.rb")))
+      (remove-if 'null
+                 (mapcar
+                  (lambda (basename)
+                    (if (string-match "^default\\.\\(.*[^~]\\)$" basename)
+                        (cons
+                         (concat "\\." (match-string 1 basename) "$")
+                         basename)))
+                  (directory-files auto-insert-directory))))
 (add-hook 'find-file-hooks 'auto-insert)
 (setq auto-insert-query nil)
 
 (if (not (functionp 'declare-function))
     (defmacro declare-function (&rest args)))
 
-(let ((dir (expand-file-name "~/.emacs.d/")))
+(let ((dir (expand-file-name "~/.emacs.d/init/")))
   (mapcar
    (lambda (basename)
-     (if (string-match "^init-.*\\.el$" basename)
+     (if (string-match "^.*\\.el$" basename)
          (load (concat dir basename))))
    (directory-files dir)))
-
-(when (not window-system)
-  (xterm-mouse-mode 1)
-  (mouse-wheel-mode 1))
 
 ;; auto-complete
 (require-safety

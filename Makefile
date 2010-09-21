@@ -1,5 +1,5 @@
 install: download
-	sh setup.sh
+	python install.py
 
 download:
 	cd emacs.d/lisp/ && make

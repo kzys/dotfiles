@@ -1,6 +1,6 @@
 session_version = 2.2
 
-all: download session.el ruby-mode.el moccur-edit.el js.el dsvn.el
+all: download session.el ruby-mode.el moccur-edit.el js.el dsvn.el anything-project.el git.el
 
 download:
 	python update.py
@@ -25,3 +25,9 @@ js.el:
 
 dsvn.el:
 	curl -O http://svn.apache.org/repos/asf/subversion/trunk/contrib/client-side/emacs/dsvn.el
+
+anything-project.el:
+	curl -O http://github.com/imakado/anything-project/raw/master/anything-project.el
+
+git.el:
+	curl 'http://git.kernel.org/?p=git/git.git;a=blob_plain;f=contrib/emacs/git.el;hb=HEAD' > $@

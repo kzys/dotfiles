@@ -31,7 +31,7 @@ setopt extended_history hist_ignore_dups share_history
 
 # Completion
 autoload -U compinit
-compinit
+compinit -d ~/.zsh/compdump
 
 # Prompt
 autoload -U colors

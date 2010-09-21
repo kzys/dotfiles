@@ -4,4 +4,4 @@ emacs.d/lisp/session
 emacs.d/lisp/*.gz
 emacs.d/auto-save-list
 *~
-emacs.d/init-private-*.el
+emacs.d/init/private-*.el
