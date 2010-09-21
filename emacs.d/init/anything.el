@@ -3,6 +3,10 @@
 (setq anything-command-map-prefix-key "C-^")
 (require 'anything-config)
 
+(require 'anything-project)
+(global-set-key "\C-c\C-f" 'anything-project)
+
+
  (global-set-key "\C-xb" 'anything)
 
  (setq anything-type-attributes
