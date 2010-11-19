@@ -54,7 +54,11 @@ export WWW_HOME=http://www.google.co.jp/
 export CVS_RSH=ssh
 export RUBYLIB=/usr/local/lib/ruby/site_ruby/1.8
 
-eval $(perl -I$HOME/local/lib/perl5 -Mlocal::lib)
+if test -f $HOME/perl5/perlbrew/etc/bashrc; then
+    source $HOME/perl5/perlbrew/etc/bashrc
+else
+    eval $(perl -I$HOME/local/lib/perl5 -Mlocal::lib)
+fi
 
 PYTHONPATH="$HOME/local/lib/python:$HOME/local/lib/python2.6"
 export PYTHONPATH
