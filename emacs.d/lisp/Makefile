@@ -1,9 +1,12 @@
 session_version = 2.2
 
-all: download session.el ruby-mode.el moccur-edit.el js.el dsvn.el anything-project.el git.el
+all: download session.el ruby-mode.el moccur-edit.el js.el dsvn.el anything-project.el git.el sgml-match-mode.el
 
 download:
 	python update.py
+
+sgml-match-mode.el:
+	curl -LO https://github.com/kzys/sgml-match-mode/raw/master/lisp/sgml-match-mode.el
 
 session-$(session_version).tar.gz:
 	curl -L http://sf.net/projects/emacs-session/files/session/$(session_version)/session-$(session_version).tar.gz/download > $@
