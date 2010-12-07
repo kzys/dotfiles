@@ -4,18 +4,19 @@
 
 (require 'anything)
 (require 'anything-config)
-(global-set-key "\C-xb" 'anything)
-
+(require 'anything-project)
 (require 'anything-match-plugin)
 
-(require 'anything-project)
-(defun find-file-or-anything-project ()
+(defun anything-switch-to-buffer ()
   (interactive)
-  (call-interactively
-   (if (car (ap:get-root-directory))
-       'anything-project
-     'find-file)))
-(global-set-key "\C-x\C-f" 'find-file-or-anything-project)
+  (anything-other-buffer
+   (list 'anything-c-source-buffers
+         'anything-c-source-recentf
+         'anything-c-source-files-in-current-dir
+         (if (car (ap:get-root-directory))
+             'anything-c-source-project))
+   "*anything switch-to-buffer*"))
+(global-set-key "\C-xb" 'anything-switch-to-buffer)
 
 (define-anything-type-attribute 'file
   '((action . (("Find File" . find-file)
