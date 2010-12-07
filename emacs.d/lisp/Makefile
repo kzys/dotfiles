@@ -1,6 +1,6 @@
 session_version = 2.2
 
-all: download session.el ruby-mode.el moccur-edit.el js.el dsvn.el anything-project.el git.el sgml-match-mode.el
+all: download session.el ruby-mode.el moccur-edit.el js.el dsvn.el anything-project.el git.el sgml-match-mode.el auto-install.el
 
 download:
 	python update.py
@@ -34,3 +34,6 @@ anything-project.el:
 
 git.el:
 	curl 'http://git.kernel.org/?p=git/git.git;a=blob_plain;f=contrib/emacs/git.el;hb=HEAD' > $@
+
+auto-install.el:
+	curl -LO http://www.emacswiki.org/emacs/download/auto-install.el
