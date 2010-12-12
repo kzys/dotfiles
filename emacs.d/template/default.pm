@@ -1,4 +1,4 @@
-pacakge;
+package ;
 use strict;
 use warnings;
 

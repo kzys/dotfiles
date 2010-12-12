@@ -135,13 +135,27 @@
                     (if (string-match "^default\\.\\(.*[^~]\\)$" basename)
                         (cons
                          (concat "\\." (match-string 1 basename) "$")
-                         basename)))
+                         (vector basename 'auto-insert-update-file))))
                   (directory-files auto-insert-directory))))
 (add-hook 'find-file-hooks 'auto-insert)
 (setq auto-insert-query nil)
 
+(defun auto-insert-update-file ()
+  (let
+      ((str (replace-regexp-in-string ".*/lib/\\(.*\\)\\.pm$" "\\1"
+                                      (buffer-file-name))))
+
+    (while (search-forward "package " nil t)
+    (save-restriction
+      (narrow-to-region (match-beginning 0) (match-end 0))
+      (replace-match
+       (concat "package " (replace-regexp-in-string "/" "::" str)))))))
+
 (if (not (functionp 'declare-function))
     (defmacro declare-function (&rest args)))
+
+(require 'auto-install)
+(add-to-list 'load-path auto-install-directory)
 
 (let ((dir (expand-file-name "~/.emacs.d/init/")))
   (mapcar
