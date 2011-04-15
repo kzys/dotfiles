@@ -24,7 +24,7 @@ moccur-edit.el:
 	curl -O http://www.bookshelf.jp/elc/moccur-edit.el
 
 js.el:
-	curl -O http://repo.or.cz/w/emacs.git/blob_plain/HEAD:/lisp/progmodes/js.el
+	curl -O http://repo.or.cz/w/emacs.git/blob_plain/c25ab7852d48443c85865f5b9fbbaed2bba3431e:/lisp/progmodes/js.el
 
 dsvn.el:
 	curl -O http://svn.apache.org/repos/asf/subversion/trunk/contrib/client-side/emacs/dsvn.el

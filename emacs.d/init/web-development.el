@@ -6,8 +6,6 @@
 (setq cssm-indent-function #'cssm-c-style-indenter)
 
 ;; JavaScript
-(if (not (functionp 'prog-mode))
-    (define-derived-mode prog-mode fundamental-mode "prog-mode"))
 (require 'js)
 (add-to-list 'auto-mode-alist '("\\.js$" . js-mode))
 
