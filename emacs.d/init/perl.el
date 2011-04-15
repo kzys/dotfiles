@@ -2,6 +2,8 @@
 (setq auto-mode-alist
       (append '(("\\.p[lm]$" . cperl-mode)
                 ("\\.t$" . cperl-mode)) auto-mode-alist))
+(add-to-list 'interpreter-mode-alist
+             '("perl" . cperl-mode))
 (setq auto-mode-alist
       (cons '("\\.tt$" . html-mode) auto-mode-alist))
 
