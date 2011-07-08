@@ -2,6 +2,7 @@
 
 (setq anything-command-map-prefix-key "C-^")
 
+(require 'image) ; image-load-path
 (require 'anything)
 (require 'anything-config)
 (require 'anything-project)
