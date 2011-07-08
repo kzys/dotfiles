@@ -1,4 +1,4 @@
-;; -*- emacs-lisp -*-
+;; -*- Emacs-lisp -*-
 ;; ~/.emacs.el
 
 (setq load-path
@@ -27,12 +27,9 @@
 (global-set-key "\C-k" 'backward-kill-word)
 (global-set-key "\C-x\C-k" 'kill-line)
 
-(cond (window-system
-       nil)
-      (t
-       (tool-bar-mode -1)
-       (menu-bar-mode -1)
-       (mouse-wheel-mode 1)))
+(tool-bar-mode -1)
+(menu-bar-mode -1)
+(mouse-wheel-mode 1)
 
 (defalias 'qrr 'query-replace-regexp)
 
