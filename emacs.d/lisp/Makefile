@@ -26,9 +26,6 @@ ruby-mode.el:
 moccur-edit.el:
 	curl -O http://www.bookshelf.jp/elc/moccur-edit.el
 
-dsvn.el:
-	curl -O http://svn.apache.org/repos/asf/subversion/trunk/contrib/client-side/emacs/dsvn.el
-
 anything-project.el:
 	curl -O https://github.com/imakado/anything-project/raw/master/anything-project.el
 
