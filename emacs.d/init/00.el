@@ -63,3 +63,7 @@
                  (mapconcat 'identity messages "\n")))))
 
 (run-with-idle-timer 1 t 'flymake-display-err-on-minibuffer)
+
+;; recentf
+(recentf-mode 1)
+(setq recentf-save-file "~/.emacs.d/recentf")
