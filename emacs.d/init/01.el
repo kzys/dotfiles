@@ -14,6 +14,11 @@
 (setq history-length t)
 (add-hook 'after-init-hook 'session-initialize)
 
+;; Incremental Search on Minibuffer
+;; D http://www.sodan.org/~knagano/emacs/minibuf-isearch/minibuf-isearch.el
+(require 'minibuf-isearch)
+(setq minibuf-isearch-use-migemo nil)
+
 ;; JavaScript
 ;; D http://repo.or.cz/w/emacs.git/blob_plain/6b45354a9e8f5db5e283025cc0b7ea053408f176:/lisp/progmodes/js.el
 (require 'js)
