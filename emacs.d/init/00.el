@@ -17,24 +17,28 @@
 ;; "Region" should be visible.
 (transient-mark-mode t)
 
+;; perl-mode can't handle some syntax of Perl.
+;; I recommend that you use cperl-mode.
+(setq auto-mode-alist
+      (append '(("\\.p[lm]$" . cperl-mode)
+                ("\\.t$" . cperl-mode)) auto-mode-alist))
+(add-to-list 'interpreter-mode-alist
+             '("perl" . cperl-mode))
+
+;; But cperl-mode's default settings is not so good.
+;; I prefer "Perl Best Practices" 2.11.
+(setq cperl-close-paren-offset -4
+      cperl-continued-statement-offset 4
+      cperl-indent-level 4
+      cperl-indent-parens-as-block t
+      cperl-tab-always-indent t)
+
 ;; Show "matched" parenthesis.
-(require 'mic-paren)
-(paren-activate)
+(show-paren-mode 1)
 
-;; Some libraries are not included on standard distribution.
-;; But we must use them for *acceptable* setting.
-(add-to-list 'load-path
-	     (expand-file-name "~/.emacs.d/lisp"))
+;; Shouldn't use "hard tab" on code.
+(setq-default indent-tabs-mode nil)
+(setq-default tab-width 4)
 
-;; Emacs should save histories.
-;; http://d.hatena.ne.jp/higepon/20061230/1167447339 (Japanese)
-(require 'session)
-
-(setq session-initialize t)
-(setq session-save-file (expand-file-name "~/.emacs.d/session"))
-(setq session-globals-include '((kill-ring 50)
-				(session-file-alist 500 t)
-				(file-name-history 10000)))
-(setq session-globals-max-string 100000000)
-(setq history-length t)
-(add-hook 'after-init-hook 'session-initialize)
+(when (boundp 'show-trailing-whitespace)
+  (setq-default show-trailing-whitespace t))
