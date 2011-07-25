@@ -37,8 +37,6 @@
   (setq-default show-trailing-whitespace t))
 
 ;; Misc
-(global-set-key "\C-h" 'backward-delete-char-untabify)
-(global-set-key "\C-ch" 'help)
 
 (global-set-key "\C-cb" 'compile)
 (global-set-key "\C-cg" 'grep)
@@ -78,18 +76,6 @@
 ;; Server
 (require 'server)
 (server-start)
-
-;; Region
-(transient-mark-mode t)
-(set-face-background 'region "gray")
-(set-face-foreground 'region nil)
-
-;; Paren
-(require-safety
- 'mic-paren
- (set-face-foreground 'paren-face-match nil)
- (set-face-background 'paren-face-match "green")
- (paren-activate))
 
 ;; Tramp
 (require-safety
