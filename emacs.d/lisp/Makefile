@@ -1,6 +1,9 @@
 session_version = 2.2
 
-all: download session.el ruby-mode.el moccur-edit.el js.el dsvn.el anything-project.el git.el sgml-match-mode.el auto-install.el
+all: download magic-comment session.el ruby-mode.el moccur-edit.el dsvn.el anything-project.el git.el sgml-match-mode.el auto-install.el
+
+magic-comment:
+	awk '/^;; D / { system("curl -LO " $$3) }' ../init/*.el
 
 download:
 	python update.py
@@ -22,9 +25,6 @@ ruby-mode.el:
 
 moccur-edit.el:
 	curl -O http://www.bookshelf.jp/elc/moccur-edit.el
-
-js.el:
-	curl -O http://repo.or.cz/w/emacs.git/blob_plain/c25ab7852d48443c85865f5b9fbbaed2bba3431e:/lisp/progmodes/js.el
 
 dsvn.el:
 	curl -O http://svn.apache.org/repos/asf/subversion/trunk/contrib/client-side/emacs/dsvn.el

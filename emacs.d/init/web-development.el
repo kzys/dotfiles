@@ -5,10 +5,6 @@
       (cons '("\\.css$" . css-mode) auto-mode-alist))
 (setq cssm-indent-function #'cssm-c-style-indenter)
 
-;; JavaScript
-(require 'js)
-(add-to-list 'auto-mode-alist '("\\.js$" . js-mode))
-
 ;; Reload
 (add-hook 'after-save-hook 'reload-browsers)
 (defun reload-browsers()
