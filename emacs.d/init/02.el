@@ -1,3 +1,5 @@
+(when (boundp 'show-trailing-whitespace)
+  (setq-default show-trailing-whitespace t))
 
 (setq user-mail-address "kzys@8-p.info")
 

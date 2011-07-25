@@ -39,6 +39,3 @@
 ;; Shouldn't use "hard tab" on code.
 (setq-default indent-tabs-mode nil)
 (setq-default tab-width 4)
-
-(when (boundp 'show-trailing-whitespace)
-  (setq-default show-trailing-whitespace t))
