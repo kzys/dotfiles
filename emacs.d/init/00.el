@@ -65,5 +65,10 @@
 (run-with-idle-timer 1 t 'flymake-display-err-on-minibuffer)
 
 ;; recentf
-(recentf-mode 1)
+(require 'recentf)
 (setq recentf-save-file "~/.emacs.d/recentf")
+(recentf-mode 1)
+
+;; You can use Menu even if you don't use any window system.
+;; But it's not useful.
+(menu-bar-mode (if window-system 1 -1))
