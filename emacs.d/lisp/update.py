@@ -2,7 +2,6 @@
 import re, urllib, os
 
 list = [
-    'http://www.sodan.org/~knagano/emacs/minibuf-isearch/minibuf-isearch.el',
     'http://www.emacswiki.org/cgi-bin/wiki/download/anything-config.el',
     'http://www.emacswiki.org/cgi-bin/wiki/download/anything.el',
     'http://www.foldr.org/~michaelw/objective-c/objc-c-mode.el',
