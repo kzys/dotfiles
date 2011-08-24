@@ -72,3 +72,18 @@
 ;; You can use Menu even if you don't use any window system.
 ;; But it's not useful.
 (menu-bar-mode (if window-system 1 -1))
+
+;; Tool Bar is not useful in Emacs.
+(tool-bar-mode -1)
+
+;; I can see a cursor even if it doesn't blink.
+(blink-cursor-mode -1)
+
+;; Server
+(require 'server)
+(server-start)
+
+;; When I open two files which have same basename,
+;; Emacs should not name as "foo<1>", "foo<2>".
+(require 'uniquify)
+(setq uniquify-buffer-name-style 'post-forward-angle-brackets)
