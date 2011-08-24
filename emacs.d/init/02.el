@@ -70,10 +70,6 @@
 ;; Bell
 (setq ring-bell-function (lambda()))
 
-;; Server
-(require 'server)
-(server-start)
-
 ;; Tramp
 (require-safety
  'tramp
