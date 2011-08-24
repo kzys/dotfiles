@@ -87,3 +87,20 @@
 ;; Emacs should not name as "foo<1>", "foo<2>".
 (require 'uniquify)
 (setq uniquify-buffer-name-style 'post-forward-angle-brackets)
+
+(cond
+ (window-system
+
+  ;; Font
+  (set-default-font "-*-fixed-medium-r-normal--14-*-*-*-*-*-*-*")
+  (set-face-font 'default
+                 "-shinonome-gothic-medium-r-normal--14-*-*-*-*-*-*-*")
+  (set-face-font 'bold
+                 "-shinonome-gothic-bold-r-normal--14-*-*-*-*-*-*-*")
+  (set-face-font 'italic
+                 "-shinonome-gothic-medium-i-normal--14-*-*-*-*-*-*-*")
+  (set-face-font 'bold-italic
+                 "-shinonome-gothic-bold-i-normal--14-*-*-*-*-*-*-*")
+
+  ;; Scroll bar should placed on right side
+  (set-scroll-bar-mode 'right)))
