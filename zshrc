@@ -63,6 +63,15 @@ fi
 PYTHONPATH="$HOME/local/lib/python:$HOME/local/lib/python2.6"
 export PYTHONPATH
 
+## Ruby
+# rbenv
+PATH=$HOME/src/rbenv/bin:$PATH
+export PATH="${HOME}/src/rbenv/shims:${PATH}"
+source "/home/kzys/src/rbenv/libexec/../completions/rbenv.zsh"
+rbenv rehash 2>/dev/null
+# ruby-build
+export PATH="${HOME}/src/ruby-build/bin:${PATH}"
+
 export FTP_PASSIVE=1
 export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/lib/pkgconfig
 # export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/sw/lib/freetype219/lib/pkgconfig:/sw/lib/pkgconfig:/usr/lib/pkgconfig
