@@ -1,10 +1,12 @@
 [ui]
-username = KATO Kazuyoshi <kzys@8-p.info>
+username = Kato Kazuyoshi <kato.kazuyoshi@gmail.com>
+ssh = ssh -C
 
 [extensions]
 hgext.mq =
 hgext.convert =
 hgext.keyword =
+hgext.graphlog =
 
 [keyword]
 * =
