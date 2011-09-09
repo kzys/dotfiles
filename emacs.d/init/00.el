@@ -46,9 +46,12 @@
 (defun flymake-display-err-on-minibuffer ()
   "Displays the error/warning for the current line in the minibuffer"
   (interactive)
-  (let* ((line-no             (flymake-current-line-no))
-         (line-err-info-list  (nth 0 (flymake-find-err-info flymake-err-info line-no)))
-         (count               (length line-err-info-list))
+  (let* ((line-no   
+          (flymake-current-line-no))
+         (line-err-info-list  
+          (nth 0 (flymake-find-err-info flymake-err-info line-no)))
+         (count    
+          (length line-err-info-list))
          (messages))
     (while (> count 0)
       (let* ((info (nth (1- count) line-err-info-list))
@@ -65,5 +68,42 @@
 (run-with-idle-timer 1 t 'flymake-display-err-on-minibuffer)
 
 ;; recentf
-(recentf-mode 1)
+(require 'recentf)
 (setq recentf-save-file "~/.emacs.d/recentf")
+(recentf-mode 1)
+
+;; You can use Menu even if you don't use any window system.
+;; But it's not useful.
+(menu-bar-mode (if window-system 1 -1))
+
+;; Tool Bar is not useful in Emacs.
+(tool-bar-mode -1)
+
+;; I can see a cursor even if it doesn't blink.
+(blink-cursor-mode -1)
+
+;; Server
+(require 'server)
+(server-start)
+
+;; When I open two files which have same basename,
+;; Emacs should not name as "foo<1>", "foo<2>".
+(require 'uniquify)
+(setq uniquify-buffer-name-style 'post-forward-angle-brackets)
+
+(cond
+ (window-system
+
+  ;; Font
+  (set-default-font "-*-fixed-medium-r-normal--14-*-*-*-*-*-*-*")
+  (set-face-font 'default
+                 "-shinonome-gothic-medium-r-normal--14-*-*-*-*-*-*-*")
+  (set-face-font 'bold
+                 "-shinonome-gothic-bold-r-normal--14-*-*-*-*-*-*-*")
+  (set-face-font 'italic
+                 "-shinonome-gothic-medium-i-normal--14-*-*-*-*-*-*-*")
+  (set-face-font 'bold-italic
+                 "-shinonome-gothic-bold-i-normal--14-*-*-*-*-*-*-*")
+
+  ;; Scroll bar should placed on right side
+  (set-scroll-bar-mode 'right)))

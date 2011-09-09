@@ -1,7 +1,7 @@
 (add-to-list 'load-path
-	     (expand-file-name "~/.emacs.d/lisp"))
+             (expand-file-name "~/.emacs.d/lisp"))
 
-;; Emacs should save histories.
+;; recentf saves histories of files. But session saves other histories too.
 ;; http://d.hatena.ne.jp/higepon/20061230/1167447339 (Japanese)
 (require 'session)
 
