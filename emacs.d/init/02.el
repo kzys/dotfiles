@@ -109,9 +109,6 @@
       (replace-match
        (concat "package " (replace-regexp-in-string "/" "::" str)))))))
 
-(if (not (functionp 'declare-function))
-    (defmacro declare-function (&rest args)))
-
 (require 'auto-install)
 (add-to-list 'load-path auto-install-directory)
 

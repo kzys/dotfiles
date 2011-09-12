@@ -1,4 +1,4 @@
-;; -*- Emacs-lisp -*-
+;; -*- emacs-lisp -*-
 ;; ~/.emacs.el
 
 (let ((dir (expand-file-name "~/.emacs.d/init/")))
