@@ -1,4 +1,7 @@
-install: download
+gitconfig: gitconfig.public gitconfig.private
+	cat $^ > gitconfig
+
+install: download gitconfig
 	python install.py
 
 download:
