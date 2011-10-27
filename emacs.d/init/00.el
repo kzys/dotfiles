@@ -95,15 +95,27 @@
  (window-system
 
   ;; Font
-  (set-default-font "-*-fixed-medium-r-normal--14-*-*-*-*-*-*-*")
-  (set-face-font 'default
-                 "-shinonome-gothic-medium-r-normal--14-*-*-*-*-*-*-*")
-  (set-face-font 'bold
-                 "-shinonome-gothic-bold-r-normal--14-*-*-*-*-*-*-*")
-  (set-face-font 'italic
-                 "-shinonome-gothic-medium-i-normal--14-*-*-*-*-*-*-*")
-  (set-face-font 'bold-italic
-                 "-shinonome-gothic-bold-i-normal--14-*-*-*-*-*-*-*")
+  (cond
+   ((>= emacs-major-version 23)
+    (set-default-font "Bitstream Vera Sans Mono-12")
+    (set-face-font 'default
+                   "Bitstream Vera Sans Mono-12")
+    (set-face-font 'bold
+                   "Bitstream Vera Sans Mono-12:weight=bold")
+    (set-face-font 'italic
+                   "Bitstream Vera Sans Mono-12:slant=oblique")
+    (set-face-font 'bold-italic
+                   "Bitstream Vera Sans Mono-12:weight=bold:slant=oblique"))
+   (t
+    (set-default-font "-*-fixed-medium-r-normal--14-*-*-*-*-*-*-*")
+    (set-face-font 'default
+                   "-shinonome-gothic-medium-r-normal--14-*-*-*-*-*-*-*")
+    (set-face-font 'bold
+                   "-shinonome-gothic-bold-r-normal--14-*-*-*-*-*-*-*")
+    (set-face-font 'italic
+                   "-shinonome-gothic-medium-i-normal--14-*-*-*-*-*-*-*")
+    (set-face-font 'bold-italic
+                   "-shinonome-gothic-bold-i-normal--14-*-*-*-*-*-*-*")))
 
   ;; Scroll bar should placed on right side
   (set-scroll-bar-mode 'right)))
