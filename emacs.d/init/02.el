@@ -24,7 +24,6 @@
 (global-set-key "\C-k" 'backward-kill-word)
 (global-set-key "\C-x\C-k" 'kill-line)
 
-(tool-bar-mode -1)
 (menu-bar-mode -1)
 (mouse-wheel-mode 1)
 

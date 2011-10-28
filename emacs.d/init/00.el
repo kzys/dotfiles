@@ -77,7 +77,8 @@
 (menu-bar-mode (if window-system 1 -1))
 
 ;; Tool Bar is not useful in Emacs.
-(tool-bar-mode -1)
+(if (boundp 'tool-bar-mode)
+    (tool-bar-mode -1))
 
 ;; I can see a cursor even if it doesn't blink.
 (blink-cursor-mode -1)
