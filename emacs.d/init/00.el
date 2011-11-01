@@ -97,15 +97,16 @@
   ;; Font
   (cond
    ((>= emacs-major-version 23)
-    (set-default-font "Bitstream Vera Sans Mono-12")
-    (set-face-font 'default
-                   "Bitstream Vera Sans Mono-12")
-    (set-face-font 'bold
-                   "Bitstream Vera Sans Mono-12:weight=bold")
-    (set-face-font 'italic
-                   "Bitstream Vera Sans Mono-12:slant=oblique")
-    (set-face-font 'bold-italic
-                   "Bitstream Vera Sans Mono-12:weight=bold:slant=oblique"))
+    (let ((family "Droid Sans Mono"))
+      (set-default-font (concat family "-12"))
+      (set-face-font 'default
+                     (concat family "-12"))
+      (set-face-font 'bold
+                     (concat family "-12:weight=bold"))
+      (set-face-font 'italic
+                     (concat family "-12:slant=oblique"))
+      (set-face-font 'bold-italic
+                     (concat family "-12:weight=bold:slant=oblique"))))
    (t
     (set-default-font "-*-fixed-medium-r-normal--14-*-*-*-*-*-*-*")
     (set-face-font 'default
