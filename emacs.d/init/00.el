@@ -97,16 +97,17 @@
   ;; Font
   (cond
    ((>= emacs-major-version 23)
-    (let ((family "Droid Sans Mono"))
-      (set-default-font (concat family "-12"))
+    (let ((family "Droid Sans Mono")
+          (size 10))
+      (set-default-font (format "%s-%d" family size))
       (set-face-font 'default
-                     (concat family "-12"))
+                     (format "%s-%d" family size))
       (set-face-font 'bold
-                     (concat family "-12:weight=bold"))
+                     (format "%s-%d:weight=bold" family size))
       (set-face-font 'italic
-                     (concat family "-12:slant=oblique"))
+                     (format "%s-%d:slant=oblique" family size))
       (set-face-font 'bold-italic
-                     (concat family "-12:weight=bold:slant=oblique"))))
+                     (format "%s-%d:weight=bold:slant=oblique" family size))))
    (t
     (set-default-font "-*-fixed-medium-r-normal--14-*-*-*-*-*-*-*")
     (set-face-font 'default
