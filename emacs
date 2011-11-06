@@ -23,3 +23,5 @@
            (set-fontset-font nil 'japanese-jisx0213-2 spec)
            (set-fontset-font nil 'katakana-jisx0201 spec)))))
 
+
+(setq ispell-program-name "/usr/local/bin/aspell")
