@@ -99,3 +99,7 @@ precmd () {
 %# "
   set-title "$(print -n -P '%~') @ $(hostname)"
 }
+
+if test -n $SSH_AGENT_PID; then
+  (ssh-add -L >& /dev/null) || ssh-add
+fi
