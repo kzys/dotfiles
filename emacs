@@ -46,3 +46,14 @@
       smtpmail-starttls-credentials '(("smtp.gmail.com" 587 nil nil))
 
       smtpmail-auth-credentials (expand-file-name "~/.emacs.d/authinfo"))
+
+(cond
+ ((require 'anthy nil t)
+
+  (require 'egg)
+  (setq default-input-method 'japanese-egg-anthy)
+
+  (require 'egg-mlh)
+  (setq mlh-default-backend "anthy")
+  (global-set-key " " 'mlh-space-bar-backward-henkan)))
+
