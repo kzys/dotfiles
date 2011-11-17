@@ -4,7 +4,7 @@
 
 (require 'image) ; image-load-path
 (require 'anything)
-(require 'anything-config)
+; (require 'anything-config)
 (require 'anything-project)
 (require 'anything-match-plugin)
 
@@ -17,7 +17,6 @@
          (if (car (ap:get-root-directory))
              'anything-c-source-project))
    "*anything switch-to-buffer*"))
-(global-set-key "\C-xb" 'anything-switch-to-buffer)
 
 (define-anything-type-attribute 'file
   '((action . (("Find File" . find-file)

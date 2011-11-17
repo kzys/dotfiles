@@ -122,3 +122,5 @@
 
   ;; Scroll bar should placed on right side
   (set-scroll-bar-mode 'right)))
+
+(iswitchb-mode)
