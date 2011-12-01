@@ -10,6 +10,13 @@
    (sort (directory-files dir) 'string-lessp)))
 
 (cond ((eq window-system 'ns)
+       (set-cursor-color "#ccc")
+
+       (defun insert-backslash ()
+         (interactive)
+         (insert "\\"))
+       (global-set-key "¥" 'insert-backslash)
+
        (mapcar
         (lambda (face)
           (set-face-attribute face nil :family "Menlo" :height 140))
@@ -22,7 +29,6 @@
            target
            '("Hiragino Maru Gothic Pro" . "iso10646-1")))
         (list 'japanese-jisx0208 'japanese-jisx0212))))
-
 
 (setq ispell-program-name "/usr/local/bin/aspell")
 
