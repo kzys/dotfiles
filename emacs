@@ -23,8 +23,10 @@
            (set-fontset-font nil 'japanese-jisx0213-2 spec)
            (set-fontset-font nil 'katakana-jisx0201 spec)))))
 
-
-(setq ispell-program-name "/usr/local/bin/aspell")
+(setq ispell-local-dictionary "english")
+(setq ispell-program-name
+      (if (file-exists-p "/usr/local/bin/aspell")
+          "/usr/local/bin/aspell" "aspell"))
 
 (setq user-full-name "Kato Kazuyoshi"
       user-mail-address "kato.kazuyoshi@gmail.com")
