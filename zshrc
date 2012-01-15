@@ -9,7 +9,14 @@ fi
 
 # Path
 # export PATH=$HOME/bin:/usr/local/bin:$PATH
-export PATH=$HOME/bin:$HOME/local/bin:$HOME/src/scala-2.7.4.final/bin:/usr/local/bin:/opt/local/bin:/usr/bin:/bin
+
+if (hostname | grep '^dvm' >& /dev/null); then
+   path_usr=(/usr/bin /usr/local/bin)
+else
+   path_usr=(/usr/local/bin /usr/bin)
+fi
+path=(~/bin ~/local/bin /opt/local/bin $path_usr /bin)
+
 fpath=(~/.zsh/functions $fpath)
 
 # Alias

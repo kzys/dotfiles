@@ -30,7 +30,10 @@
            '("Hiragino Maru Gothic Pro" . "iso10646-1")))
         (list 'japanese-jisx0208 'japanese-jisx0212))))
 
-(setq ispell-program-name "/usr/local/bin/aspell")
+(setq ispell-local-dictionary "english")
+(setq ispell-program-name
+      (if (file-exists-p "/usr/local/bin/aspell")
+          "/usr/local/bin/aspell" "aspell"))
 
 (setq user-full-name "Kato Kazuyoshi"
       user-mail-address "kato.kazuyoshi@gmail.com")

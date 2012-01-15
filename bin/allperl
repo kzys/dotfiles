@@ -1,0 +1,6 @@
+for perl in $(which -a perl)
+do
+        echo % $perl "$@"
+        $perl "$@"
+done
+echo %
