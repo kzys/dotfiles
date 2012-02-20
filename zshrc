@@ -15,7 +15,7 @@ if (hostname | grep '^dvm' >& /dev/null); then
 else
    path_usr=(/usr/local/bin /usr/bin)
 fi
-path=(~/bin ~/local/bin /opt/local/bin $path_usr /bin)
+path=($(dirname $(readlink ~/.zshrc))/bin ~/local/bin /opt/local/bin $path_usr /bin)
 
 fpath=(~/.zsh/functions $fpath)
 
