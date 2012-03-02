@@ -45,7 +45,6 @@ autoload -U colors
 colors
 PROMPT="$fg[green]%~ @ `hostname`$reset_color
 %# "
-# RPROMPT="%~ "
 
 # Misc
 setopt extended_glob print_eight_bit noflow_control
@@ -104,6 +103,15 @@ original_prompt="%~ @ $(hostname)"
 precmd () {
   PROMPT="%{%(?.$fg[green].$fg[red])%}$original_prompt$reset_color
 %# "
+
+  local branch
+  local dirty
+  if git rev-parse --git-dir >& /dev/null; then
+    branch="$(git symbolic-ref -q HEAD 2>/dev/null | sed 's/refs\/heads\///')"
+    test -z "$(git ls-files -m 2>/dev/null)" || dirty=' ✗'
+  fi
+  RPROMPT="$branch$dirty"
+
   set-title "$(print -n -P '%~') @ $(hostname)"
 }
 
