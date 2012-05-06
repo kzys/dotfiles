@@ -26,3 +26,7 @@
 (setq cc-other-file-alist
       '(("\\.mm?$" (".h"))
         ("\\.h$" (".c" ".cpp" ".m" ".mm"))))
+
+;; Arduino
+(add-to-list 'auto-mode-alist '("\\.pde$" . c++-mode))
+
