@@ -112,15 +112,8 @@
 (add-to-list 'load-path auto-install-directory)
 
 ;; auto-complete
-(require-safety
- 'auto-complete
- (global-auto-complete-mode t)
-
- (mapcar (lambda (hook)
-           (add-hook hook
-                     '(lambda ()
-                        (setq ac-sources '(ac-source-symbols)))))
-         (list 'emacs-lisp-mode-hook 'lisp-interaction-mode-hook)) )
+(require 'auto-complete-config)
+(ac-config-default)
 
 (load (expand-file-name "~/.emacs.d/lisp/local.el") t t)
 
