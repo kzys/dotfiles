@@ -10,12 +10,8 @@ fi
 # Path
 # export PATH=$HOME/bin:/usr/local/bin:$PATH
 
-if (hostname | grep '^dvm' >& /dev/null); then
-   path_usr=(/usr/bin /usr/local/bin)
-else
-   path_usr=(/usr/local/bin /usr/bin)
-fi
-path=($(dirname $(readlink ~/.zshrc))/bin ~/local/bin /opt/local/bin $path_usr /bin)
+path=(~/src/dotfile/bin ~/bin ~/local/bin
+      /opt/local/bin /usr/local/bin /usr/bin /bin)
 
 fpath=(~/.zsh/functions $fpath)
 
