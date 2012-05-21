@@ -1,6 +1,3 @@
-gitconfig: gitconfig.public gitconfig.private
-	cat $^ > gitconfig
-
 install: install-misc install-emacs
 
 install-misc: zsh/functions/git-escape-magic

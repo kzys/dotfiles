@@ -1,0 +1,16 @@
+[user]
+	email = kato.kazuyoshi@gmail.com
+	name = Kato Kazuyoshi
+
+[core]
+	pager = less
+
+[log]
+	date = local
+
+[grep]
+	lineNumber = true
+	extendRegexp = true
+
+[color]
+	ui = always
