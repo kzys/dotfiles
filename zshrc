@@ -58,7 +58,7 @@ export RUBYLIB=/usr/local/lib/ruby/site_ruby/1.8
 
 if test -f $HOME/perl5/perlbrew/etc/bashrc; then
     source $HOME/perl5/perlbrew/etc/bashrc
-else
+elif test -e $HOME/local/lib/perl5; then
     eval $(perl -I$HOME/local/lib/perl5 -Mlocal::lib)
 fi
 
