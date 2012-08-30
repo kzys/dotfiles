@@ -3,7 +3,7 @@
 	name = Kato Kazuyoshi
 
 [core]
-	pager = less
+	pager = less -R
 
 [log]
 	date = local
@@ -13,4 +13,4 @@
 	extendRegexp = true
 
 [color]
-	ui = always
+	ui = auto
