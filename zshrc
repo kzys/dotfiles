@@ -8,10 +8,7 @@ if test ! -d ~/.zsh; then
 fi
 
 # Path
-# export PATH=$HOME/bin:/usr/local/bin:$PATH
-
-path=(~/src/dotfile/bin ~/bin ~/local/bin
-      /opt/local/bin /usr/local/bin /usr/bin /bin)
+PATH=$HOME/bin:$PATH
 
 fpath=(~/.zsh/functions $fpath)
 
