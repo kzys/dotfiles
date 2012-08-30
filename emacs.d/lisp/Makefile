@@ -36,8 +36,11 @@ dsvn.el:
 anything-project.el:
 	curl -O https://github.com/imakado/anything-project/raw/master/anything-project.el
 
-git.el:
-	curl 'http://git.kernel.org/?p=git/git.git;a=blob_plain;f=contrib/emacs/git.el;hb=HEAD' > $@
-
 auto-install.el:
 	curl -LO http://www.emacswiki.org/emacs/download/auto-install.el
+
+magit-1.1.1: magit-1.1.1.tar.gz
+	tar xvf $^
+
+magit-1.1.1.tar.gz:
+	curl -LO https://github.com/downloads/magit/magit/magit-1.1.1.tar.gz

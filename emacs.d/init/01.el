@@ -39,5 +39,5 @@
     (if path (concat path subdir) nil)))
 
 (add-to-list 'load-path
-             (expand-file-name "~/local/share/emacs/site-lisp/"))
+             (expand-file-name "~/.emacs.d/lisp/magit-1.1.1"))
 (require 'magit)
