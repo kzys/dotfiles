@@ -1,6 +1,6 @@
 session_version = 2.2
 
-all: download magic-comment session.el ruby-mode.el moccur-edit.el dsvn.el anything-project.el git.el sgml-match-mode.el auto-install.el
+all: download magic-comment session.el ruby-mode.el moccur-edit.el dsvn.el git.el sgml-match-mode.el auto-install.el
 
 magic-comment:
 	awk '/^;; D / { system("curl -LO " $$3) }' ../init/*.el
@@ -32,9 +32,6 @@ js.el:
 
 dsvn.el:
 	curl -O http://svn.apache.org/repos/asf/subversion/trunk/contrib/client-side/emacs/dsvn.el
-
-anything-project.el:
-	curl -O https://github.com/imakado/anything-project/raw/master/anything-project.el
 
 auto-install.el:
 	curl -LO http://www.emacswiki.org/emacs/download/auto-install.el
