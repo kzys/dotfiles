@@ -91,18 +91,18 @@ preexec () {
   set-title "$1 @ $(hostname)"
 }
 
+autoload -U vcs_info
+zstyle ':vcs_info:*' enable git svn
+zstyle ':vcs_info:git:*' check-for-changes true
+zstyle ':vcs_info:git:*' formats '%b %m%u%c'
+
 original_prompt="%~ @ $(hostname)"
 precmd () {
   PROMPT="%{%(?.$fg[green].$fg[red])%}$original_prompt$reset_color
 %# "
 
-  local branch
-  local dirty
-  if git rev-parse --git-dir >& /dev/null; then
-    branch="$(git symbolic-ref -q HEAD 2>/dev/null | sed 's/refs\/heads\///')"
-    test -z "$(git ls-files -m 2>/dev/null)" || dirty=' ✗'
-  fi
-  RPROMPT="$branch$dirty"
+  vcs_info
+  RPROMPT="$vcs_info_msg_0_"
 
   set-title "$(print -n -P '%~') @ $(hostname)"
 }
