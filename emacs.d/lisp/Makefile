@@ -1,6 +1,6 @@
 session_version = 2.2
 
-all: download magic-comment session.el ruby-mode.el moccur-edit.el dsvn.el git.el sgml-match-mode.el auto-install.el
+all: download magic-comment session.el ruby-mode.el moccur-edit.el dsvn.el anything-project.el sgml-match-mode.el auto-install.el magit-1.1.1
 
 magic-comment:
 	awk '/^;; D / { system("curl -LO " $$3) }' ../init/*.el

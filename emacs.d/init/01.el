@@ -37,7 +37,3 @@
                           (lambda (a b)
                             (not (string-lessp a b)))))))
     (if path (concat path subdir) nil)))
-
-(add-to-list 'load-path
-             (expand-file-name "~/.emacs.d/lisp/magit-1.1.1"))
-(require 'magit)

@@ -16,4 +16,6 @@
  'vc-hg
  (setq vc-handled-backends (cons 'HG vc-handled-backends)))
 
-(require 'git)
+(add-to-list 'load-path
+             (expand-file-name "~/.emacs.d/lisp/magit-1.1.1"))
+(require 'magit)
