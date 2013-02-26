@@ -98,7 +98,7 @@
   ;; Font
   (cond
    ((>= emacs-major-version 23)
-    (let ((family "Droid Sans Mono")
+    (let ((family "Bitstream Vera Sans Mono")
           (size 10))
       (set-default-font (format "%s-%d" family size))
       (set-face-font 'default
