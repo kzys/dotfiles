@@ -40,6 +40,7 @@ autoload -U colors
 colors
 PROMPT="$fg[green]%~ @ `hostname`$reset_color
 %# "
+setopt transient_rprompt
 
 # Misc
 setopt extended_glob print_eight_bit noflow_control
