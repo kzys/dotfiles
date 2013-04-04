@@ -54,7 +54,6 @@ export LC_MESSAGES=C
 export PAGER=less
 export WWW_HOME=http://www.google.co.jp/
 export CVS_RSH=ssh
-export RUBYLIB=/usr/local/lib/ruby/site_ruby/1.8
 
 if test -f $HOME/perl5/perlbrew/etc/bashrc; then
     source $HOME/perl5/perlbrew/etc/bashrc
@@ -64,14 +63,6 @@ fi
 
 PYTHONPATH="$HOME/local/lib/python:$HOME/local/lib/python2.6"
 export PYTHONPATH
-
-## Ruby
-if test -d .rbenv; then
-    PATH=$HOME/.rbenv/bin:$PATH
-    export PATH="${HOME}/.rbenv/shims:${PATH}"
-    source "/home/kzys/.rbenv/libexec/../completions/rbenv.zsh"
-    rbenv rehash 2>/dev/null
-fi
 
 export FTP_PASSIVE=1
 export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/lib/pkgconfig
@@ -114,4 +105,9 @@ REPORTTIME=5
 
 if test -n $SSH_AGENT_PID; then
   (ssh-add -L >& /dev/null) || ssh-add
+fi
+
+## Ruby
+if [ -d $HOME/.rvm ]; then
+    PATH=$HOME/.rvm/bin:$PATH # Add RVM to PATH for scripting
 fi
