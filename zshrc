@@ -110,6 +110,8 @@ precmd () {
   set-title "$(print -n -P '%~') @ $(hostname)"
 }
 
+REPORTTIME=5
+
 if test -n $SSH_AGENT_PID; then
   (ssh-add -L >& /dev/null) || ssh-add
 fi
