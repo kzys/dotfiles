@@ -111,10 +111,6 @@
 (require 'auto-install)
 (add-to-list 'load-path auto-install-directory)
 
-;; auto-complete
-(require 'auto-complete-config)
-(ac-config-default)
-
 (load (expand-file-name "~/.emacs.d/lisp/local.el") t t)
 
 (require 'wdired)
