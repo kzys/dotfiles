@@ -1,10 +1,5 @@
 #! sh
 
-# Fink
-#if test -f /sw/bin/init.sh; then
-#    source /sw/bin/init.sh
-#fi
-
 if test ! -d ~/.zsh; then
   mkdir ~/.zsh
 fi
