@@ -5,7 +5,7 @@ if test ! -d ~/.zsh; then
 fi
 
 # Path
-PATH=$HOME/bin:$PATH
+PATH=$HOME/local/bin:$HOME/bin:$PATH
 
 fpath=(~/.zsh/functions $fpath)
 
