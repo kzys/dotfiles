@@ -63,6 +63,11 @@ export FTP_PASSIVE=1
 export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/lib/pkgconfig
 # export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/sw/lib/freetype219/lib/pkgconfig:/sw/lib/pkgconfig:/usr/lib/pkgconfig
 
+## Java
+# Don't use JAVA_TOOL_OPTIONS because of annoying
+# "Picked up JAVA_TOOL_OPTIONS: ..." message...
+export ANT_OPTS='-Dfile.encoding=UTF8 -Xmx2G -XX:MaxPermSize=1G'
+
 export EDITOR=vi
 bindkey -e
 
