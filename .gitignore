@@ -6,3 +6,5 @@ emacs.d/auto-save-list
 *~
 emacs.d/init/private-*.el
 gitconfig.private
+emacs.d/elpa/
+
