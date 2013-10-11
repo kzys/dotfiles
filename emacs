@@ -65,16 +65,3 @@
   (require 'egg-mlh)
   (setq mlh-default-backend "anthy")
   (global-set-key " " 'mlh-space-bar-backward-henkan)))
-
-(require 'package)
-(add-to-list 'package-archives
-             '("marmalade" . "http://marmalade-repo.org/packages/"))
-(package-initialize)
-(package-refresh-contents)
-
-(mapcar
- (lambda (package)
-   (if (package-installed-p package)
-       t
-    (package-install package)))
-   (list 'go-mode))

@@ -1,6 +1,4 @@
-session_version = 2.2
-
-all: download magic-comment session.el ruby-mode.el moccur-edit.el dsvn.el anything-project.el sgml-match-mode.el auto-install.el magit-1.1.1
+all: download magic-comment ruby-mode.el moccur-edit.el dsvn.el anything-project.el sgml-match-mode.el auto-install.el
 
 magic-comment:
 	awk '/^;; D / { system("curl -LO " $$3) }' ../init/*.el
@@ -10,15 +8,6 @@ download:
 
 sgml-match-mode.el:
 	curl -LO https://github.com/kzys/sgml-match-mode/raw/master/lisp/sgml-match-mode.el
-
-session-$(session_version).tar.gz:
-	curl -L http://sf.net/projects/emacs-session/files/session/$(session_version)/session-$(session_version).tar.gz/download > $@
-
-session: session-$(session_version).tar.gz
-	tar xvf $^
-
-session.el: session
-	cp session/lisp/session.el .
 
 ruby-mode.el:
 	svn export http://svn.ruby-lang.org/repos/ruby/trunk/misc/ruby-mode.el
@@ -35,9 +24,3 @@ dsvn.el:
 
 auto-install.el:
 	curl -LO http://www.emacswiki.org/emacs/download/auto-install.el
-
-magit-1.1.1: magit-1.1.1.tar.gz
-	tar xvf $^
-
-magit-1.1.1.tar.gz:
-	curl -LO https://github.com/downloads/magit/magit/magit-1.1.1.tar.gz

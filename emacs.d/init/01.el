@@ -1,6 +1,19 @@
 (add-to-list 'load-path
              (expand-file-name "~/.emacs.d/lisp"))
 
+(require 'package)
+(add-to-list 'package-archives
+             '("marmalade" . "http://marmalade-repo.org/packages/"))
+(package-initialize)
+(package-refresh-contents)
+
+(mapcar
+ (lambda (package)
+   (if (package-installed-p package)
+       t
+    (package-install package)))
+   (list 'go-mode 'magit 'session))
+
 ;; recentf saves histories of files. But session saves other histories too.
 ;; http://d.hatena.ne.jp/higepon/20061230/1167447339 (Japanese)
 (require 'session)
