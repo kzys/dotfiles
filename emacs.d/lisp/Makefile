@@ -1,4 +1,4 @@
-all: download magic-comment ruby-mode.el moccur-edit.el dsvn.el anything-project.el sgml-match-mode.el auto-install.el
+all: download magic-comment ruby-mode.el moccur-edit.el dsvn.el sgml-match-mode.el auto-install.el
 
 magic-comment:
 	awk '/^;; D / { system("curl -LO " $$3) }' ../init/*.el
