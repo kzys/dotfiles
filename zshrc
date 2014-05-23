@@ -107,7 +107,6 @@ if test -n $SSH_AGENT_PID; then
   (ssh-add -L >& /dev/null) || ssh-add
 fi
 
-## Ruby
-if [ -d $HOME/.rvm ]; then
-    PATH=$HOME/.rvm/bin:$PATH # Add RVM to PATH for scripting
-fi
+# rbenv
+export PATH="$HOME/.rbenv/bin:$PATH"
+eval "$(rbenv init -)"
