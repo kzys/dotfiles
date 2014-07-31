@@ -82,7 +82,7 @@ else
 fi
 
 preexec () {
-  set-title "$1 @ $(hostname)"
+  set-title "$1"
 }
 
 autoload -U vcs_info
@@ -97,7 +97,7 @@ precmd () {
   vcs_info
   RPROMPT="$vcs_info_msg_0_"
 
-  set-title "$(print -n -P '%~') @ $(hostname)"
+  set-title "$(print -n -P '%~')"
 }
 
 REPORTTIME=5
