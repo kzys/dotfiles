@@ -71,9 +71,9 @@ export ANT_OPTS='-Dfile.encoding=UTF8 -Xmx2G -XX:MaxPermSize=1G'
 export EDITOR=vi
 bindkey -e
 
-if test x$WINDOW != x; then
+if [ ! -z "$TMUX" ]; then
     set-title() {
-      screen -X eval "title '$1'"
+      echo -ne "\ek$1\e\\"
     }
 else
   set-title() {
