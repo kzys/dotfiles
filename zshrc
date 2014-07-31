@@ -111,3 +111,6 @@ fi
 if [ -d $HOME/.rvm ]; then
     PATH=$HOME/.rvm/bin:$PATH # Add RVM to PATH for scripting
 fi
+
+dotfiles_private=$HOME/src/dotfiles-private
+. $dotfiles_private/zshrc
