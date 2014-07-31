@@ -87,7 +87,6 @@ preexec () {
 
 autoload -U vcs_info
 zstyle ':vcs_info:*' enable git svn
-zstyle ':vcs_info:git:*' check-for-changes true
 zstyle ':vcs_info:git:*' formats '%b %m%u%c'
 
 original_prompt="%~ @ $(hostname)"
