@@ -71,9 +71,9 @@ export ANT_OPTS='-Dfile.encoding=UTF8 -Xmx2G -XX:MaxPermSize=1G'
 export EDITOR=vi
 bindkey -e
 
-if test x$WINDOW != x; then
+if [ ! -z "$TMUX" ]; then
     set-title() {
-      screen -X eval "title '$1'"
+      echo -ne "\ek$1\e\\"
     }
 else
   set-title() {
@@ -82,12 +82,11 @@ else
 fi
 
 preexec () {
-  set-title "$1 @ $(hostname)"
+  set-title "$1"
 }
 
 autoload -U vcs_info
 zstyle ':vcs_info:*' enable git svn
-zstyle ':vcs_info:git:*' check-for-changes true
 zstyle ':vcs_info:git:*' formats '%b %m%u%c'
 
 original_prompt="%~ @ $(hostname)"
@@ -98,7 +97,7 @@ precmd () {
   vcs_info
   RPROMPT="$vcs_info_msg_0_"
 
-  set-title "$(print -n -P '%~') @ $(hostname)"
+  set-title "$(print -n -P '%~')"
 }
 
 REPORTTIME=5
@@ -110,3 +109,6 @@ fi
 # rbenv
 export PATH="$HOME/.rbenv/bin:$PATH"
 eval "$(rbenv init -)"
+
+dotfiles_private=$HOME/src/dotfiles-private
+. $dotfiles_private/zshrc
