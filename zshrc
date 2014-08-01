@@ -110,5 +110,9 @@ fi
 export PATH="$HOME/.rbenv/bin:$PATH"
 eval "$(rbenv init -)"
 
+# Android
+android_dir=$HOME/src/adt-bundle-mac-x86_64-20140702
+PATH=$android_dir/sdk/tools:$android_dir/sdk/platform-tools:$android_dir/sdk/build-tools/android-4.4W:$PATH
+
 dotfiles_private=$HOME/src/dotfiles-private
 . $dotfiles_private/zshrc
