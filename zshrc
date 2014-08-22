@@ -107,8 +107,10 @@ if test -n $SSH_AGENT_PID; then
 fi
 
 # rbenv
-export PATH="$HOME/.rbenv/bin:$PATH"
-eval "$(rbenv init -)"
+if [ -d $HOME/.rbenv ]; then
+    export PATH="$HOME/.rbenv/bin:$PATH"
+    eval "$(rbenv init -)"
+fi
 
 # Android
 android_dir=$HOME/src/adt-bundle-mac-x86_64-20140702
