@@ -7,3 +7,5 @@ seconds.times do |i|
   printf "%02d:%02d\r", remaining / 60, remaining % 60
   sleep 1
 end
+
+system('terminal-notifier', '-message', "#{minutes} minutes elapsed")
