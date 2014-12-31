@@ -5,7 +5,7 @@ if test ! -d ~/.zsh; then
 fi
 
 # Path
-PATH=$HOME/local/bin:$HOME/bin:$PATH
+export PATH=$HOME/src/dotfiles/bin:$HOME/local/bin:$PATH
 
 fpath=(~/.zsh/functions $fpath)
 
@@ -116,5 +116,7 @@ fi
 android_dir=$HOME/src/adt-bundle-mac-x86_64-20140702
 PATH=$android_dir/sdk/tools:$android_dir/sdk/platform-tools:$android_dir/sdk/build-tools/android-4.4W:$PATH
 
+# Private
 dotfiles_private=$HOME/src/dotfiles-private
 . $dotfiles_private/zshrc
+PATH=$dotfiles_private/bin:$PATH
