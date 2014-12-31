@@ -1,0 +1,4 @@
+branch=$1
+path=$2
+git show $branch:$path > $path
+
