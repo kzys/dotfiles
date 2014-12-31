@@ -1,11 +1,24 @@
 #! /usr/bin/env ruby
 minutes = (ARGV.shift || 25).to_i
 seconds = minutes * 60
+abort = false
+
+trap 'SIGINT' do
+  abort = true
+end
 
 seconds.times do |i|
+  if abort
+    break
+  end
+
   remaining = seconds - i
   printf "%02d:%02d\r", remaining / 60, remaining % 60
   sleep 1
 end
 
-system('terminal-notifier', '-message', "#{minutes} minutes elapsed")
+if abort
+  puts
+else
+  system('terminal-notifier', '-message', "#{minutes} minutes elapsed")
+end
