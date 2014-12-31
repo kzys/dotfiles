@@ -12,7 +12,17 @@
 	lineNumber = true
 	extendRegexp = true
 
+[push]
+    # "simple" is default since Git 2.0
+    # http://blogs.atlassian.com/2014/06/happened-git-2-0-full-goodies/
+	default = simple
+
 [color]
 	ui = auto
+
 [alias]
 	co = checkout
+	dag = log --graph --format='format:%C(yellow)%h%C(reset) %C(blue)\"%an\" <%ae>%C(reset) %C(magenta)%cr%C(reset)%C(auto)%d%C(reset)%n%s' --date-order
+
+[include]
+    path = ~/src/dotfiles-private/gitconfig
