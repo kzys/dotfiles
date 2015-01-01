@@ -118,5 +118,7 @@ PATH=$android_dir/sdk/tools:$android_dir/sdk/platform-tools:$android_dir/sdk/bui
 
 # Private
 dotfiles_private=$HOME/src/dotfiles-private
-. $dotfiles_private/zshrc
-PATH=$dotfiles_private/bin:$PATH
+if [ -e $dotfiles_private/zshrc ]; then
+    . $dotfiles_private/zshrc
+    PATH=$dotfiles_private/bin:$PATH
+fi
