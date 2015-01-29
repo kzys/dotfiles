@@ -16,14 +16,14 @@ def create_desktop_symlink(file_path, symlink_path)
                 return
             else
                 # remove the old link
-                File.unlink(desktop_symlink)
+                File.unlink(symlink_path)
             end
         else
             raise "#{symlink_path} exists, but it is not a symlink"
         end
     end
 
-    File.symlink(memo_file, desktop_symlink)
+    File.symlink(file_path, symlink_path)
 end
 
 def main
