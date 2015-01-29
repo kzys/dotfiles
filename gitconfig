@@ -4,6 +4,7 @@
 
 [core]
 	pager = less -R
+	excludesfile = /Users/katokazu/.gitignore_global
 
 [log]
 	date = local
@@ -26,3 +27,15 @@
 
 [include]
     path = ~/src/dotfiles-private/gitconfig
+[amazon]
+	pull-request-by-default = true
+[difftool "sourcetree"]
+	cmd = opendiff \"$LOCAL\" \"$REMOTE\"
+	path = 
+[mergetool "sourcetree"]
+	cmd = /Applications/SourceTree.app/Contents/Resources/opendiff-w.sh \"$LOCAL\" \"$REMOTE\" -ancestor \"$BASE\" -merge \"$MERGED\"
+	trustExitCode = true
+[filter "media"]
+	required = true
+	clean = git media clean %f
+	smudge = git media smudge %f

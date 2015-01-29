@@ -106,12 +106,6 @@ if test -n $SSH_AGENT_PID; then
   (ssh-add -L >& /dev/null) || ssh-add
 fi
 
-# rbenv
-if [ -d $HOME/.rbenv ]; then
-    export PATH="$HOME/.rbenv/bin:$PATH"
-    eval "$(rbenv init -)"
-fi
-
 # Android
 android_dir=$HOME/src/adt-bundle-mac-x86_64-20140702
 PATH=$android_dir/sdk/tools:$android_dir/sdk/platform-tools:$android_dir/sdk/build-tools/android-4.4W:$PATH
@@ -121,4 +115,10 @@ dotfiles_private=$HOME/src/dotfiles-private
 if [ -e $dotfiles_private/zshrc ]; then
     . $dotfiles_private/zshrc
     PATH=$dotfiles_private/bin:$PATH
+fi
+
+# rbenv
+if [ -d $HOME/.rbenv ]; then
+    export PATH="$HOME/.rbenv/bin:$PATH"
+    eval "$(rbenv init -)"
 fi

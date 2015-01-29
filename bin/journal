@@ -26,11 +26,15 @@ def create_desktop_symlink(file_path, symlink_path)
     File.symlink(memo_file, desktop_symlink)
 end
 
-now = Time.now
-memo_file = File.expand_path("~/journal/%04d-%02d/memo.txt" % [ now.year, now.month ])
-create_memo_file(memo_file)
+def main
+    now = Time.now
+    memo_file = File.expand_path("~/journal/%04d-%02d/memo.txt" % [ now.year, now.month ])
+    create_memo_file(memo_file)
 
-desktop_symlink = File.expand_path("~/Desktop/memo.txt")
-create_desktop_symlink(memo_file, desktop_symlink)
+    desktop_symlink = File.expand_path("~/Desktop/memo.txt")
+    create_desktop_symlink(memo_file, desktop_symlink)
 
-puts File.dirname(memo_file)
+    puts File.dirname(memo_file)
+end
+
+main if $0 === __FILE__
