@@ -1,0 +1,22 @@
+#! /usr/bin/env ruby
+require "fileutils"
+
+def create_memo_file(path)
+    unless File.exist?(path)
+        FileUtils.mkdir_p(File.dirname(path))
+        File.open(path, "w").write("")
+    end
+end
+
+now = Time.now
+memo_file = File.expand_path("~/journal/%04d-%02d/memo.txt" % [ now.year, now.month ])
+create_memo_file(memo_file)
+
+desktop_symlink = File.expand_path("~/Desktop/memo.txt")
+if File.exist?(desktop_symlink)
+    ;
+else
+    File.symlink(memo_file, desktop_symlink)
+end
+
+puts File.dirname(memo_file)
