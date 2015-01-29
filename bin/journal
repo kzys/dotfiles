@@ -8,15 +8,29 @@ def create_memo_file(path)
     end
 end
 
+def create_desktop_symlink(file_path, symlink_path)
+    if File.exist?(symlink_path)
+        if File.symlink?(symlink_path)
+            if File.readlink(symlink_path) == file_path
+                # don't have to create the link
+                return
+            else
+                # remove the old link
+                File.unlink(desktop_symlink)
+            end
+        else
+            raise "#{symlink_path} exists, but it is not a symlink"
+        end
+    end
+
+    File.symlink(memo_file, desktop_symlink)
+end
+
 now = Time.now
 memo_file = File.expand_path("~/journal/%04d-%02d/memo.txt" % [ now.year, now.month ])
 create_memo_file(memo_file)
 
 desktop_symlink = File.expand_path("~/Desktop/memo.txt")
-if File.exist?(desktop_symlink)
-    ;
-else
-    File.symlink(memo_file, desktop_symlink)
-end
+create_desktop_symlink(memo_file, desktop_symlink)
 
 puts File.dirname(memo_file)
