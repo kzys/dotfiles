@@ -110,6 +110,9 @@ fi
 android_dir=$HOME/src/adt-bundle-mac-x86_64-20140702
 PATH=$android_dir/sdk/tools:$android_dir/sdk/platform-tools:$android_dir/sdk/build-tools/android-4.4W:$PATH
 
+# Python
+export LC_ALL=$LANG
+
 # Private
 dotfiles_private=$HOME/src/dotfiles-private
 if [ -e $dotfiles_private/zshrc ]; then
