@@ -106,6 +106,10 @@ if test -n $SSH_AGENT_PID; then
   (ssh-add -L >& /dev/null) || ssh-add
 fi
 
+# Go
+export GOPATH=$HOME/gopath
+export PATH=$HOME/gopath/bin:$PATH
+
 # Android
 android_dir=$HOME/src/adt-bundle-mac-x86_64-20140702
 PATH=$android_dir/sdk/tools:$android_dir/sdk/platform-tools:$android_dir/sdk/build-tools/android-4.4W:$PATH
