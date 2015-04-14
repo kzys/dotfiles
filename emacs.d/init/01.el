@@ -32,13 +32,6 @@
 (require 'minibuf-isearch)
 (setq minibuf-isearch-use-migemo nil)
 
-;; JavaScript
-;; D http://repo.or.cz/w/emacs.git/blob_plain/6b45354a9e8f5db5e283025cc0b7ea053408f176:/lisp/progmodes/js.el
-(if (not (functionp 'declare-function))
-    (defmacro declare-function (&rest args)))
-(require 'js)
-(add-to-list 'auto-mode-alist '("\\.js$" . js-mode))
-
 ;; Subversion
 ;; D http://svn.apache.org/repos/asf/subversion/trunk/contrib/client-side/emacs/dsvn.el
 (require 'dsvn)

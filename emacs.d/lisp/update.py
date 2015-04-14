@@ -6,7 +6,6 @@ list = [
     'http://howm.sourceforge.jp/a/howm-1.3.6.tar.gz',
     'http://www.bookshelf.jp/elc/color-moccur.el',
     'http://www.pitecan.com/papers/JSSSTDmacro/dmacro.el',
-    'http://user.it.uu.se/~mic/mic-paren.el',
     ]
 
 pattern = re.compile(r'\.el$')
