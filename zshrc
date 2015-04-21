@@ -26,6 +26,13 @@ HISTSIZE=10000
 SAVEHIST=$HISTSIZE
 setopt extended_history hist_ignore_dups share_history
 
+# Private
+dotfiles_private=$HOME/src/dotfiles-private
+if [ -e $dotfiles_private/zshrc ]; then
+    . $dotfiles_private/zshrc
+    PATH=$dotfiles_private/bin:$PATH
+fi
+
 # Completion
 autoload -U compinit
 compinit -d ~/.zsh/compdump
@@ -116,13 +123,6 @@ PATH=$android_dir/sdk/tools:$android_dir/sdk/platform-tools:$android_dir/sdk/bui
 
 # Python
 export LC_ALL=$LANG
-
-# Private
-dotfiles_private=$HOME/src/dotfiles-private
-if [ -e $dotfiles_private/zshrc ]; then
-    . $dotfiles_private/zshrc
-    PATH=$dotfiles_private/bin:$PATH
-fi
 
 # rbenv
 if [ -d $HOME/.rbenv ]; then
