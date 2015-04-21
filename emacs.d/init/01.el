@@ -12,7 +12,8 @@
    (if (package-installed-p package)
        t
     (package-install package)))
-   (list 'go-mode 'magit 'session 'scala-mode 'dsvn 'ruby-mode))
+   (list 'go-mode 'magit 'session 'scala-mode 'dsvn 'ruby-mode
+         'minibuf-isearch))
 
 ;; recentf saves histories of files. But session saves other histories too.
 ;; http://d.hatena.ne.jp/higepon/20061230/1167447339 (Japanese)
@@ -28,7 +29,6 @@
 (add-hook 'after-init-hook 'session-initialize)
 
 ;; Incremental Search on Minibuffer
-;; D http://www.sodan.org/~knagano/emacs/minibuf-isearch/minibuf-isearch.el
 (require 'minibuf-isearch)
 (setq minibuf-isearch-use-migemo nil)
 
