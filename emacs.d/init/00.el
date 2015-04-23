@@ -124,3 +124,6 @@
   (set-scroll-bar-mode 'right)))
 
 (iswitchb-mode)
+
+;; Show where is the Emacs
+(setq frame-title-format (list "%b - " (system-name)))
