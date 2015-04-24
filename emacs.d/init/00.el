@@ -126,4 +126,25 @@
 (iswitchb-mode)
 
 ;; Show where is the Emacs
-(setq frame-title-format (list "%b - " (system-name)))
+(defun my-parse-lsb-release (path)
+  (let* ((content
+          (with-temp-buffer
+           (insert-file-contents path)
+           (buffer-string)))
+         (lines (split-string content "\n")))
+    (mapcar
+     (lambda (line)
+       (let ((xs (split-string line "=")))
+         (cons (car xs) (cadr xs))))
+     lines)))
+
+(defun my-lsb-release ()
+  (if (file-exists-p "/etc/lsb-release")
+      (my-parse-lsb-release "/etc/lsb-release")))
+
+(let ((distrib (cdr (assoc "DISTRIB_ID" (my-lsb-release)))))
+  (setq frame-title-format
+        (list
+         "%b - "              ;; foobar.el
+         (system-name)        ;; baz.example.com
+         " (" distrib ")")))  ;; Ubuntu
