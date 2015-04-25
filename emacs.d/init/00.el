@@ -142,9 +142,12 @@
   (if (file-exists-p "/etc/lsb-release")
       (my-parse-lsb-release "/etc/lsb-release")))
 
-(let ((distrib (cdr (assoc "DISTRIB_ID" (my-lsb-release)))))
+(let ((distrib
+       (if (file-exists-p "/System/Library/CoreServices/Finder.app")
+           "OS X"
+         (cdr (assoc "DISTRIB_ID" (my-lsb-release))))))
   (setq frame-title-format
         (list
          "%b - "              ;; foobar.el
          (system-name)        ;; baz.example.com
-         " (" distrib ")")))  ;; Ubuntu
+         " (" distrib ")")))  ;; OS X / Ubuntu
