@@ -50,8 +50,9 @@ setopt extended_glob print_eight_bit noflow_control
 WORDCHARS='*?_-.[]~=&;!#$%^(){}<>:'
 
 # ENV
-export LANG=ja_JP.UTF-8
+export LANG=C
 export LC_MESSAGES=C
+export LC_ALL=C
 
 export PAGER=less
 export WWW_HOME=http://www.google.co.jp/
