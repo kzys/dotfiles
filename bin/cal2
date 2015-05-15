@@ -1,5 +1,7 @@
 #! /usr/bin/env ruby
-WIDTH = 10
+CYAN = "\033[36m"
+REVERSE = "\e[7m"
+RESET = "\033[0m"
 
 def tomorrow(t)
   begin
@@ -29,17 +31,38 @@ def mail_count(d)
   (151.0 / (31 - 14)) * (31 - (d.day))
 end
 
-now = Time.now
-month_list = create_month_list(now)
+def create_calendar(t)
+  month_list = create_month_list(t)
+  rows = []
+  columns = [nil] * month_list.first.wday
 
-print (' ' * WIDTH) * month_list.first.wday
-month_list.each do |d|
-  printf('%3d%s(%3d) ',
-         d.day,
-         if now.day == d.day then '*' else ' ' end,
-         mail_count(d))
-  print "\n" if d.saturday?
+  month_list.each do |d|
+    columns.push(d)
+    if d.saturday?
+      rows.push(columns)
+      columns = []
+    end
+  end
+
+  rows.push(columns)
+
+  rows
 end
 
-print "\n" unless month_list.last.saturday?
+now = Time.now
+create_calendar(now).each do |columns|
+  columns.each do |d|
+    if d
+      if d.day == now.day
+        printf('%s%3d%s', REVERSE, d.day, RESET)
+      else
+        printf('%3d', d.day)
+      end
 
+      printf('%s%3d%s ', CYAN, mail_count(d), RESET)
+    else
+      print '       '
+    end
+  end
+  puts
+end
