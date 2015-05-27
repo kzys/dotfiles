@@ -28,7 +28,7 @@ def create_month_list(src)
 end
 
 def mail_count(d)
-  (151.0 / (31 - 14)) * (31 - (d.day))
+  (86.0 / (31 - 26)) * (31 - (d.day))
 end
 
 def create_calendar(t)
