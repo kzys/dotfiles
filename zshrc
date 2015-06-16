@@ -119,11 +119,15 @@ export GOPATH=$HOME/gopath
 export PATH=$HOME/gopath/bin:$PATH
 
 # Android
-if [ -d $HOME/src/adt-bundle-linux-x86_64-20140702 ]; then
+if [ -d $HOME/Library/Android ]; then
+    ANDROID_HOME=$HOME/Library/Android
+elif [ -d $HOME/src/adt-bundle-linux-x86_64-20140702 ]; then
     ANDROID_HOME=$HOME/src/adt-bundle-linux-x86_64-20140702
+elif [ -d $HOME/src/adt-bundle-mac-x86_64-20140702 ]; then
+    ANDROID_HOME=$HOME/src/adt-bundle-mac-x86_64-20140702
 fi
 
-if [ -z "$ANDROID_HOME" ]; then
+if [ ! -z "$ANDROID_HOME" ]; then
     export ANDROID_HOME
 
     PATH=$ANDROID_HOME/sdk/tools:$PATH              # android, emulator, ...
