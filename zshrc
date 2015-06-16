@@ -119,8 +119,20 @@ export GOPATH=$HOME/gopath
 export PATH=$HOME/gopath/bin:$PATH
 
 # Android
-android_dir=$HOME/src/adt-bundle-mac-x86_64-20140702
-PATH=$android_dir/sdk/tools:$android_dir/sdk/platform-tools:$android_dir/sdk/build-tools/android-4.4W:$PATH
+if [ -d $HOME/src/adt-bundle-linux-x86_64-20140702 ]; then
+    ANDROID_HOME=$HOME/src/adt-bundle-linux-x86_64-20140702
+fi
+
+if [ -z "$ANDROID_HOME" ]; then
+    export ANDROID_HOME
+
+    PATH=$ANDROID_HOME/sdk/tools:$PATH              # android, emulator, ...
+    PATH=$ANDROID_HOME/sdk/platform-tools:$PATH     # adb, fastboot, ...
+    PATH=$ANDROID_HOME/sdk/build-tools/22.1.2:$PATH # aapt, aidl, ...
+fi
+
+# Android NDK
+PATH=$HOME/src/android-ndk-r10e:$PATH
 
 # Python
 export LC_ALL=$LANG
