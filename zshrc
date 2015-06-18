@@ -142,6 +142,8 @@ PATH=$HOME/src/android-ndk-r10e:$PATH
 export LC_ALL=$LANG
 
 # rbenv
+# https://github.com/sstephenson/rbenv#installation
+# https://github.com/sstephenson/ruby-build#installing-as-an-rbenv-plugin-recommended
 if [ -d $HOME/.rbenv ]; then
     export PATH="$HOME/.rbenv/bin:$PATH"
     eval "$(rbenv init -)"
