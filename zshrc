@@ -120,19 +120,19 @@ export PATH=$HOME/gopath/bin:$PATH
 
 # Android
 if [ -d $HOME/Library/Android ]; then
-    ANDROID_HOME=$HOME/Library/Android
+    ANDROID_HOME=$HOME/Library/Android/sdk
 elif [ -d $HOME/src/adt-bundle-linux-x86_64-20140702 ]; then
-    ANDROID_HOME=$HOME/src/adt-bundle-linux-x86_64-20140702
+    ANDROID_HOME=$HOME/src/adt-bundle-linux-x86_64-20140702/sdk
 elif [ -d $HOME/src/adt-bundle-mac-x86_64-20140702 ]; then
-    ANDROID_HOME=$HOME/src/adt-bundle-mac-x86_64-20140702
+    ANDROID_HOME=$HOME/src/adt-bundle-mac-x86_64-20140702/sdk
 fi
 
 if [ ! -z "$ANDROID_HOME" ]; then
     export ANDROID_HOME
 
-    PATH=$ANDROID_HOME/sdk/tools:$PATH              # android, emulator, ...
-    PATH=$ANDROID_HOME/sdk/platform-tools:$PATH     # adb, fastboot, ...
-    PATH=$ANDROID_HOME/sdk/build-tools/22.1.2:$PATH # aapt, aidl, ...
+    PATH=$ANDROID_HOME/tools:$PATH              # android, emulator, ...
+    PATH=$ANDROID_HOME/platform-tools:$PATH     # adb, fastboot, ...
+    PATH=$ANDROID_HOME/build-tools/22.1.2:$PATH # aapt, aidl, ...
 fi
 
 # Android NDK
