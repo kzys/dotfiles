@@ -132,7 +132,12 @@ if [ ! -z "$ANDROID_HOME" ]; then
 
     PATH=$ANDROID_HOME/tools:$PATH              # android, emulator, ...
     PATH=$ANDROID_HOME/platform-tools:$PATH     # adb, fastboot, ...
-    PATH=$ANDROID_HOME/build-tools/22.1.2:$PATH # aapt, aidl, ...
+
+    # aapt, aidl, ...
+    for build_tool_path in $ANDROID_HOME/build-tools/*
+    do
+        PATH=$build_tool_path:$PATH
+    done
 fi
 
 # Android NDK
