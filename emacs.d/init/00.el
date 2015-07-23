@@ -1,6 +1,11 @@
 ;; This file contains very basic settings of Emacs.
 ;; I can recommend them for my coworkers (especially a newbie).
 
+(require 'package)
+(add-to-list 'package-archives
+             '("melpa" . "http://melpa.org/packages/"))
+(package-initialize)
+
 ;; C-h should be "delete" because it's very common convention in Unix.
 (global-set-key "\C-h" 'backward-delete-char-untabify)
 (global-set-key "\C-ch" 'help)

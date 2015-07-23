@@ -1,12 +1,6 @@
 (add-to-list 'load-path
              (expand-file-name "~/.emacs.d/lisp"))
 
-(require 'package)
-(add-to-list 'package-archives
-             '("melpa" . "http://melpa.org/packages/"))
-(package-initialize)
-(package-refresh-contents)
-
 (mapcar
  (lambda (package)
    (if (package-installed-p package)
