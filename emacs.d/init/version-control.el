@@ -1,11 +1,6 @@
 ;; VC
 (setq vc-follow-symlinks t)
 
-;; Subversion
-(require 'dsvn)
-(setq svn-program (expand-file-name "~/.emacs.d/svn-with-lv"))
-
-
 ;; Mercurial
 ;; installed on ~/local
 (setq exec-path
