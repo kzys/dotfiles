@@ -1,10 +1,4 @@
-all: download magic-comment ruby-mode.el moccur-edit.el dsvn.el sgml-match-mode.el auto-install.el
-
-magic-comment:
-	awk '/^;; D / { system("curl -LO " $$3) }' ../init/*.el
-
-download:
-	python update.py
+all: moccur-edit.el sgml-match-mode.el auto-install.el
 
 sgml-match-mode.el:
 	curl -LO https://github.com/kzys/sgml-match-mode/raw/master/lisp/sgml-match-mode.el
