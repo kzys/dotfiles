@@ -123,7 +123,11 @@
   ;; Scroll bar should placed on right side
   (set-scroll-bar-mode 'right)))
 
-(iswitchb-mode)
+;; iswitchb is obsolete
+(if (boundp 'icomplete-mode)
+    (icomplete-mode)
+  (iswitchb-mode))
+(define-key icomplete-minibuffer-map "\C-m" 'minibuffer-force-complete-and-exit)
 
 ;; Show where is the Emacs
 (defun my-parse-lsb-release (path)
