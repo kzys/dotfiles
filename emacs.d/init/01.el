@@ -25,10 +25,3 @@
 ;; Incremental Search on Minibuffer
 (require 'minibuf-isearch)
 (setq minibuf-isearch-use-migemo nil)
-
-(defun -newest-dir (pattern subdir)
-  (let* ((dirs (file-expand-wildcards (expand-file-name pattern)))
-         (path (car (sort (remove-if-not 'file-directory-p dirs)
-                          (lambda (a b)
-                            (not (string-lessp a b)))))))
-    (if path (concat path subdir) nil)))
