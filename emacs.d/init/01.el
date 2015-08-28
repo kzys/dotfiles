@@ -6,8 +6,9 @@
    (if (package-installed-p package)
        t
     (package-install package)))
-   (list 'go-mode 'magit 'session 'scala-mode 'dsvn 'ruby-mode
-         'minibuf-isearch))
+ (list 'go-mode 'magit 'session 'scala-mode 'dsvn 'ruby-mode
+       'flymake-cursor
+       'minibuf-isearch))
 
 ;; History
 (require 'session)
