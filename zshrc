@@ -158,3 +158,9 @@ fi
 if [ -d $HOME/local/lib/rustlib/x86_64-apple-darwin/lib ]; then
     export DYLD_LIBRARY_PATH=$HOME/local/lib/rustlib/x86_64-apple-darwin/lib
 fi
+
+# Z
+brew_z="$(brew --prefix)/etc/profile.d/z.sh"
+if [ -e $brew_z ]; then
+    . $brew_z
+fi
