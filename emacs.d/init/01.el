@@ -9,8 +9,7 @@
    (list 'go-mode 'magit 'session 'scala-mode 'dsvn 'ruby-mode
          'minibuf-isearch))
 
-;; recentf saves histories of files. But session saves other histories too.
-;; http://d.hatena.ne.jp/higepon/20061230/1167447339 (Japanese)
+;; History
 (require 'session)
 
 (setq session-initialize t)
