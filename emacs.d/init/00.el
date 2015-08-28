@@ -76,34 +76,18 @@
 
 (cond
  (window-system
-
-  ;; Font
-  (cond
-   ((>= emacs-major-version 23)
-    (let ((family "Bitstream Vera Sans Mono")
-          (size 10))
-      (set-default-font (format "%s-%d" family size))
-      (set-face-font 'default
-                     (format "%s-%d" family size))
-      (set-face-font 'bold
-                     (format "%s-%d:weight=bold" family size))
-      (set-face-font 'italic
-                     (format "%s-%d:slant=oblique" family size))
-      (set-face-font 'bold-italic
-                     (format "%s-%d:weight=bold:slant=oblique" family size))))
-   (t
-    (set-default-font "-*-fixed-medium-r-normal--14-*-*-*-*-*-*-*")
+  (let ((family "Menlo")
+        (size 14))
+    (set-default-font (format "%s-%d" family size))
     (set-face-font 'default
-                   "-shinonome-gothic-medium-r-normal--14-*-*-*-*-*-*-*")
+                   (format "%s-%d" family size))
     (set-face-font 'bold
-                   "-shinonome-gothic-bold-r-normal--14-*-*-*-*-*-*-*")
+                   (format "%s-%d:weight=bold" family size))
     (set-face-font 'italic
-                   "-shinonome-gothic-medium-i-normal--14-*-*-*-*-*-*-*")
+                   (format "%s-%d:slant=oblique" family size))
     (set-face-font 'bold-italic
-                   "-shinonome-gothic-bold-i-normal--14-*-*-*-*-*-*-*")))
-
-  ;; Scroll bar should placed on right side
-  (set-scroll-bar-mode 'right)))
+                   (format "%s-%d:weight=bold:slant=oblique" family size))
+    (set-scroll-bar-mode 'right))))
 
 ;; iswitchb is obsolete
 (if (boundp 'icomplete-mode)
