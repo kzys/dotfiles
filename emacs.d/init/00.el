@@ -89,11 +89,7 @@
                    (format "%s-%d:weight=bold:slant=oblique" family size))
     (set-scroll-bar-mode 'right))))
 
-;; iswitchb is obsolete
-(if (boundp 'icomplete-mode)
-    (icomplete-mode)
-  (iswitchb-mode))
-(define-key icomplete-minibuffer-map "\C-m" 'minibuffer-force-complete-and-exit)
+(ido-mode 'buffers)
 
 ;; Show where is the Emacs
 (defun my-parse-lsb-release (path)
