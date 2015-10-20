@@ -36,3 +36,8 @@
       (expand-file-name (format-time-string "~/journal/%Y-%m.org.txt")))
 (add-to-list 'auto-mode-alist '("\\.org.txt\\'" . org-mode))
 (setq org-agenda-file-regexp "\\.org.txt\\'")
+
+(require 'js)
+(add-hook 'js-mode-hook
+          (lambda ()
+            (setq js-indent-level 2)))
