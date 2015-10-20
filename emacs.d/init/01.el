@@ -24,3 +24,15 @@
 ;; Incremental Search on Minibuffer
 (require 'minibuf-isearch)
 (setq minibuf-isearch-use-migemo nil)
+
+(require 'org)
+(setq org-startup-truncated nil)
+(define-key global-map "\C-cl" 'org-store-link)
+(define-key global-map "\C-ca" 'org-agenda)
+(define-key global-map "\C-cc" 'org-capture)
+(setq org-log-done t)
+(setq org-agenda-files (list (expand-file-name "~/journal")))
+(setq org-default-notes-file
+      (expand-file-name (format-time-string "~/journal/%Y-%m.org.txt")))
+(add-to-list 'auto-mode-alist '("\\.org.txt\\'" . org-mode))
+(setq org-agenda-file-regexp "\\.org.txt\\'")
