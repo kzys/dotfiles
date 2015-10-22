@@ -7,7 +7,9 @@
        t
     (package-install package)))
  (list 'go-mode 'magit 'session 'scala-mode 'dsvn 'ruby-mode
-       'flymake-cursor 'minibuf-isearch))
+       'org
+       'flymake-cursor
+       'minibuf-isearch))
 
 ;; History
 (require 'session)
@@ -25,6 +27,7 @@
 (require 'minibuf-isearch)
 (setq minibuf-isearch-use-migemo nil)
 
+;; org-mode
 (require 'org)
 (setq org-startup-truncated nil)
 (define-key global-map "\C-cl" 'org-store-link)
@@ -36,6 +39,9 @@
       (expand-file-name (format-time-string "~/journal/%Y-%m.org.txt")))
 (add-to-list 'auto-mode-alist '("\\.org.txt\\'" . org-mode))
 (setq org-agenda-file-regexp "\\.org.txt\\'")
+
+(setq org-todo-keywords
+      '((sequence "TODO" "WAIT" "|" "DONE")))
 
 (require 'js)
 (add-hook 'js-mode-hook
