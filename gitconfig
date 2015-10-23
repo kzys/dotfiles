@@ -42,3 +42,6 @@
 
 [http]
 	cookiefile = ~/.gitcookies
+
+[include]
+    path = src/dotfiles/gitconfig-alias
