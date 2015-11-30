@@ -58,12 +58,6 @@ export PAGER=less
 export WWW_HOME=http://www.google.co.jp/
 export CVS_RSH=ssh
 
-if test -f $HOME/perl5/perlbrew/etc/bashrc; then
-    source $HOME/perl5/perlbrew/etc/bashrc
-elif test -e $HOME/local/lib/perl5; then
-    eval $(perl -I$HOME/local/lib/perl5 -Mlocal::lib)
-fi
-
 PYTHONPATH="$HOME/local/lib/python:$HOME/local/lib/python2.6"
 export PYTHONPATH
 
