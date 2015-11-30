@@ -5,7 +5,7 @@ if test ! -d ~/.zsh; then
 fi
 
 # Path
-export PATH=$HOME/src/dotfiles/bin:$HOME/local/bin:$PATH
+export PATH=$HOME/src/dotfiles/bin:$HOME/local/bin:$HOME/bin:$PATH
 
 fpath=(~/.zsh/functions $fpath)
 
