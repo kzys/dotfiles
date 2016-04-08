@@ -1,0 +1,11 @@
+#! /bin/sh
+set -ue
+
+if [ "$(git log --author 'Kato Kazuyoshi' --oneline | wc -l)" = 0 ]; then
+    name='Kazuyoshi Kato'
+else
+    echo '# You had commits which mentions "Kato Kazuyoshi"'
+    name='Kato Kazuyoshi'
+fi
+echo git config user.name "'$name'"
+echo git config user.email "'kato.kazuyoshi@gmail.com'"
