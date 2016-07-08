@@ -34,15 +34,19 @@
 (define-key global-map "\C-ca" 'org-agenda)
 (define-key global-map "\C-cc" 'org-capture)
 (setq org-log-done t)
-(setq org-agenda-files (list (expand-file-name "~/journal")))
+(setq org-agenda-files '("~/journal/work" "~/journal/home"))
 (setq org-default-notes-file
       (expand-file-name (format-time-string "~/journal/%Y-%m.org.txt")))
-(add-to-list 'auto-mode-alist '("\\.org.txt\\'" . org-mode))
-(setq org-agenda-file-regexp "\\.org.txt\\'")
+(add-to-list 'auto-mode-alist '("\\.org\\.txt\\'" . org-mode))
+(setq org-agenda-file-regexp "\\.org\\.txt\\'")
+(setq org-directory "~/journal")
 
 (setq org-todo-keywords
       '((sequence "TODO" "WAIT" "|" "DONE")))
-
+(setq org-todo-keyword-faces
+      '(("TODO" . "red")
+        ("WAIT" . "orange")
+        ("DONE" . "darkgreen")))
 (require 'js)
 (add-hook 'js-mode-hook
           (lambda ()
