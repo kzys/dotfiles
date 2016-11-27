@@ -58,9 +58,6 @@ export PAGER=less
 export WWW_HOME=http://www.google.co.jp/
 export CVS_RSH=ssh
 
-PYTHONPATH="$HOME/local/lib/python:$HOME/local/lib/python2.6"
-export PYTHONPATH
-
 export FTP_PASSIVE=1
 export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/lib/pkgconfig
 # export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/sw/lib/freetype219/lib/pkgconfig:/sw/lib/pkgconfig:/usr/lib/pkgconfig
@@ -91,15 +88,23 @@ autoload -U vcs_info
 zstyle ':vcs_info:*' enable git svn
 zstyle ':vcs_info:git:*' formats '%b %m%u%c'
 
-original_prompt="%~ @ $(hostname)"
+# see zshmisc to know %(? ... ) and other expressions
 precmd () {
-  PROMPT="%{%(?.$fg[green].$fg[red])%}$original_prompt$reset_color
+    # python
+    local prompt_virtual_env=''
+    if [ -e "$VIRTUAL_ENV" ]; then
+        prompt_virtual_env=" virtualenv:$(basename "$VIRTUAL_ENV")"
+    fi
+
+    PROMPT="%{%(?.$fg[green].$fg[red])%}%~ @ $(hostname)$prompt_virtual_env$reset_color
 %# "
 
-  vcs_info
-  RPROMPT="$vcs_info_msg_0_"
+    # show git's status
+    vcs_info
+    RPROMPT="$vcs_info_msg_0_"
 
-  set-title "$(print -n -P '%~')"
+    # tmux
+    set-title "$(print -n -P '%~')"
 }
 
 REPORTTIME=5
