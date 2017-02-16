@@ -1,7 +1,9 @@
 #! /bin/sh
 set -ue
 
-if [ "$(git log --author 'Kato Kazuyoshi' --oneline | wc -l)" = 0 ]; then
+has_kato_kazuyoshi="$(git log --author 'Kato Kazuyoshi' --oneline | wc -l)"
+
+if [ "$has_kato_kazuyoshi" -eq 0 ]; then
     name='Kazuyoshi Kato'
 else
     echo '# You had commits which mentions "Kato Kazuyoshi"'
