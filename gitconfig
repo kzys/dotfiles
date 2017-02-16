@@ -42,5 +42,9 @@
 [include]
     path = src/dotfiles/gitconfig-alias
 
-[user]
-	useConfigOnly = true
+[credential]
+    helper =
+
+[credential "https://git-codecommit.us-east-1.amazonaws.com"]
+    helper = !aws codecommit credential-helper $@
+    UseHttpPath = true
