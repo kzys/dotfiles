@@ -47,7 +47,6 @@
 
 ;; Flymake
 (require 'flymake)
-(require 'flymake-cursor)
 
 ;; You can use Menu even if you don't use any window system.
 ;; But it's not useful.

@@ -80,43 +80,10 @@
  (setq auto-mode-alist
        (cons '("\\.hs$" . haskell-mode) auto-mode-alist)))
 
-;; Auto Insert
-(setq auto-insert-directory  ;; don't forget last slash!
-      (expand-file-name "~/.emacs.d/template/"))
-(auto-insert-mode t)
-
-(setq auto-insert-alist
-      (remove-if 'null
-                 (mapcar
-                  (lambda (basename)
-                    (if (string-match "^default\\.\\(.*[^~]\\)$" basename)
-                        (cons
-                         (concat "\\." (match-string 1 basename) "$")
-                         (vector basename 'auto-insert-update-file))))
-                  (directory-files auto-insert-directory))))
-(add-hook 'find-file-hooks 'auto-insert)
-(setq auto-insert-query nil)
-
-(defun auto-insert-update-file ()
-  (let
-      ((str (replace-regexp-in-string ".*/lib/\\(.*\\)\\.pm$" "\\1"
-                                      (buffer-file-name))))
-
-    (while (search-forward "package " nil t)
-    (save-restriction
-      (narrow-to-region (match-beginning 0) (match-end 0))
-      (replace-match
-       (concat "package " (replace-regexp-in-string "/" "::" str)))))))
-
-(require 'auto-install)
-(add-to-list 'load-path auto-install-directory)
-
 (load (expand-file-name "~/.emacs.d/lisp/local.el") t t)
 
 (require 'wdired)
 (define-key dired-mode-map "r" 'wdired-change-to-wdired-mode)
-
-(require 'moccur-edit)
 
 (defun my:test-current-buffer ()
   (interactive)

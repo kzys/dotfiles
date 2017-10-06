@@ -1,5 +1,12 @@
 ;; -*- emacs-lisp -*-
 ;; ~/.emacs.el
+(setq debug-on-error t)
+
+;; Added by Package.el.  This must come before configurations of
+;; installed packages.  Don't delete this line.  If you don't want it,
+;; just comment it out by adding a semicolon to the start of the line.
+;; You may delete these explanatory comments.
+(package-initialize)
 
 (let ((dir (expand-file-name "~/.emacs.d/init/")))
   (mapcar
@@ -70,7 +77,12 @@
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
- '(haskell-mode-hook (quote (turn-on-haskell-indent))))
+ '(haskell-mode-hook (quote (turn-on-haskell-indent)))
+ '(magit-credential-cache-daemon-socket nil)
+ '(package-selected-packages
+   (quote
+    (session scala-mode minibuf-isearch magit go-mode flymake-cursor dsvn)))
+ '(session-use-package t nil (session)))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
