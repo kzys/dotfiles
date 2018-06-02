@@ -173,3 +173,8 @@ brew_z="$(brew --prefix)/etc/profile.d/z.sh"
 if [ -e $brew_z ]; then
     . $brew_z
 fi
+
+if [ -d ~/project/google-cloud-sdk ]; then
+    . ~/project/google-cloud-sdk/path.zsh.inc
+    . ~/project/google-cloud-sdk/completion.zsh.inc
+fi
