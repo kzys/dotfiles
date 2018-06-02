@@ -5,7 +5,17 @@ if test ! -d ~/.zsh; then
 fi
 
 # Path
-export PATH=$HOME/project/dotfiles/bin:$HOME/local/bin:$HOME/bin:$PATH
+# http://www.clear-code.com/blog/2011/9/5.html
+typeset -U path
+path=(
+    ~/project/dotfiles/bin(N)
+    ~/local/bin(N)
+    ~/bin(N)
+
+    # rustup installs rust and cargo under the directory
+    ~/.cargo/bin(N)
+    $path
+)
 
 fpath=(~/.zsh/functions $fpath)
 
