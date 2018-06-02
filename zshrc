@@ -178,3 +178,13 @@ if [ -d ~/project/google-cloud-sdk ]; then
     . ~/project/google-cloud-sdk/path.zsh.inc
     . ~/project/google-cloud-sdk/completion.zsh.inc
 fi
+
+# the variable must be declared first
+# http://mywiki.wooledge.org/BashPitfalls#local_varname.3D.24.28command.29
+function cdw {
+    local dir
+    dir="$((cd $HOME && find ./project ./gopath -type d ) | fzf --height 10)"
+    if [ $? -eq 0 ]; then
+       cd "$HOME/$dir"
+    fi
+}
