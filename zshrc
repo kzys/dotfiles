@@ -183,7 +183,7 @@ fi
 # http://mywiki.wooledge.org/BashPitfalls#local_varname.3D.24.28command.29
 function cdw {
     local dir
-    dir="$(find ~/project -maxdepth 5 -type d -not -name '.*' | fzy)"
+    dir="$(find ~/project -maxdepth 3 -type d -not -name '.*' | fzy)"
     if [ $? -eq 0 ]; then
        cd "$dir"
     fi
