@@ -128,7 +128,7 @@ export GOPATH=$HOME/gopath
 export PATH=$HOME/gopath/bin:$PATH
 
 # Android
-if [ -d $HOME/Library/Android ]; then
+if [ -d $HOME/Library/Android/sdk ]; then
     ANDROID_HOME=$HOME/Library/Android/sdk
 elif [ -d $HOME/src/adt-bundle-linux-x86_64-20140702 ]; then
     ANDROID_HOME=$HOME/src/adt-bundle-linux-x86_64-20140702/sdk
