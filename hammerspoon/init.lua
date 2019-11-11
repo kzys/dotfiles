@@ -1,20 +1,20 @@
 local log = hs.logger.new('init.lua','debug')
 
-function createCtrlHotKey(from, to)
+function createCtrlHotKey(from, mods, to)
    local f = function ()
-      hs.eventtap.keyStroke({}, to, 50000)
+      hs.eventtap.keyStroke(mods, to, 50000)
    end
    return hs.hotkey.new({'ctrl'}, from, f, nil, f)
 end
 
 emacsLike = {
-   createCtrlHotKey('p', 'UP'),
-   createCtrlHotKey('n', 'DOWN'),
-   createCtrlHotKey('b', 'LEFT'),
-   createCtrlHotKey('f', 'RIGHT'),
+   createCtrlHotKey('p', {}, 'UP'),
+   createCtrlHotKey('n', {}, 'DOWN'),
+   createCtrlHotKey('b', {}, 'LEFT'),
+   createCtrlHotKey('f', {}, 'RIGHT'),
 
-   createCtrlHotKey('e', 'END'),
-   createCtrlHotKey('a', 'HOME'),
+   createCtrlHotKey('e', {'cmd'}, 'RIGHT'),
+   createCtrlHotKey('a', {'cmd'}, 'LEFT'),
 }
 
 local APPS_TO_FIX = {
