@@ -3,14 +3,14 @@ set -eu
 
 path="$1"
 
-if [ -e "$HOME/.$path" ]; then
-    if [ -L "$HOME/.$path" ]; then
-        actual=$(readlink "$HOME/.$path")
-        if [ "$actual" = "$PWD/$path" ]; then
-            echo ok
-        else
-            echo "$HOME/.$path is pointing to $actual"
-        fi
+if [ -L "$HOME/.$path" ]; then
+    actual=$(readlink "$HOME/.$path")
+    if [ "$actual" = "$PWD/$path" ]; then
+        echo ok
+    else
+        echo "$HOME/.$path is pointing $actual"
+        rm "$HOME/.$path"
+        ln -s "$PWD/$path" "$HOME/.$path"
     fi
 else
     ln -s "$PWD/$path" "$HOME/.$path"
