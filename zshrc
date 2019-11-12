@@ -82,7 +82,7 @@ bindkey -e
 
 if [ ! -z "$TMUX" ]; then
     set-title() {
-      echo -ne "\ek$1\e\\"
+      echo -ne "\e]2;$1\e\\"
     }
 else
   set-title() {
