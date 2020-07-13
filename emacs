@@ -11,6 +11,7 @@
 ; desktop instead of session
 (desktop-save-mode 1)
 (setq desktop-save t)
+(savehist-mode 1)
 
 ; keep all backup files under ~/.emacs.d/
 (make-directory "~/.emacs.d/backup" t)
@@ -96,8 +97,7 @@
  '(magit-credential-cache-daemon-socket nil)
  '(package-selected-packages
    (quote
-    (rust-mode session scala-mode minibuf-isearch magit go-mode flymake-cursor dsvn)))
- '(session-use-package t nil (session)))
+    (dash git-commit transient with-editor projectile rust-mode scala-mode minibuf-isearch magit go-mode flymake-cursor dsvn))))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
