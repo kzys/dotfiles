@@ -25,10 +25,14 @@
    (sort (directory-files dir) 'string-lessp)))
 
 (cond ((eq window-system 'ns)
-       (set-cursor-color "#ccc")
+       (hl-line-mode 1)
+       (set-face-background hl-line-face "#eee")
+       (set-cursor-color "#aaa")
 
-       (set-frame-parameter (selected-frame) 'alpha '(95 95))
-       (add-to-list 'default-frame-alist '(alpha 95 95))
+       (setq default-frame-alist
+             '((width . 120) (height . 70) (alpha . 95)))
+       (dolist (x default-frame-alist)
+         (set-frame-parameter (selected-frame) (car x) (cdr x)))
 
        (defun insert-backslash ()
          (interactive)
