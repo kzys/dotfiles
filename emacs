@@ -8,6 +8,14 @@
 ;; You may delete these explanatory comments.
 (package-initialize)
 
+; desktop instead of session
+(desktop-save-mode 1)
+(setq desktop-save t)
+
+; keep all backup files under ~/.emacs.d/
+(make-directory "~/.emacs.d/backup" t)
+(setq backup-directory-alist `(("." "~/.emacs.d/backup")))
+
 (let ((dir (expand-file-name "~/.emacs.d/init/")))
   (mapcar
    (lambda (basename)
@@ -19,6 +27,9 @@
 (cond ((eq window-system 'ns)
        (set-cursor-color "#ccc")
 
+       (set-frame-parameter (selected-frame) 'alpha '(95 95))
+       (add-to-list 'default-frame-alist '(alpha 95 95))
+
        (defun insert-backslash ()
          (interactive)
          (insert "\\"))
@@ -26,7 +37,7 @@
 
        (mapcar
         (lambda (face)
-          (set-face-attribute face nil :family "Menlo" :height 140))
+          (set-face-attribute face nil :family "Menlo" :height 120))
         (list 'default 'bold 'bold-italic))
 
        (mapcar
@@ -81,7 +92,7 @@
  '(magit-credential-cache-daemon-socket nil)
  '(package-selected-packages
    (quote
-    (session scala-mode minibuf-isearch magit go-mode flymake-cursor dsvn)))
+    (rust-mode session scala-mode minibuf-isearch magit go-mode flymake-cursor dsvn)))
  '(session-use-package t nil (session)))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
