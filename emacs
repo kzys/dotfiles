@@ -1,88 +1,44 @@
-;; -*- emacs-lisp -*-
-;; ~/.emacs.el
+; -*- Emacs-Lisp -*-
 (setq debug-on-error t)
 
-;; Added by Package.el.  This must come before configurations of
-;; installed packages.  Don't delete this line.  If you don't want it,
-;; just comment it out by adding a semicolon to the start of the line.
-;; You may delete these explanatory comments.
-(package-initialize)
+; C-x C-f should start from ~/
+(setq inhibit-startup-message t)
+(setq default-directory "~/")
 
-; desktop instead of session
-(desktop-save-mode 1)
-(setq desktop-save t)
-(savehist-mode 1)
+; Don't ask "Symbolic link to Git-controlled source file; follow link?"
+(setq vc-follow-symlinks t)
 
-; keep all backup files under ~/.emacs.d/
-(make-directory "~/.emacs.d/backup" t)
-(setq backup-directory-alist '(("." . "~/.emacs.d/backup")))
+(blink-cursor-mode -1)
 
-(let ((dir (expand-file-name "~/.emacs.d/init/")))
-  (mapcar
-   (lambda (basename)
-     (message basename)
-     (if (string-match "\\.el$" basename)
-         (load (concat dir basename))))
-   (sort (directory-files dir) 'string-lessp)))
+(setq default-frame-alist
+      '((tool-bar-lines . 0)
+        (width . 110)
+        (height . 60)
+        (left . 100)
+	(top . 0)))
 
-(cond ((eq window-system 'ns)
-       (hl-line-mode 1)
-       (set-face-background hl-line-face "#eee")
-       (set-cursor-color "#aaa")
+; C-h as Backspace
+(global-set-key "\C-ch" 'help)
+(keyboard-translate ?\C-h ?\C-?)
 
-       (setq default-frame-alist
-             '((width . 120) (height . 70) (alpha . 95)))
-       (dolist (x default-frame-alist)
-         (set-frame-parameter (selected-frame) (car x) (cdr x)))
+(add-to-list 'package-archives
+             '("melpa-stable" . "https://stable.melpa.org/packages/") t)
 
-       (defun insert-backslash ()
-         (interactive)
-         (insert "\\"))
-       (global-set-key "¥" 'insert-backslash)
+; find-file
+(define-key minibuffer-local-map "\C-n" 'next-line-or-history-element)
+(define-key minibuffer-local-map "\C-p" 'previous-line-or-history-element)
 
-       (mapcar
-        (lambda (face)
-          (set-face-attribute face nil :family "Menlo" :height 120))
-        (list 'default 'bold 'bold-italic))
-
-       (mapcar
-        (lambda (target)
-          (set-fontset-font
-           (frame-parameter nil 'font)
-           target
-           '("Hiragino Maru Gothic Pro" . "iso10646-1")))
-        (list 'japanese-jisx0208 'japanese-jisx0212))))
-
-(setq ispell-local-dictionary "english")
-(setq ispell-program-name
-      (if (file-exists-p "/usr/local/bin/aspell")
-          "/usr/local/bin/aspell" "aspell"))
-
-(setq user-full-name "Kazuyoshi Kato"
-      user-mail-address "kato.kazuyoshi@gmail.com")
-
-(cond
- ((require 'anthy nil t)
-
-  (require 'egg)
-  (setq default-input-method 'japanese-egg-anthy)
-
-  (require 'egg-mlh)
-  (setq mlh-default-backend "anthy")
-  (global-set-key " " 'mlh-space-bar-backward-henkan)))
+; Custom
 (custom-set-variables
  ;; custom-set-variables was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
- '(haskell-mode-hook (quote (turn-on-haskell-indent)))
- '(magit-credential-cache-daemon-socket nil)
  '(package-selected-packages
-   (quote
-    (dash git-commit transient with-editor projectile rust-mode scala-mode minibuf-isearch magit go-mode flymake-cursor dsvn))))
-(custom-set-faces
- ;; custom-set-faces was added by Custom.
- ;; If you edit it by hand, you could mess it up, so be careful.
- ;; Your init file should contain only one such instance.
- ;; If there is more than one, they won't work right.
- )
+   '(session scala-mode rust-mode projectile minibuf-isearch markdown-mode magit ivy go-mode flymake-cursor dsvn)))
+
+(require 'session)
+(add-hook 'after-init-hook 'session-initialize)
+
+; Is it fast?
+(setq initial-scratch-message (format "; %s\n" (emacs-init-time)))
