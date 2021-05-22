@@ -1,5 +1,16 @@
-; -*- Emacs-Lisp -*-
 (setq debug-on-error t)
+
+(savehist-mode)
+
+;; Added by Package.el.  This must come before configurations of
+;; installed packages.  Don't delete this line.  If you don't want it,
+;; just comment it out by adding a semicolon to the start of the line.
+;; You may delete these explanatory comments.
+(package-initialize)
+
+(add-to-list
+ 'package-archives
+ '("melpa" . "https://stable.melpa.org/packages/"))
 
 ; C-x C-f should start from ~/
 (setq inhibit-startup-message t)
@@ -21,24 +32,24 @@
 (global-set-key "\C-ch" 'help)
 (keyboard-translate ?\C-h ?\C-?)
 
-(add-to-list 'package-archives
-             '("melpa-stable" . "https://stable.melpa.org/packages/") t)
-
 ; find-file
 (define-key minibuffer-local-map "\C-n" 'next-line-or-history-element)
 (define-key minibuffer-local-map "\C-p" 'previous-line-or-history-element)
 
-; Custom
 (custom-set-variables
  ;; custom-set-variables was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
+ '(gnutls-algorithm-priority "normal:-vers-tls1.3")
  '(package-selected-packages
-   '(session scala-mode rust-mode projectile minibuf-isearch markdown-mode magit ivy go-mode flymake-cursor dsvn)))
-
-(require 'session)
-(add-hook 'after-init-hook 'session-initialize)
+   '(yaml-mode session scala-mode rust-mode minibuf-isearch magit lua-mode go-mode flymake-cursor)))
+(custom-set-faces
+ ;; custom-set-faces was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ )
 
 ; Is it fast?
 (setq initial-scratch-message (format "; %s\n" (emacs-init-time)))
