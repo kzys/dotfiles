@@ -28,6 +28,10 @@
 (define-key minibuffer-local-map "\C-n" 'next-line-or-history-element)
 (define-key minibuffer-local-map "\C-p" 'previous-line-or-history-element)
 
+;; Use savehist instead of session
+(require 'savehist)
+(savehist-mode nil)
+
 ; Custom
 (custom-set-variables
  ;; custom-set-variables was added by Custom.
@@ -35,10 +39,7 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(session scala-mode rust-mode projectile minibuf-isearch markdown-mode magit ivy go-mode flymake-cursor dsvn)))
-
-(require 'session)
-(add-hook 'after-init-hook 'session-initialize)
+   '(scala-mode rust-mode projectile minibuf-isearch markdown-mode magit ivy go-mode flymake-cursor dsvn)))
 
 ; Is it fast?
 (setq initial-scratch-message (format "; %s\n" (emacs-init-time)))
