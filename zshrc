@@ -193,3 +193,8 @@ function cdw {
 if [ -f /Users/kazuyoshi/.travis/travis.sh ]; then
     source /Users/kazuyoshi/.travis/travis.sh
 fi
+
+
+if [ -f ~/.zsh/init-work.sh ]; then
+    . ~/.zsh/init-work.sh
+fi

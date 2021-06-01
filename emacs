@@ -41,5 +41,8 @@
  '(package-selected-packages
    '(scala-mode rust-mode projectile minibuf-isearch markdown-mode magit ivy go-mode flymake-cursor dsvn)))
 
+(let* ((path (expand-file-name "~/.emacs.d/init-work.el")))
+  (if (file-exists-p path) (load path)))
+
 ; Is it fast?
 (setq initial-scratch-message (format "; %s\n" (emacs-init-time)))
