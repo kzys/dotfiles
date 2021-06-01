@@ -1,13 +1,4 @@
-#! /bin/sh
-set -ue
-
-has_kato_kazuyoshi="$(git log --author 'Kato Kazuyoshi' --oneline | wc -l)"
-
-if [ "$has_kato_kazuyoshi" -eq 0 ]; then
-    name='Kazuyoshi Kato'
-else
-    echo '# You had commits which mentions "Kato Kazuyoshi"'
-    name='Kato Kazuyoshi'
-fi
-echo git config user.name "'$name'"
-echo git config user.email "'kato.kazuyoshi@gmail.com'"
+#! /bin/bash
+set -uexo pipefail
+git config user.name 'Kazuyoshi Kato'
+git config user.email 'kato.kazuyoshi@gmail.com'
