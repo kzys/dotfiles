@@ -15,6 +15,8 @@ emacsLike = {
 
    createCtrlHotKey('e', {'cmd'}, 'RIGHT'),
    createCtrlHotKey('a', {'cmd'}, 'LEFT'),
+
+   createCtrlHotKey('g', {}, 'Escape'),
 }
 
 local APPS_TO_FIX = {
