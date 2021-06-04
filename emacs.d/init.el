@@ -36,6 +36,11 @@
 (define-key minibuffer-local-map "\C-n" 'next-line-or-history-element)
 (define-key minibuffer-local-map "\C-p" 'previous-line-or-history-element)
 
+;; Use savehist instead of session
+(require 'savehist)
+(savehist-mode nil)
+
+; Custom
 (custom-set-variables
  ;; custom-set-variables was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
@@ -50,6 +55,9 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  )
+
+(let* ((path (expand-file-name "~/.emacs.d/init-work.el")))
+  (if (file-exists-p path) (load path)))
 
 ; Is it fast?
 (setq initial-scratch-message (format "; %s\n" (emacs-init-time)))

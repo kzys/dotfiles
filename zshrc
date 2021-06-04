@@ -8,7 +8,7 @@ fi
 # http://www.clear-code.com/blog/2011/9/5.html
 typeset -U path
 path=(
-    ~/project/dotfiles/bin(N)
+    ~/ws/dotfiles/bin(N)
     ~/local/bin(N)
     ~/bin(N)
 
@@ -174,16 +174,16 @@ if [ -e $brew_z ]; then
     . $brew_z
 fi
 
-if [ -d ~/project/google-cloud-sdk ]; then
-    . ~/project/google-cloud-sdk/path.zsh.inc
-    . ~/project/google-cloud-sdk/completion.zsh.inc
-fi
+cdw_dirs=(
+    ~/ws(N)
+    ~/ec2-ws(N)
+)
 
 # the variable must be declared first
 # http://mywiki.wooledge.org/BashPitfalls#local_varname.3D.24.28command.29
 function cdw {
     local dir
-    dir="$(find ~/project -maxdepth 3 -type d -not -name '.*' | fzy)"
+    dir="$(find $cdw_dirs -maxdepth 3 -type d -not -name '.*' | fzy)"
     if [ $? -eq 0 ]; then
        cd "$dir"
     fi
@@ -192,4 +192,9 @@ function cdw {
 # added by travis gem
 if [ -f /Users/kazuyoshi/.travis/travis.sh ]; then
     source /Users/kazuyoshi/.travis/travis.sh
+fi
+
+
+if [ -f ~/.zsh/init-work.sh ]; then
+    . ~/.zsh/init-work.sh
 fi
