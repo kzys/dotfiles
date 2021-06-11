@@ -1,4 +1,4 @@
-(setq debug-on-error t)
+(setq debug-on-error nil)
 
 (savehist-mode)
 
@@ -44,7 +44,23 @@
 (require 'org)
 (global-set-key (kbd "C-c l") 'org-store-link)
 (global-set-key (kbd "C-c a") 'org-agenda)
+
+(require 'org-capture)
 (global-set-key (kbd "C-c c") 'org-capture)
+(setq org-capture-templates
+      `(("h" "home" entry
+	 (file+headline ,(format-time-string "~/org/home/%Y-%m-home.org") "Inbox") "* TODO %?")
+	("w" "work" entry
+	 (file+headline ,(format-time-string "~/org/work/%Y-%m-work.org") "Inbox") "* TODO %?")))
+
+(require 'org-agenda)
+(setq org-agenda-files (list "~/org/home" "~/org/work"))
+
+(setq org-todo-keywords
+      '((sequence "TODO" "WAIT" "|" "DONE")))
+(setq org-todo-keyword-faces
+      '(("TODO" :foreground "#006600")
+	("WAIT" :foreground "#996600")))
 
 ; Custom
 (custom-set-variables
