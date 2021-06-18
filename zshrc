@@ -125,10 +125,6 @@ if test -n $SSH_AGENT_PID; then
   (ssh-add -L >& /dev/null) || ssh-add ~/.ssh/id_rsa ~/.ssh/id_rsa_legacy ~/.ssh/id_ed25519
 fi
 
-# Go
-export GOPATH=$HOME/gopath
-export PATH=$HOME/gopath/bin:$PATH
-
 # Android
 if [ -d $HOME/Library/Android/sdk ]; then
     ANDROID_HOME=$HOME/Library/Android/sdk
@@ -179,6 +175,7 @@ fi
 cdw_dirs=(
     ~/ws(N)
     ~/ec2-ws(N)
+    ~/go/src(N)
 )
 
 # the variable must be declared first
