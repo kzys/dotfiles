@@ -12,6 +12,8 @@ path=(
     ~/local/bin(N)
     ~/bin(N)
 
+    ~/Library/Python/2.7/bin(N)
+
     # rustup installs rust and cargo under the directory
     ~/.cargo/bin(N)
     $path
