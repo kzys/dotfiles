@@ -1,5 +1,7 @@
 (setq debug-on-error nil)
 
+(set-language-environment "Japanese")
+
 (savehist-mode)
 
 ;; Added by Package.el.  This must come before configurations of
