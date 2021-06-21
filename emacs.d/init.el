@@ -42,9 +42,10 @@
 (require 'savehist)
 (savehist-mode nil)
 
-(defun after-init-hook ()
-  (vertico-mode)
-  (marginalia-mode))
+(add-hook 'after-init-hook
+	  (lambda ()
+	    (vertico-mode)
+	    (marginalia-mode)))
 
 ;; org
 (require 'org)
