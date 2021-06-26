@@ -25,15 +25,19 @@ local APPS_TO_FIX = {
 }
 
 function applicationWatcherCallback(appName, eventType, appObject)
+   if eventType == hs.application.watcher.activated then
+   else
+      return
+   end
+
+
    if (APPS_TO_FIX[appName]) then
-      if (eventType == hs.application.watcher.activated) then
-         for _, v in pairs(emacsLike) do
-            v:enable()
-         end
-      elseif (eventType == hs.application.watcher.deactivated) then
-         for _, v in pairs(emacsLike) do
-            v:disable()
-         end
+      for _, v in pairs(emacsLike) do
+	 v:enable()
+      end
+   else
+      for _, v in pairs(emacsLike) do
+	 v:disable()
       end
    end
 end
