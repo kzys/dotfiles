@@ -51,6 +51,7 @@
 (require 'org)
 (global-set-key (kbd "C-c l") 'org-store-link)
 (global-set-key (kbd "C-c a") 'org-agenda)
+(setq org-startup-truncated nil)
 
 (require 'org-capture)
 (global-set-key (kbd "C-c c") 'org-capture)
@@ -59,6 +60,10 @@
 	 (file+headline ,(format-time-string "~/org/home/%Y-%m-home.org") "Inbox") "* TODO %?")
 	("w" "work" entry
 	 (file+headline ,(format-time-string "~/org/work/%Y-%m-work.org") "Inbox") "* TODO %?")))
+(setq org-startup-folded 'content)
+
+(setq org-ellipsis " ...")
+(custom-set-faces '(org-ellipsis ((t (:foreground "#999999" :underline nil)))))
 
 (require 'org-agenda)
 (setq org-agenda-files (list "~/org/home" "~/org/work"))
