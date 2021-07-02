@@ -48,31 +48,30 @@
 	    (marginalia-mode)))
 
 ;; org
-(require 'org)
 (global-set-key (kbd "C-c l") 'org-store-link)
 (global-set-key (kbd "C-c a") 'org-agenda)
-(setq org-startup-truncated nil)
+(with-eval-after-load 'org
+  (setq org-startup-truncated nil)
+  (setq org-startup-folded 'content)
+  (setq org-ellipsis " ...")
+  (custom-set-faces '(org-ellipsis ((t (:foreground "#999999" :underline nil))))))
 
-(require 'org-capture)
 (global-set-key (kbd "C-c c") 'org-capture)
-(setq org-capture-templates
-      `(("h" "home" entry
-	 (file+headline ,(format-time-string "~/org/home/%Y-%m-home.org") "Inbox") "* TODO %?")
-	("w" "work" entry
-	 (file+headline ,(format-time-string "~/org/work/%Y-%m-work.org") "Inbox") "* TODO %?")))
-(setq org-startup-folded 'content)
+(with-eval-after-load 'org-capture
+  (setq org-capture-templates
+	`(("h" "home" entry
+	   (file+headline ,(format-time-string "~/org/home/%Y-%m-home.org") "Inbox") "* TODO %?")
+	  ("w" "work" entry
+	   (file+headline ,(format-time-string "~/org/work/%Y-%m-work.org") "Inbox") "* TODO %?"))))
 
-(setq org-ellipsis " ...")
-(custom-set-faces '(org-ellipsis ((t (:foreground "#999999" :underline nil)))))
+(with-eval-after-load 'org-agenda
+  (setq org-agenda-files (list "~/org/home" "~/org/work"))
 
-(require 'org-agenda)
-(setq org-agenda-files (list "~/org/home" "~/org/work"))
-
-(setq org-todo-keywords
-      '((sequence "TODO" "WAIT" "|" "DONE")))
-(setq org-todo-keyword-faces
-      '(("TODO" :foreground "#006600")
-	("WAIT" :foreground "#996600")))
+  (setq org-todo-keywords
+	'((sequence "TODO" "WAIT" "|" "DONE")))
+  (setq org-todo-keyword-faces
+	'(("TODO" :foreground "#006600")
+	  ("WAIT" :foreground "#996600"))))
 
 ; Custom
 (custom-set-variables
