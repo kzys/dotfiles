@@ -42,11 +42,6 @@
 (require 'savehist)
 (savehist-mode nil)
 
-(add-hook 'after-init-hook
-	  (lambda ()
-	    (vertico-mode)
-	    (marginalia-mode)))
-
 ;; org
 (global-set-key (kbd "C-c l") 'org-store-link)
 (global-set-key (kbd "C-c a") 'org-agenda)
