@@ -3,7 +3,7 @@ set -euo pipefail
 IFS=$'\n\t'
 
 main() {
-    local -a files=(zshrc emacs.d gitconfig)
+    local -a files=(zshrc emacs.d gitconfig tmux.conf)
     for file in "${files[@]}"
     do
         if [[ -e "$HOME/.$file" ]]; then
