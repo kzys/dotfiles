@@ -78,7 +78,7 @@
  ;; If there is more than one, they won't work right.
  '(gnutls-algorithm-priority "normal:-vers-tls1.3")
  '(package-selected-packages
-   '(marginalia vertico yaml-mode session scala-mode rust-mode minibuf-isearch magit lua-mode go-mode flymake-cursor)))
+   '(company eglot flymake marginalia vertico yaml-mode session scala-mode rust-mode minibuf-isearch magit lua-mode go-mode flymake-cursor)))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
@@ -88,6 +88,11 @@
 
 (let* ((path (expand-file-name "~/.emacs.d/init-work.el")))
   (if (file-exists-p path) (load path)))
+
+(global-company-mode)
+
+(add-hook 'go-mode-hook (lambda()
+			  (eglot-ensure)))
 
 ; Is it fast?
 (setq initial-scratch-message (format "; %s\n" (emacs-init-time)))
