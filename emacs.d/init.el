@@ -94,5 +94,7 @@
 (add-hook 'go-mode-hook (lambda()
 			  (eglot-ensure)))
 
+(setq ring-bell-function 'ignore)
+
 ; Is it fast?
 (setq initial-scratch-message (format "; %s\n" (emacs-init-time)))
