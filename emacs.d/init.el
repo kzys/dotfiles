@@ -91,6 +91,13 @@
 
 (global-company-mode)
 
+;; Make eglot work on aws/amazon-ecs-agent where there is agent/go.mod.
+(defun -project-try-gomod (dir)
+  (if (file-exists-p (concat (file-name-as-directory dir) "go.mod"))
+      dir
+    (if (string-equal dir "/")
+	(-project-try-gomod (file-name-directory (directory-file-name dir))))))
+(add-hook 'project-find-functions '-project-try-gomod)
 (add-hook 'go-mode-hook (lambda()
 			  (eglot-ensure)))
 
