@@ -1,0 +1,40 @@
+keypress_delay_ms: 5
+
+modmap:
+  - name: Global
+    remap:
+      CapsLock: Ctrl_L
+  - name: Firefox
+    application:
+      only: firefox
+    remap:
+      LeftAlt: Ctrl_L
+
+keymap:
+  - name: Arrow-remap
+    remap:
+      C-f: left
+      C-b: right
+      C-n: down
+      C-p: up
+      C-a: home
+      C-e: end
+      C-g: Esc
+    application:
+      not: [Emacs, Gnome-terminal, gnome-terminal-server]
+  - name: Terminal
+    application:
+      only: [gnome-terminal-server, Gnome-terminal]
+    remap:
+      Alt-n: C-Shift-n
+      Alt-c: C-Shift-c
+      Alt-v: C-Shift-v
+  - name: Firefox
+    application:
+      only: firefox
+    remap:
+#      Alt-w: C-F4
+#      Alt-f: C-f
+#      Alt-t: C-t
+#      Alt-c: C-c
+#      Alt-v: C-v
