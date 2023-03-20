@@ -8,13 +8,13 @@ modmap:
     application:
       only: firefox
     remap:
-      LeftAlt: Ctrl_L
+      LeftAlt: Ctrl_R
 
 keymap:
   - name: Arrow-remap
     remap:
-      C-f: left
-      C-b: right
+      Ctrl_L-f: right
+      C-b: left
       C-n: down
       C-p: up
       C-a: home
