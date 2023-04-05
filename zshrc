@@ -14,8 +14,16 @@ path=(
 
     ~/Library/Python/2.7/bin(N)
 
+    # not so sure whether Go has to be managed by asdf or not
+    ~/sdk/go1.20.3/bin(N)
+    ~/go/bin(N)
+
     # rustup installs rust and cargo under the directory
     ~/.cargo/bin(N)
+
+    # https://fly.io/docs/flyctl/
+    ~/.fly/bin(N)
+
     $path
 )
 
