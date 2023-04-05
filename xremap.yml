@@ -8,7 +8,7 @@ modmap:
       CapsLock: Ctrl_L
   - name: Alt as Cmd on Firefox
     application:
-      only: firefox
+      only: [firefox, Google-chrome]
     remap:
       LeftAlt: Ctrl_R
 
