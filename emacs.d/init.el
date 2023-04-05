@@ -103,7 +103,8 @@
 
 ;; rust-mode + elgot uses eglot-inlay-hint-face a lot, which is too small.
 (with-eval-after-load 'eglot
-  (set-face-attribute 'eglot-inlay-hint-face nil :height 1.0))
+  (set-face-attribute 'eglot-inlay-hint-face nil :height 1.0)
+  (setq eglot-sync-connect 1))
 (add-hook 'rust-mode-hook (lambda()
 			  (eglot-ensure)))
 
