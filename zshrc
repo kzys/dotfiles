@@ -210,3 +210,9 @@ unset __mamba_setup
 # <<< mamba initialize <<<
 
 micromamba activate mamba-sandbox
+
+if [ -d ~/.asdf ]; then
+    . "$HOME/.asdf/asdf.sh"
+fi
+
+(command -v direnv > /dev/null) && eval "$(direnv hook zsh)"
