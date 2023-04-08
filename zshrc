@@ -24,6 +24,9 @@ path=(
     # https://fly.io/docs/flyctl/
     ~/.fly/bin(N)
 
+
+    ~/ws/node-v18.15.0-linux-x64/bin(N)
+    
     $path
 )
 

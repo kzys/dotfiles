@@ -25,7 +25,7 @@
 
 (setq default-frame-alist
       '((tool-bar-lines . 0)
-        (width . 110)
+        (width . 120)
         (height . 60)
         (left . 100)
 	(top . 0)))
