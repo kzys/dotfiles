@@ -135,7 +135,7 @@ precmd () {
 REPORTTIME=5
 
 if test -n $SSH_AGENT_PID; then
-  (ssh-add -L >& /dev/null) || ssh-add ~/.ssh/id_rsa ~/.ssh/id_rsa_legacy ~/.ssh/id_ed25519
+  (ssh-add -L >& /dev/null) || ssh-add ~/secrets/id_ed25519
 fi
 
 # Android
