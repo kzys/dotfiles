@@ -205,24 +205,24 @@ if [ -f ~/.zsh/init-work.sh ]; then
     . ~/.zsh/init-work.sh
 fi
 
-# >>> mamba initialize >>>
-# !! Contents within this block are managed by 'mamba init' !!
-export MAMBA_EXE="/home/kazuyoshi/.local/bin/micromamba";
-export MAMBA_ROOT_PREFIX="/home/kazuyoshi/micromamba";
-__mamba_setup="$('/home/kazuyoshi/.local/bin/micromamba' shell hook --shell zsh --prefix '/home/kazuyoshi/micromamba' 2> /dev/null)"
+# >>> conda initialize >>>
+# !! Contents within this block are managed by 'conda init' !!
+p__conda_setup="$('/home/kaz/mambaforge/bin/conda' 'shell.sh' 'hook' 2> /dev/null)"
 if [ $? -eq 0 ]; then
-    eval "$__mamba_setup"
+    eval "$__conda_setup"
 else
-    if [ -f "/home/kazuyoshi/micromamba/etc/profile.d/micromamba.sh" ]; then
-        . "/home/kazuyoshi/micromamba/etc/profile.d/micromamba.sh"
+    if [ -f "/home/kaz/mambaforge/etc/profile.d/conda.sh" ]; then
+        . "/home/kaz/mambaforge/etc/profile.d/conda.sh"
     else
-        export  PATH="/home/kazuyoshi/micromamba/bin:$PATH"  # extra space after export prevents interference from conda init
+        export PATH="/home/kaz/mambaforge/bin:$PATH"
     fi
 fi
-unset __mamba_setup
-# <<< mamba initialize <<<
+unset __conda_setup
 
-micromamba activate mamba-sandbox
+if [ -f "/home/kaz/mambaforge/etc/profile.d/mamba.sh" ]; then
+    . "/home/kaz/mambaforge/etc/profile.d/mamba.sh"
+fi
+# <<< conda initialize <<<
 
 if [ -d ~/.asdf ]; then
     . "$HOME/.asdf/asdf.sh"
