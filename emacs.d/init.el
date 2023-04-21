@@ -78,7 +78,7 @@
  ;; If there is more than one, they won't work right.
  '(gnutls-algorithm-priority "normal:-vers-tls1.3")
  '(package-selected-packages
-   '(graphviz-dot-mode markdown-mode eglot flymake marginalia vertico yaml-mode session scala-mode rust-mode minibuf-isearch magit lua-mode go-mode flymake-cursor)))
+   '(company elixir-mode graphviz-dot-mode markdown-mode eglot flymake marginalia vertico yaml-mode session scala-mode rust-mode minibuf-isearch magit lua-mode go-mode flymake-cursor)))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
@@ -97,6 +97,7 @@
 	(-project-try-gomod (file-name-directory (directory-file-name dir))))))
 (add-hook 'project-find-functions '-project-try-gomod)
 (add-hook 'go-mode-hook (lambda()
+			  (company-mode)
 			  (eglot-ensure)))
 
 (setq ring-bell-function 'ignore)
@@ -104,6 +105,8 @@
 ;; rust-mode + elgot uses eglot-inlay-hint-face a lot, which is too small.
 (with-eval-after-load 'eglot
   (set-face-attribute 'eglot-inlay-hint-face nil :height 1.0)
+  (global-set-key (kbd "<C-return>") 'eglot-code-actions)
+  
   (setq eglot-sync-connect 1))
 (add-hook 'rust-mode-hook (lambda()
 			  (eglot-ensure)))
