@@ -1,0 +1,6 @@
+[Service]
+ExecStart=/home/kazuyoshi/local/bin/xremap /home/kazuyoshi/ws/dotfiles/xremap.yml
+
+[Install]
+WantedBy=org.gnome.Shell.target
+
