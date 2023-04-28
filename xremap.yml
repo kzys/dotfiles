@@ -6,9 +6,9 @@ modmap:
   - name: Global
     remap:
       CapsLock: Ctrl_L
-  - name: Alt as Cmd on Firefox
+  - name: Alt as Cmd on browsers and Slack
     application:
-      only: [firefox, Google-chrome, Microsoft-edge]
+      only: [firefox, Google-chrome, Microsoft-edge, Slack]
     remap:
       LeftAlt: Ctrl_R
 
