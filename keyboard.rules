@@ -1,0 +1,6 @@
+ACTION=="add", \
+    ATTRS{idVendor}=="04d9", ATTRS{idProduct}=="a293", \
+    ENV{ID_USB_INTERFACE_NUM}=="00", \
+    RUN+="/usr/local/bin/systemctl-as-gnome-user restart xremap"
+ 
+
