@@ -1,0 +1,10 @@
+- name: laptop
+  hosts:
+    - localhost
+  tasks:
+    - copy:
+        src: xremap.service
+        dest: ~/.config/systemd/user/
+    - command: systemctl --user daemon-reload
+    - command: systemctl --user enable xremap.service
+    - command: systemctl --user start xremap.service
