@@ -12,8 +12,8 @@
     - copy:
         src: bin/systemctl-as-gnome-user
         dest: /usr/local/bin
-        become: true
+      become: true
     - copy:
         src: keyboard.rules
         dest: /etc/udev/rules.d/
-        become: true
+      become: true
