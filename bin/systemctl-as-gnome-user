@@ -1,0 +1,10 @@
+#! /bin/bash
+set -euo pipefail
+
+PATH=/usr/bin
+
+gnome_user=$(ps axun | awk '/gnome-shell$/ { print $1 }')
+sudo -u "#$gnome_user" \
+     DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$gnome_user/bus" \
+     /usr/bin/systemctl --user "$@"
+

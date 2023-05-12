@@ -8,3 +8,12 @@
     - command: systemctl --user daemon-reload
     - command: systemctl --user enable xremap.service
     - command: systemctl --user start xremap.service
+    # xremap + udev
+    - copy:
+        src: bin/systemctl-as-gnome-user
+        dest: /usr/local/bin
+        become: true
+    - copy:
+        src: keyboard.rules
+        dest: /etc/udev/rules.d/
+        become: true
