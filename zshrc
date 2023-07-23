@@ -4,6 +4,9 @@ if test ! -d ~/.zsh; then
   mkdir ~/.zsh
 fi
 
+# Go
+go_sdk=$(ls -r ~/sdk | head -1)
+
 # Path
 # http://www.clear-code.com/blog/2011/9/5.html
 typeset -U path
@@ -15,8 +18,7 @@ path=(
     ~/Library/Python/2.7/bin(N)
 
     # not so sure whether Go has to be managed by asdf or not
-    ~/sdk/go1.20.3/bin(N)
-    ~/go/bin(N)
+    $go_sdk/bin(N)
 
     # rustup installs rust and cargo under the directory
     ~/.cargo/bin(N)
