@@ -1,33 +1,27 @@
-# This is for emulating Mac-like shortcuts.
-
 keypress_delay_ms: 5
 
 modmap:
   - name: Global
     remap:
-      CapsLock: Ctrl_L
-  - name: Alt as Cmd on browsers and Slack
-    application:
-      only: [firefox, Google-chrome, Microsoft-edge, Slack]
-    remap:
-      LeftAlt: Ctrl_R
+      CapsLock: Ctrl_R
 
 keymap:
   - name: Emacs-like shortcuts for moving a cursor
     remap:
-      Ctrl_L-f: right
-      Ctrl_L-b: left
-      Ctrl_L-n: down
-      Ctrl_L-p: up
-      Ctrl_L-a: home
-      Ctrl_L-e: end
-      Ctrl_L-g: Esc
+      Ctrl_R-f: right
+      Ctrl_R-b: left
+      Ctrl_R-n: down
+      Ctrl_R-p: up
+      Ctrl_R-a: home
+      Ctrl_R-e: end
+      Ctrl_R-g: Esc
+      Ctrl_R-h: Backspace
     application:
-      not: [Emacs, Gnome-terminal, gnome-terminal-server]
+      not: [Emacs, Gnome-terminal, gnome-terminal-server, Code]
   - name: Cmd-c, Cmd-v on Terminal
     application:
       only: [gnome-terminal-server, Gnome-terminal]
     remap:
-      Alt-n: C-Shift-n
-      Alt-c: C-Shift-c
-      Alt-v: C-Shift-v
+      Ctrl_L-n: C-Shift-n
+      Ctrl_L-c: C-Shift-c
+      Ctrl_L-v: C-Shift-v

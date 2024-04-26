@@ -50,3 +50,5 @@
     UseHttpPath = true
 [user]
 	email = kato.kazuyoshi@gmail.com
+[init]
+	defaultBranch = main
