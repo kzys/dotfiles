@@ -1,27 +1,38 @@
 keypress_delay_ms: 5
 
 modmap:
-  - name: Global
+  # Mapping CapsLock to Ctrl works well, where I use Ctrl more than Cmd such as Terminal.
+  - name: CapsLock -> Ctrl_R
     remap:
       CapsLock: Ctrl_R
+      Alt_L: Win_R
+    application:
+      not: [Emacs, Code, firefox_firefox]
+  # Mapping At to Ctrl works where I use Cmd more than Ctrl such as Visual Studio Code.
+  - name: CapsLock -> Win_R
+    application:
+      only: [Code, firefox_firefox]
+    remap:
+      Alt_L: Ctrl_R
+      CapsLock: Win_R
 
 keymap:
-  - name: Emacs-like shortcuts for moving a cursor
-    remap:
-      Ctrl_R-f: right
-      Ctrl_R-b: left
-      Ctrl_R-n: down
-      Ctrl_R-p: up
-      Ctrl_R-a: home
-      Ctrl_R-e: end
-      Ctrl_R-g: Esc
-      Ctrl_R-h: Backspace
-    application:
-      not: [Emacs, Gnome-terminal, gnome-terminal-server, Code]
-  - name: Cmd-c, Cmd-v on Terminal
+  - name: Terminal
     application:
       only: [gnome-terminal-server, Gnome-terminal]
     remap:
-      Ctrl_L-n: C-Shift-n
-      Ctrl_L-c: C-Shift-c
-      Ctrl_L-v: C-Shift-v
+      Win_R-n: C-Shift-n
+      Win_R-c: C-Shift-c
+      Win_R-v: C-Shift-v
+  - name: Emacs-like shortcuts for moving a cursor
+    application:
+      only: [Code, firefox_firefox]
+    remap:
+      Win_R-f: right
+      Win_R-b: left
+      Win_R-n: down
+      Win_R-p: up
+      Win_R-a: home
+      Win_R-e: end
+      Win_R-g: Esc
+      Win_R-h: Backspace
