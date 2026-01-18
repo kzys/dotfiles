@@ -1,4 +1,16 @@
 #! sh
+debug=0
+t0=$(date +%s%N)
+
+milestone() {
+    if [[ "$debug" -ne 1 ]]; then
+	return
+    fi
+
+    t1=$(date +%s%N)
+    printf "%8s %4sms\n" "$1" $(echo "scale=2; ($t1 - $t0)/1000000" | bc)
+    t0=$t1
+}
 
 if test ! -d ~/.zsh; then
   mkdir ~/.zsh
@@ -198,37 +210,14 @@ function cdw {
     fi
 }
 
-# added by travis gem
-if [ -f /Users/kazuyoshi/.travis/travis.sh ]; then
-    source /Users/kazuyoshi/.travis/travis.sh
-fi
-
-
 if [ -f ~/.zsh/init-work.sh ]; then
     . ~/.zsh/init-work.sh
 fi
 
-# >>> conda initialize >>>
-# !! Contents within this block are managed by 'conda init' !!
-p__conda_setup="$('/home/kaz/mambaforge/bin/conda' 'shell.sh' 'hook' 2> /dev/null)"
-if [ $? -eq 0 ]; then
-    eval "$__conda_setup"
-else
-    if [ -f "/home/kaz/mambaforge/etc/profile.d/conda.sh" ]; then
-        . "/home/kaz/mambaforge/etc/profile.d/conda.sh"
-    else
-        export PATH="/home/kaz/mambaforge/bin:$PATH"
-    fi
-fi
-unset __conda_setup
+# The next line updates PATH for the Google Cloud SDK.
+if [ -f '/home/kazuyoshi/ws/google-cloud-sdk/path.zsh.inc' ]; then . '/home/kazuyoshi/ws/google-cloud-sdk/path.zsh.inc'; fi
 
-if [ -f "/home/kaz/mambaforge/etc/profile.d/mamba.sh" ]; then
-    . "/home/kaz/mambaforge/etc/profile.d/mamba.sh"
-fi
-# <<< conda initialize <<<
+# The next line enables shell command completion for gcloud.
+if [ -f '/home/kazuyoshi/ws/google-cloud-sdk/completion.zsh.inc' ]; then . '/home/kazuyoshi/ws/google-cloud-sdk/completion.zsh.inc'; fi
 
-if [ -d ~/.asdf ]; then
-    . "$HOME/.asdf/asdf.sh"
-fi
-
-(command -v direnv > /dev/null) && eval "$(direnv hook zsh)"
+milestone end
