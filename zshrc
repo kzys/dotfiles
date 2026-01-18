@@ -1,5 +1,5 @@
 #! sh
-debug=0
+debug=1
 t0=$(date +%s%N)
 
 milestone() {
@@ -221,4 +221,4 @@ if [ -f '/home/kazuyoshi/ws/google-cloud-sdk/path.zsh.inc' ]; then . '/home/kazu
 # The next line enables shell command completion for gcloud.
 if [ -f '/home/kazuyoshi/ws/google-cloud-sdk/completion.zsh.inc' ]; then . '/home/kazuyoshi/ws/google-cloud-sdk/completion.zsh.inc'; fi
 
-milestone end
+milestone "$(date); zsh (pid:$$) was initalized in"
