@@ -50,14 +50,16 @@ path=(
 fpath=(~/.zsh/functions $fpath)
 
 # Alias
-if ls -wF >& /dev/null; then
-    alias ls='ls -wF'
-else
-    alias ls='ls -F'
-fi
-
 if which emacs-nox >& /dev/null; then
     alias emacs='emacs-nox'
+fi
+
+if [[ $(uname) == Linux ]]; then
+    alias ls='ls -F'
+    alias cal3='ncal -C3'
+else
+    alias ls='ls -wF'
+    alias cal3='cal -3'
 fi
 
 # History
