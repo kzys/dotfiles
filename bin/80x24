@@ -1,0 +1,11 @@
+#! /usr/bin/ruby
+width = 80
+height = 24
+
+s = "\e[8;#{height};#{width}t"
+if ENV['TMUX']
+  s = "\ePtmux;" + s.gsub(/\e/, "\e\e") + "\e\\"
+end
+
+puts s
+
