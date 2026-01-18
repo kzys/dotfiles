@@ -94,7 +94,6 @@ export LANG=en_US.UTF-8
 export LC_MESSAGES=$LANG
 export LC_ALL=$LANG
 
-export PAGER=less
 export WWW_HOME=http://www.google.co.jp/
 export CVS_RSH=ssh
 
