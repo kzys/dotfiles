@@ -1,20 +1,20 @@
 keypress_delay_ms: 5
 
 modmap:
-  # Mapping CapsLock to Ctrl works well, where I use Ctrl more than Cmd such as Terminal.
+  # Mapping CapsLock to Ctrl where I don't use Cmd much
   - name: CapsLock -> Ctrl_R
     remap:
       CapsLock: Ctrl_R
       Alt_L: Win_R
     application:
       not: [Emacs, Code, firefox_firefox]
-  # Mapping At to Ctrl works where I use Cmd more than Ctrl such as Visual Studio Code.
+  # Mapping Alt to Ctrl where I use Cmd more than Ctrl such as Visual Studio Code.
   - name: CapsLock -> Win_R
     application:
       only: [Code, firefox_firefox]
     remap:
-      Alt_L: Ctrl_R
       CapsLock: Win_R
+      Alt_L: Ctrl_R
 
 keymap:
   - name: Terminal
@@ -24,6 +24,7 @@ keymap:
       Win_R-n: C-Shift-n
       Win_R-c: C-Shift-c
       Win_R-v: C-Shift-v
+      Win_R-w: C-Shift-w
   - name: Emacs-like shortcuts for moving a cursor
     application:
       only: [Code, firefox_firefox]
