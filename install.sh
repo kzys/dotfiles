@@ -19,6 +19,8 @@ main() {
     if [[ -n "${CODESPACES:-}" ]]; then
 	setup_github_codespaces
     fi
+
+    env
 }
 
 main
