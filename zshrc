@@ -146,8 +146,6 @@ precmd () {
     set-title "$(print -n -P '%~')"
 }
 
-REPORTTIME=5
-
 if test -n $SSH_AGENT_PID; then
   (ssh-add -L | grep kato.kazuyoshi@gmail.com > /dev/null) || ssh-add ~/secrets/id_ed25519
 fi
@@ -219,4 +217,6 @@ if [ -f '/home/kazuyoshi/ws/google-cloud-sdk/path.zsh.inc' ]; then . '/home/kazu
 # The next line enables shell command completion for gcloud.
 if [ -f '/home/kazuyoshi/ws/google-cloud-sdk/completion.zsh.inc' ]; then . '/home/kazuyoshi/ws/google-cloud-sdk/completion.zsh.inc'; fi
 
+# Be mindful about slowness
 milestone "$(date); zsh (pid:$$) was initalized in"
+REPORTTIME=1
