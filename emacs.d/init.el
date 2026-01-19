@@ -114,3 +114,8 @@
 
 ; Is it fast?
 (setq initial-scratch-message (format "; %s\n" (emacs-init-time)))
+
+(dolist (path (list "~/.proto/shims"))
+  (let ((p (expand-file-name path)))
+    (if (file-exists-p p)
+	(setenv "PATH" (concat p ":" (getenv "PATH"))))))
