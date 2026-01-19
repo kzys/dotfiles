@@ -61,6 +61,7 @@ else
     alias ls='ls -wF'
     alias cal3='cal -3'
 fi
+alias tmuxa='tmux attach || tmux'
 
 # History
 HISTFILE=~/.zsh/history
@@ -111,18 +112,15 @@ export ANT_OPTS='-Dfile.encoding=UTF8 -Xmx2G -XX:MaxPermSize=1G'
 export EDITOR=vi
 bindkey -e
 
-if [ ! -z "$TMUX" ]; then
-    set-title() {
-      echo -ne "\e]2;$1\e\\"
-    }
-else
-  set-title() {
-      echo -ne "\e]2;$1\007"
-  }
-fi
+set-title() {
+    local ESC=$'\e'
+    local BEL=$'\007'
+    local cmd="$ESC]2;$1$BEL"
+    echo -ne "$cmd"
+}
 
 preexec () {
-  set-title "$1"
+    set-title "$1"
 }
 
 autoload -U vcs_info
