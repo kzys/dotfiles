@@ -140,7 +140,7 @@ precmd () {
 
     # show git's status
     vcs_info
-    RPROMPT="$vcs_info_msg_0_"
+    RPROMPT="$vcs_info_msg_0_ $(basename "$KUBECONFIG" .yaml)"
 
     # tmux
     set-title "$(print -n -P '%~')"
@@ -220,3 +220,7 @@ if [ -f '/home/kazuyoshi/ws/google-cloud-sdk/completion.zsh.inc' ]; then . '/hom
 # Be mindful about slowness
 milestone "$(date); zsh (pid:$$) was initalized in"
 REPORTTIME=1
+
+# proto
+export PROTO_HOME="$HOME/.proto";
+export PATH="$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH";
