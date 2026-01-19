@@ -111,11 +111,18 @@
 (add-hook 'rust-mode-hook (lambda()
 			  (eglot-ensure)))
 
-
 ; Is it fast?
 (setq initial-scratch-message (format "; %s\n" (emacs-init-time)))
 
+; # Use binaries from proto
 (dolist (path (list "~/.proto/shims"))
   (let ((p (expand-file-name path)))
     (if (file-exists-p p)
 	(setenv "PATH" (concat p ":" (getenv "PATH"))))))
+
+; # Platform-specific settings
+(cond
+ ((eq system-type 'gnu/linux)
+  (set-frame-font "Ubuntu Mono-12" nil t)
+  (set-fontset-font t 'japanese-jisx0208 "Noto Sans Mono CJK JP-12"))
+ ((eq system-type 'darwin) nil))
