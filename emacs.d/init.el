@@ -72,27 +72,7 @@
 (let* ((path (expand-file-name "~/.emacs.d/init-work.el")))
   (if (file-exists-p path) (load path)))
 
-;; Make eglot work on aws/amazon-ecs-agent where there is agent/go.mod.
-(defun -project-try-gomod (dir)
-  (if (file-exists-p (concat (file-name-as-directory dir) "go.mod"))
-      dir
-    (if (string-equal dir "/")
-	(-project-try-gomod (file-name-directory (directory-file-name dir))))))
-;(add-hook 'project-find-functions '-project-try-gomod)
-(add-hook 'go-mode-hook (lambda()
-			  (company-mode)
-			  (eglot-ensure)))
-
 (setq ring-bell-function 'ignore)
-
-;; rust-mode + elgot uses eglot-inlay-hint-face a lot, which is too small.
-(with-eval-after-load 'eglot
-  (set-face-attribute 'eglot-inlay-hint-face nil :height 1.0)
-  (global-set-key (kbd "<C-return>") 'eglot-code-actions)
-  
-  (setq eglot-sync-connect 1))
-(add-hook 'rust-mode-hook (lambda()
-			  (eglot-ensure)))
 
 ; Is it fast?
 (setq initial-scratch-message (format "; %s\n" (emacs-init-time)))
