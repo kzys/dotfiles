@@ -7,11 +7,11 @@ modmap:
       CapsLock: Ctrl_R
       Alt_L: Win_R
     application:
-      not: [Emacs, Code, firefox_firefox]
+      not: [Emacs, Code, firefox_firefox, google-chrome]
   # Mapping Alt to Ctrl where I use Cmd more than Ctrl such as Visual Studio Code.
   - name: CapsLock -> Win_R
     application:
-      only: [Code, firefox_firefox]
+      only: [Code, firefox_firefox, google-chrome]
     remap:
       CapsLock: Win_R
       Alt_L: Ctrl_R
@@ -27,7 +27,7 @@ keymap:
       Win_R-w: C-Shift-w
   - name: Emacs-like shortcuts for moving a cursor
     application:
-      only: [Code, firefox_firefox]
+      only: [Code, firefox_firefox, google-chrome]
     remap:
       Win_R-f: right
       Win_R-b: left
