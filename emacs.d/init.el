@@ -2,6 +2,17 @@
 
 (set-language-environment "Japanese")
 
+;; # Line
+(global-display-line-numbers-mode t)
+(set-face-attribute 'line-number nil :foreground "#cccccc")
+(set-face-attribute 'line-number-current-line nil :foreground "#999999")
+
+;; # Column
+(column-number-mode)
+(global-display-fill-column-indicator-mode t)
+(set-face-attribute 'fill-column-indicator nil :foreground "#f0f0f0")
+(setq fill-column 80)
+
 (savehist-mode)
 
 ;; Added by Package.el.  This must come before configurations of
