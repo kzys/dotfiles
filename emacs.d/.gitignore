@@ -1,0 +1,9 @@
+# From savehist.el
+history
+
+# From native compilation
+eln-cache/
+
+# From transient.el
+# part of magit - https://github.com/magit/transient
+transient/
