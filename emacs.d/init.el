@@ -42,34 +42,6 @@
 (require 'savehist)
 (savehist-mode nil)
 
-;; org
-(global-set-key (kbd "C-c l") 'org-store-link)
-(global-set-key (kbd "C-c a") 'org-agenda)
-(with-eval-after-load 'org
-  (setq org-startup-truncated nil)
-  (setq org-startup-folded 'content)
-  (setq org-ellipsis " ...")
-  (custom-set-faces '(org-ellipsis ((t (:foreground "#999999" :underline nil))))))
-
-(global-set-key (kbd "C-c c") 'org-capture)
-(with-eval-after-load 'org-capture
-  (setq org-capture-templates
-	'(("h" "home" entry
-	   (file+headline (lambda ()
-			    (format-time-string "~/org/home/%Y-%m-home.org")) "Inbox") "* TODO %?\n%T")
-	  ("w" "work" entry
-	   (file+headline (lambda ()
-			    (format-time-string "~/org/work/%Y-%m-work.org")) "Inbox") "* TODO %?\n%T"))))
-
-(with-eval-after-load 'org-agenda
-  (setq org-agenda-files (list "~/org/home" "~/org/work"))
-
-  (setq org-todo-keywords
-	'((sequence "TODO" "WAIT" "|" "DONE")))
-  (setq org-todo-keyword-faces
-	'(("TODO" :foreground "#006600")
-	  ("WAIT" :foreground "#996600"))))
-
 ; Custom
 (custom-set-variables
  ;; custom-set-variables was added by Custom.
