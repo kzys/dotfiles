@@ -135,12 +135,18 @@ precmd () {
         prompt_virtual_env=" virtualenv:$(basename "$VIRTUAL_ENV")"
     fi
 
-    PROMPT="%{%(?.$fg[green].$fg[red])%}%~ @ $(hostname)$prompt_virtual_env$reset_color
+    local helm=$'\U2388'
+    local kube=$(basename "$KUBECONFIG" .yaml)
+    if [[ -n "$kube" ]]; then
+	kube=" $bg[red]$fg[white]$helm $kube$reset_color"
+    fi
+
+    PROMPT="%{%(?.$fg[green].$fg[red])%}%~ @ $(hostname)$kube$reset_color
 %# "
 
     # show git's status
     vcs_info
-    RPROMPT="$vcs_info_msg_0_ $(basename "$KUBECONFIG" .yaml)"
+    RPROMPT="$vcs_info_msg_0_"
 
     # tmux
     set-title "$(print -n -P '%~')"
