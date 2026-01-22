@@ -34,12 +34,15 @@
 
 (blink-cursor-mode -1)
 
-(setq default-frame-alist
-      '((tool-bar-lines . 0)
-        (width . 120)
-        (height . 60)
-        (left . 100)
-	(top . 0)))
+;; # Setting the default and modifying the parameters
+(let ((frame '((tool-bar-lines . 0)
+	       (width . 100)
+	       (height . 40)
+	       (left . 50)
+	       (top . 100))))
+  (setq default-frame-alist frame)
+  (modify-frame-parameters nil frame))
+
 
 ; C-h as Backspace
 (global-set-key "\C-ch" 'help)
