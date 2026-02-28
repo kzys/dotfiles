@@ -2,6 +2,10 @@
 set -euo pipefail
 IFS=$'\n\t'
 
+setup_codespaces() {
+    curl -fsSL https://claude.ai/install.sh | bash
+}
+
 main() {
     local -a files=(zshrc emacs.d gitconfig tmux.conf bashrc)
     for file in "${files[@]}"
@@ -12,7 +16,9 @@ main() {
         ln -s "$PWD/$file" "$HOME/.$file"
     done
 
-    env
+    if [[ -n "${CODESPACES:-}" ]]; then
+        setup_codespaces
+    fi
 }
 
 main
