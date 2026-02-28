@@ -2,12 +2,8 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-setup_github_codespaces() {
-    sudo chsh "$(id -un)" --shell "/usr/bin/zsh"
-}
-
 main() {
-    local -a files=(zshrc emacs.d gitconfig tmux.conf)
+    local -a files=(zshrc emacs.d gitconfig tmux.conf bashrc)
     for file in "${files[@]}"
     do
         if [[ -e "$HOME/.$file" ]]; then
@@ -15,10 +11,6 @@ main() {
         fi
         ln -s "$PWD/$file" "$HOME/.$file"
     done
-
-    if [[ -n "${CODESPACES:-}" ]]; then
-	setup_github_codespaces
-    fi
 
     env
 }
