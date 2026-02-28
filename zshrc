@@ -8,7 +8,7 @@ milestone() {
     fi
 
     t1=$(date +%s%N)
-    printf "%8s %4sms\n" "$1" $(echo "scale=2; ($t1 - $t0)/1000000" | bc)
+    printf "%8s %6.2fms\n" "$1" $(( (t1 - t0) / 1000000.0 ))
     t0=$t1
 }
 
