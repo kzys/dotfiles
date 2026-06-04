@@ -1,0 +1,150 @@
+#! /usr/bin/env python3
+"""Start (or create) a Lima VM that writable-mounts the current directory,
+then open a shell inside it at the same path."""
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+
+# apt packages installed into every newly created VM. Edit to taste.
+# (curl is needed by the Claude Code installer below.)
+PACKAGES = ["build-essential", "curl"]
+
+# Host config files copied into the guest's home so Claude Code starts
+# configured and logged in. Paths are relative to the host's home, and are
+# placed at the same relative path inside the guest's home. Missing files are
+# skipped.
+CONFIG_FILES = [
+    ".claude.json",
+    ".claude/.credentials.json",
+    ".claude/settings.json",
+]
+
+
+def provisions():
+    """Provision steps run on first boot, in order."""
+    apt = (
+        "#!/bin/sh\n"
+        "set -eux\n"
+        "export DEBIAN_FRONTEND=noninteractive\n"
+        "apt-get update\n"
+        "apt-get install -y " + " ".join(PACKAGES) + "\n"
+    )
+    # Install Claude Code per-user via its official installer.
+    claude = (
+        "#!/bin/sh\n"
+        "set -eux\n"
+        "curl -fsSL https://claude.ai/install.sh | bash\n"
+    )
+    return [
+        {"mode": "system", "script": apt},
+        {"mode": "user", "script": claude},
+    ]
+
+
+def instance_name(path):
+    """Derive a valid Lima instance name from a directory's basename."""
+    name = re.sub(r"[^a-z0-9-]", "-", os.path.basename(path).lower())
+    name = name.strip("-")
+    if not name or not name[0].isalnum():
+        name = "lima-" + name
+    return name
+
+
+def existing_instances():
+    out = subprocess.run(
+        ["limactl", "list", "-q"], check=True, capture_output=True, text=True
+    )
+    return out.stdout.split()
+
+
+def status(name):
+    out = subprocess.run(
+        ["limactl", "list", "--format", "{{.Status}}", name],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return out.stdout.strip()
+
+
+def create(name, here):
+    # Base on the default template, but replace its mounts so the guest
+    # sees *only* this directory (not the whole home directory).
+    mounts = json.dumps([{"location": here, "writable": True}])
+    provision = json.dumps(provisions())
+    subprocess.run(
+        [
+            "limactl", "start", "--tty=false", "--name", name,
+            "--set", f".mounts = {mounts} | .provision = {provision}",
+            "template://default",
+        ],
+        check=True,
+    )
+
+
+def guest_home(name):
+    out = subprocess.run(
+        ["limactl", "shell", name, "sh", "-c", "echo $HOME"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return out.stdout.strip()
+
+
+def seed_config(name):
+    """Copy host Claude Code config into the guest so it starts logged in."""
+    host_home = os.path.expanduser("~")
+    home = guest_home(name)
+    dirs = {os.path.dirname(f) for f in CONFIG_FILES if os.path.dirname(f)}
+    for d in sorted(dirs):
+        subprocess.run(
+            ["limactl", "shell", name, "mkdir", "-p", f"{home}/{d}"],
+            check=True,
+        )
+    for rel in CONFIG_FILES:
+        src = os.path.join(host_home, rel)
+        if not os.path.exists(src):
+            continue
+        subprocess.run(
+            ["limactl", "copy", src, f"{name}:{home}/{rel}"],
+            check=True,
+        )
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--provision",
+        action="store_true",
+        help="delete any existing VM for this directory and create a fresh one",
+    )
+    args = parser.parse_args()
+
+    here = os.getcwd()
+    name = instance_name(here)
+
+    if args.provision and name in existing_instances():
+        subprocess.run(["limactl", "delete", "--force", name], check=True)
+
+    if name not in existing_instances():
+        create(name, here)
+    elif status(name) != "Running":
+        subprocess.run(["limactl", "start", name], check=True)
+
+    seed_config(name)
+
+    os.execvp(
+        "limactl", ["limactl", "shell", "--workdir", here, name]
+    )
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except subprocess.CalledProcessError as e:
+        sys.exit(e.returncode)
