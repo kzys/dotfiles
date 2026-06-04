@@ -130,8 +130,11 @@ def main():
 
     seed_config(name)
 
+    # chsh sets the login shell, but `limactl shell` doesn't always honor it,
+    # so request zsh explicitly too.
     os.execvp(
-        "limactl", ["limactl", "shell", "--workdir", here, name]
+        "limactl",
+        ["limactl", "shell", "--shell", "/usr/bin/zsh", "--workdir", here, name],
     )
 
 
