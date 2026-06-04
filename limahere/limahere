@@ -130,11 +130,16 @@ def main():
 
     seed_config(name)
 
-    # chsh sets the login shell, but `limactl shell` doesn't always honor it,
-    # so request zsh explicitly too.
+    # ssh forwards $TERM into the guest. The host's terminal (e.g.
+    # xterm-ghostty) may have no terminfo entry there, breaking curses apps
+    # like top; xterm is universally available, so force it.
+    os.environ["TERM"] = "xterm"
+
+    # Open the interactive login shell with no command: ssh allocates a PTY
+    # and forwards $TERM only when no remote command is given, and the login
+    # shell is already zsh thanks to the chsh in user.sh.
     os.execvp(
-        "limactl",
-        ["limactl", "shell", "--shell", "/usr/bin/zsh", "--workdir", here, name],
+        "limactl", ["limactl", "shell", "--workdir", here, name]
     )
 
 
