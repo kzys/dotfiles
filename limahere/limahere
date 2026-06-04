@@ -12,11 +12,12 @@ import sys
 # Resolve symlinks so the *.sh files are found when invoked via bin/limahere.
 HERE = os.path.dirname(os.path.realpath(__file__))
 
-# Host config files copied into the guest's home so Claude Code starts
-# configured and logged in. Paths are relative to the host's home, and are
-# placed at the same relative path inside the guest's home. Missing files are
-# skipped.
+# Host config files copied into the guest's home so the shell and Claude Code
+# start configured. Paths are relative to the host's home, and are placed at
+# the same relative path inside the guest's home. Symlinks are followed and
+# missing files are skipped.
 CONFIG_FILES = [
+    ".zshrc",
     ".claude.json",
     ".claude/.credentials.json",
     ".claude/settings.json",
@@ -89,7 +90,7 @@ def guest_home(name):
 
 
 def seed_config(name):
-    """Copy host Claude Code config into the guest so it starts logged in."""
+    """Copy host config (CONFIG_FILES) into the guest's home."""
     host_home = os.path.expanduser("~")
     home = guest_home(name)
     dirs = {os.path.dirname(f) for f in CONFIG_FILES if os.path.dirname(f)}
@@ -102,6 +103,9 @@ def seed_config(name):
         src = os.path.join(host_home, rel)
         if not os.path.exists(src):
             continue
+        # Dereference symlinks (e.g. ~/.zshrc -> the dotfiles repo) so the
+        # file's content is copied, not a link that dangles in the guest.
+        src = os.path.realpath(src)
         subprocess.run(
             ["limactl", "copy", src, f"{name}:{home}/{rel}"],
             check=True,
