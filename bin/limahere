@@ -1,0 +1,66 @@
+#! /usr/bin/env python3
+"""Start (or create) a Lima VM that writable-mounts the current directory,
+then open a shell inside it at the same path."""
+
+import json
+import os
+import re
+import subprocess
+import sys
+
+
+def instance_name(path):
+    """Derive a valid Lima instance name from a directory's basename."""
+    name = re.sub(r"[^a-z0-9-]", "-", os.path.basename(path).lower())
+    name = name.strip("-")
+    if not name or not name[0].isalnum():
+        name = "lima-" + name
+    return name
+
+
+def existing_instances():
+    out = subprocess.run(
+        ["limactl", "list", "-q"], check=True, capture_output=True, text=True
+    )
+    return out.stdout.split()
+
+
+def status(name):
+    out = subprocess.run(
+        ["limactl", "list", "--format", "{{.Status}}", name],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return out.stdout.strip()
+
+
+def main():
+    here = os.getcwd()
+    name = instance_name(here)
+
+    if name not in existing_instances():
+        # Base on the default template, but replace its mounts so the guest
+        # sees *only* this directory (not the whole home directory).
+        mounts = json.dumps([{"location": here, "writable": True}])
+        subprocess.run(
+            [
+                "limactl", "start", "--tty=false", "--name", name,
+                "--set", f".mounts = {mounts}",
+                "template://default",
+            ],
+            check=True,
+        )
+    elif status(name) != "Running":
+        subprocess.run(["limactl", "start", name], check=True)
+
+    os.execvp(
+        "limactl", ["limactl", "shell", "--workdir", here, name]
+    )
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except subprocess.CalledProcessError as e:
+        sys.exit(e.returncode)
