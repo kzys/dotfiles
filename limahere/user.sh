@@ -3,3 +3,5 @@
 # official installer.
 set -eux
 curl -fsSL https://claude.ai/install.sh | bash
+# Make zsh (installed by system.sh) the login shell for this user.
+sudo chsh -s "$(command -v zsh)" "$(whoami)"
