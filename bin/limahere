@@ -9,19 +9,30 @@ import re
 import subprocess
 import sys
 
-# Commands installed into every newly created VM. Edit to taste.
-PACKAGES = ["build-essential"]
+# apt packages installed into every newly created VM. Edit to taste.
+# (curl is needed by the Claude Code installer below.)
+PACKAGES = ["build-essential", "curl"]
 
 
-def provision_script():
-    """A system provision script that installs PACKAGES on first boot."""
-    return (
+def provisions():
+    """Provision steps run on first boot, in order."""
+    apt = (
         "#!/bin/sh\n"
         "set -eux\n"
         "export DEBIAN_FRONTEND=noninteractive\n"
         "apt-get update\n"
         "apt-get install -y " + " ".join(PACKAGES) + "\n"
     )
+    # Install Claude Code per-user via its official installer.
+    claude = (
+        "#!/bin/sh\n"
+        "set -eux\n"
+        "curl -fsSL https://claude.ai/install.sh | bash\n"
+    )
+    return [
+        {"mode": "system", "script": apt},
+        {"mode": "user", "script": claude},
+    ]
 
 
 def instance_name(path):
@@ -54,7 +65,7 @@ def create(name, here):
     # Base on the default template, but replace its mounts so the guest
     # sees *only* this directory (not the whole home directory).
     mounts = json.dumps([{"location": here, "writable": True}])
-    provision = json.dumps([{"mode": "system", "script": provision_script()}])
+    provision = json.dumps(provisions())
     subprocess.run(
         [
             "limactl", "start", "--tty=false", "--name", name,
