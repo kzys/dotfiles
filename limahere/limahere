@@ -9,9 +9,8 @@ import re
 import subprocess
 import sys
 
-# apt packages installed into every newly created VM. Edit to taste.
-# (curl is needed by the Claude Code installer below.)
-PACKAGES = ["build-essential", "curl"]
+# Resolve symlinks so the *.sh files are found when invoked via bin/limahere.
+HERE = os.path.dirname(os.path.realpath(__file__))
 
 # Host config files copied into the guest's home so Claude Code starts
 # configured and logged in. Paths are relative to the host's home, and are
@@ -26,23 +25,11 @@ CONFIG_FILES = [
 
 def provisions():
     """Provision steps run on first boot, in order."""
-    apt = (
-        "#!/bin/sh\n"
-        "set -eux\n"
-        "export DEBIAN_FRONTEND=noninteractive\n"
-        "apt-get update\n"
-        "apt-get install -y " + " ".join(PACKAGES) + "\n"
-    )
-    # Install Claude Code per-user via its official installer.
-    claude = (
-        "#!/bin/sh\n"
-        "set -eux\n"
-        "curl -fsSL https://claude.ai/install.sh | bash\n"
-    )
-    return [
-        {"mode": "system", "script": apt},
-        {"mode": "user", "script": claude},
-    ]
+    steps = []
+    for mode in ("system", "user"):
+        with open(os.path.join(HERE, f"{mode}.sh")) as f:
+            steps.append({"mode": mode, "script": f.read()})
+    return steps
 
 
 def instance_name(path):
