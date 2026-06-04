@@ -2,11 +2,26 @@
 """Start (or create) a Lima VM that writable-mounts the current directory,
 then open a shell inside it at the same path."""
 
+import argparse
 import json
 import os
 import re
 import subprocess
 import sys
+
+# Commands installed into every newly created VM. Edit to taste.
+PACKAGES = ["build-essential"]
+
+
+def provision_script():
+    """A system provision script that installs PACKAGES on first boot."""
+    return (
+        "#!/bin/sh\n"
+        "set -eux\n"
+        "export DEBIAN_FRONTEND=noninteractive\n"
+        "apt-get update\n"
+        "apt-get install -y " + " ".join(PACKAGES) + "\n"
+    )
 
 
 def instance_name(path):
@@ -35,22 +50,38 @@ def status(name):
     return out.stdout.strip()
 
 
+def create(name, here):
+    # Base on the default template, but replace its mounts so the guest
+    # sees *only* this directory (not the whole home directory).
+    mounts = json.dumps([{"location": here, "writable": True}])
+    provision = json.dumps([{"mode": "system", "script": provision_script()}])
+    subprocess.run(
+        [
+            "limactl", "start", "--tty=false", "--name", name,
+            "--set", f".mounts = {mounts} | .provision = {provision}",
+            "template://default",
+        ],
+        check=True,
+    )
+
+
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--provision",
+        action="store_true",
+        help="delete any existing VM for this directory and create a fresh one",
+    )
+    args = parser.parse_args()
+
     here = os.getcwd()
     name = instance_name(here)
 
+    if args.provision and name in existing_instances():
+        subprocess.run(["limactl", "delete", "--force", name], check=True)
+
     if name not in existing_instances():
-        # Base on the default template, but replace its mounts so the guest
-        # sees *only* this directory (not the whole home directory).
-        mounts = json.dumps([{"location": here, "writable": True}])
-        subprocess.run(
-            [
-                "limactl", "start", "--tty=false", "--name", name,
-                "--set", f".mounts = {mounts}",
-                "template://default",
-            ],
-            check=True,
-        )
+        create(name, here)
     elif status(name) != "Running":
         subprocess.run(["limactl", "start", name], check=True)
 
