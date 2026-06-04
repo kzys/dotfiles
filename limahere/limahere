@@ -63,10 +63,15 @@ def create(name, here):
     # sees *only* this directory (not the whole home directory).
     mounts = json.dumps([{"location": here, "writable": True}])
     provision = json.dumps(provisions())
+    # Run containerd as root (system) instead of the default rootless user.
+    sets = (
+        f".mounts = {mounts} | .provision = {provision}"
+        " | .containerd.system = true | .containerd.user = false"
+    )
     subprocess.run(
         [
-            "limactl", "start", "--tty=false", "--name", name,
-            "--set", f".mounts = {mounts} | .provision = {provision}",
+            "limactl", "start", "--tty=false", "--progress", "--name", name,
+            "--set", sets,
             "template://default",
         ],
         check=True,
