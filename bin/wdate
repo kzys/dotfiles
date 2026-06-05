@@ -132,6 +132,12 @@ def tz_coords():
     return coords
 
 
+def map_rows_for(chars_w):
+    # map height in character rows for a given width, full latitude band
+    px_h = max(1, round(chars_w * 2 * (LAT_MAX - LAT_MIN) / 360.0))
+    return (px_h + 3) // 4
+
+
 def render_map(chars_w, utc_hour, coords):
     # Braille cell = 2px wide x 4px tall. Pixel height tracks the cropped
     # latitude span so the equirectangular aspect ratio stays undistorted.
@@ -241,14 +247,22 @@ def render_clock(coords, utc_hour):
 
 
 def main():
-    # explicit arg wins; otherwise fill the terminal width, falling back to 80
+    try:
+        term = os.get_terminal_size()
+        cols, lines = term.columns, term.lines
+    except OSError:  # stdout is not a terminal (piped/redirected)
+        cols, lines = 80, 24
     if len(sys.argv) > 1:
-        width = int(sys.argv[1])
+        width = int(sys.argv[1])  # explicit width is used as-is
     else:
-        try:
-            width = os.get_terminal_size().columns
-        except OSError:  # stdout is not a terminal (piped/redirected)
-            width = 80
+        # leave a 2-column side margin; then narrow the (whole-world) map
+        # further if needed to fit the rows left after a 4-line bottom margin,
+        # the blank, and the clock
+        margin = 4
+        budget = max(1, lines - margin - 1 - len(CITIES))
+        width = max(1, cols - 2)
+        while width > 1 and map_rows_for(width) > budget:
+            width -= 1
     now = datetime.now(timezone.utc)
     utc_hour = now.hour + now.minute / 60.0
     coords = tz_coords()
