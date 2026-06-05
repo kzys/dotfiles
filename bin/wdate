@@ -6,7 +6,8 @@ ramp (blue at night, orange at midday) that stays legible on both light and
 dark terminals. City markers and a clock list are printed below. City
 coordinates are resolved from the IANA tz database (zone1970.tab) by zone name.
 
-Usage: wdate [WIDTH]   (WIDTH = map width in characters, default 60)
+Usage: wdate [WIDTH]   (map width in characters; defaults to the terminal
+                        width, or 80 when output is not a terminal)
 
 Coastline data is Natural Earth 110m land, downloaded once and cached under
 ~/.cache/wdate/.
@@ -231,7 +232,14 @@ def render_clock(coords, utc_hour):
 
 
 def main():
-    width = int(sys.argv[1]) if len(sys.argv) > 1 else 60
+    # explicit arg wins; otherwise fill the terminal width, falling back to 80
+    if len(sys.argv) > 1:
+        width = int(sys.argv[1])
+    else:
+        try:
+            width = os.get_terminal_size().columns
+        except OSError:  # stdout is not a terminal (piped/redirected)
+            width = 80
     now = datetime.now(timezone.utc)
     utc_hour = now.hour + now.minute / 60.0
     coords = tz_coords()
