@@ -1,0 +1,72 @@
+#! /usr/bin/env python3
+"""Composite the clipboard image onto a solid background, then copy it back.
+
+Bluesky (and some other apps) render PNG transparency as solid black; this
+flattens the transparent areas onto a chosen color instead so they look right.
+
+Usage: clip-flatten [-b COLOR] [-o FILE]
+  -b, --background COLOR  background color, name or #hex (default: gray)
+  -o, --output FILE       write the PNG to FILE instead of back to the clipboard
+"""
+import argparse
+import io
+import shutil
+import subprocess
+import sys
+
+from PIL import Image, ImageColor
+
+
+def require(cmd):
+    if shutil.which(cmd) is None:
+        sys.exit(f"clip-flatten: {cmd} not found (install wl-clipboard)")
+
+
+def read_clipboard_png():
+    require("wl-paste")
+    types = subprocess.run(["wl-paste", "--list-types"],
+                           capture_output=True, text=True).stdout.split()
+    if not any(t.startswith("image/") for t in types):
+        sys.exit("clip-flatten: clipboard has no image")
+    data = subprocess.run(["wl-paste", "-t", "image/png"],
+                          capture_output=True).stdout
+    if not data:
+        sys.exit("clip-flatten: failed to read image from clipboard")
+    return data
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Flatten the clipboard image onto a solid background.")
+    parser.add_argument("-b", "--background", default="gray",
+                        metavar="COLOR",
+                        help="background color, name or #hex (default: gray)")
+    parser.add_argument("-o", "--output", metavar="FILE",
+                        help="write PNG to FILE instead of back to the clipboard")
+    args = parser.parse_args()
+
+    try:
+        rgb = ImageColor.getrgb(args.background)[:3]
+    except ValueError as exc:
+        sys.exit(f"clip-flatten: {exc}")
+
+    img = Image.open(io.BytesIO(read_clipboard_png())).convert("RGBA")
+    bg = Image.new("RGBA", img.size, rgb + (255,))
+    flat = Image.alpha_composite(bg, img).convert("RGB")
+
+    out = io.BytesIO()
+    flat.save(out, "PNG")
+    payload = out.getvalue()
+
+    if args.output:
+        with open(args.output, "wb") as f:
+            f.write(payload)
+        print(f"clip-flatten: wrote {args.output} ({args.background} background)")
+    else:
+        require("wl-copy")
+        subprocess.run(["wl-copy", "-t", "image/png"], input=payload, check=True)
+        print(f"clip-flatten: clipboard image flattened onto {args.background}")
+
+
+if __name__ == "__main__":
+    main()
