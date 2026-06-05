@@ -215,15 +215,18 @@ def render_clock(coords, utc_hour):
     located = sorted((tz for tz in CITIES if tz in coords),
                      key=lambda tz: coords[tz][1])
     other = [tz for tz in CITIES if tz not in coords]
-    lines = []
+    rows = []
     for tz in other + located:
         t = datetime.now(ZoneInfo(tz))
-        if tz in coords:
-            marker = f"\033[{marker_color(coords[tz][1], utc_hour)}m◉{RESET}"
-        else:
-            marker = " "
-        lines.append(f"{marker} {zone_label(tz):<14} {t:%Y-%m-%d %H:%M  %Z} "
-                     f"(UTC{t:%z})")
+        marker = (f"\033[{marker_color(coords[tz][1], utc_hour)}m◉{RESET}"
+                  if tz in coords else " ")
+        rows.append((marker, zone_label(tz), t))
+    # pad name and abbreviation columns to their widest so everything aligns
+    name_w = max(len(label) for _, label, _ in rows)
+    abbr_w = max(len(t.strftime("%Z")) for _, _, t in rows)
+    lines = [f"{marker} {label:<{name_w}}  {t:%Y-%m-%d %H:%M}  "
+             f"{t.strftime('%Z'):<{abbr_w}} (UTC{t:%z})"
+             for marker, label, t in rows]
     return "\n".join(lines)
 
 
