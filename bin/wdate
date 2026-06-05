@@ -9,7 +9,7 @@ coordinates are resolved from the IANA tz database (zone1970.tab) by zone name.
 Usage: wdate [-w WIDTH] [-z ZONE ...]
   -w WIDTH map width in characters; defaults to fitting the terminal
   -z ZONE  IANA time zone(s) to show instead of the default city set;
-           repeatable and/or comma-separated (e.g. -z Asia/Tokyo,Europe/London)
+           repeatable (e.g. -z Asia/Tokyo -z Europe/London)
 
 Coastline data is Natural Earth 110m land, downloaded once and cached under
 ~/.cache/wdate/.
@@ -251,16 +251,11 @@ def render_clock(coords, utc_hour, cities):
 
 
 def parse_zones(zone_args):
-    # accept repeated -z and comma-separated values: -z A,B -z C
-    zones = []
-    for chunk in zone_args:
-        zones.extend(z.strip() for z in chunk.split(",") if z.strip())
-    for tz in zones:
-        try:
-            ZoneInfo(tz)
-        except (ZoneInfoNotFoundError, ValueError):
-            sys.exit(f"wdate: unknown time zone: {tz}")
-    return zones
+    # validate each zone; ZoneInfo raises ZoneInfoNotFoundError/ValueError for
+    # unknown zones, which the caller is expected to handle
+    for tz in zone_args:
+        ZoneInfo(tz)
+    return zone_args
 
 
 def main():
@@ -270,11 +265,16 @@ def main():
                         help="map width in characters (default: fit terminal)")
     parser.add_argument("-z", "--zone", action="append", default=[],
                         metavar="ZONE",
-                        help="IANA time zone to show; repeatable and/or "
-                             "comma-separated. Replaces the default city set.")
+                        help="IANA time zone to show; repeatable. "
+                             "Replaces the default city set.")
     args = parser.parse_args()
 
-    cities = parse_zones(args.zone) if args.zone else DEFAULT_CITIES
+    try:
+        cities = parse_zones(args.zone) if args.zone else DEFAULT_CITIES
+    except (ZoneInfoNotFoundError, ValueError) as exc:
+        # ZoneInfoNotFoundError subclasses KeyError, whose str() adds quotes;
+        # use the bare message instead
+        sys.exit(f"wdate: {exc.args[0] if exc.args else exc}")
 
     try:
         term = os.get_terminal_size()
