@@ -113,10 +113,9 @@ export EDITOR=vi
 bindkey -e
 
 set-title() {
-    local ESC=$'\e'
-    local BEL=$'\007'
-    local cmd="$ESC]2;$1$BEL"
-    echo -ne "$cmd"
+    # Strip control chars so a command containing ESC/BEL can't terminate or
+    # inject into the OSC sequence; %s (not echo -e) keeps backslashes literal.
+    printf '\e]2;%s\a' "${1//[[:cntrl:]]/}"
 }
 
 preexec () {
