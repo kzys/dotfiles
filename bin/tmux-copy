@@ -1,0 +1,10 @@
+#! /bin/bash
+set -euo pipefail
+
+if [[ -n "$WAYLAND_DISPLAY" ]]; then
+    # Need to call wl-copy due to https://gitlab.gnome.org/GNOME/vte/-/issues/2495
+    wl-copy
+else
+    pbcopy
+fi
+
