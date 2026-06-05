@@ -222,10 +222,15 @@ if [ -f '/home/kazuyoshi/ws/google-cloud-sdk/path.zsh.inc' ]; then . '/home/kazu
 # The next line enables shell command completion for gcloud.
 if [ -f '/home/kazuyoshi/ws/google-cloud-sdk/completion.zsh.inc' ]; then . '/home/kazuyoshi/ws/google-cloud-sdk/completion.zsh.inc'; fi
 
-# Be mindful about slowness
-milestone "$(date); zsh (pid:$$) was initalized in"
-REPORTTIME=1
-
 # proto
 export PROTO_HOME="$HOME/.proto";
 export PATH="$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH";
+
+export PATH="$HOME/.local/bin:$PATH"
+export LD_LIBRARY_PATH="$HOME/.local/lib:$LD_LIBRARY_PATH"
+
+# THIS SECTION MUST BE AT THE END
+#
+# Be mindful about slowness
+milestone "$(date); zsh (pid:$$) was initalized in"
+REPORTTIME=1
