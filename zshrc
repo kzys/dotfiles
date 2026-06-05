@@ -136,12 +136,12 @@ precmd () {
     fi
 
     local helm=$'\U2388'
-    local kube=$(basename "$KUBECONFIG" .yaml)
+    local kube=${${KUBECONFIG:t}:r}
     if [[ -n "$kube" ]]; then
-	kube=" $bg[red]$fg[white]$helm $kube$reset_color"
+	kube=" %{$bg[red]$fg[white]%}$helm $kube%{$reset_color%}"
     fi
 
-    PROMPT="%{%(?.$fg[green].$fg[red])%}%~ @ $(hostname)$kube$reset_color
+    PROMPT="%{%(?.$fg[green].$fg[red])%}%~ @ %m$kube%{$reset_color%}
 %# "
 
     # show git's status
