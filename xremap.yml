@@ -1,39 +1,45 @@
 keypress_delay_ms: 5
 
+virtual_modifiers:
+  - F20
+  - F21
+
 modmap:
   # Mapping CapsLock to Ctrl where I don't use Cmd much
   - name: CapsLock -> Ctrl_R
     remap:
       CapsLock: Ctrl_R
-      Alt_L: Win_R
+      Alt_L: F20
     application:
       not: [Emacs, Code, firefox_firefox, google-chrome]
   # Mapping Alt to Ctrl where I use Cmd more than Ctrl such as Visual Studio Code.
-  - name: CapsLock -> Win_R
+  - name: CapsLock -> F21
     application:
       only: [Code, firefox_firefox, google-chrome]
     remap:
-      CapsLock: Win_R
       Alt_L: Ctrl_R
+      CapsLock: F21
 
 keymap:
   - name: Terminal
     application:
-      only: [gnome-terminal-server, Gnome-terminal]
+      only: [gnome-terminal-server, Gnome-terminal, ghostty]
     remap:
-      Win_R-n: C-Shift-n
-      Win_R-c: C-Shift-c
-      Win_R-v: C-Shift-v
-      Win_R-w: C-Shift-w
+      F20-n: C-Shift-n
+      F20-c: C-Shift-c
+      F20-v: C-Shift-v
+      F20-w: C-Shift-w
+      F20-space: LeftMeta
   - name: Emacs-like shortcuts for moving a cursor
     application:
       only: [Code, firefox_firefox, google-chrome]
     remap:
-      Win_R-f: right
-      Win_R-b: left
-      Win_R-n: down
-      Win_R-p: up
-      Win_R-a: home
-      Win_R-e: end
-      Win_R-g: Esc
-      Win_R-h: Backspace
+      F21-f: right
+      F21-b: left
+      F21-n: down
+      F21-p: up
+      F21-a: home
+      F21-e: end
+      F21-g: Esc
+      F21-h: Backspace
+      C-space: LeftMeta
