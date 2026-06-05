@@ -1,0 +1,56 @@
+name: CalVer tag
+
+on:
+  schedule:
+    # Daily at 00:00 UTC. Running daily (instead of only on the 1st) means a
+    # skipped/delayed scheduler run is caught the next day, and any missing
+    # months are backfilled.
+    - cron: "0 0 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create missing CalVer tags
+        run: |
+          set -euo pipefail
+
+          create_tag() {
+            local tag="$1"
+            if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+              echo "$tag already exists, skipping"
+              return
+            fi
+            echo "Creating $tag"
+            git tag "$tag"
+            git push origin "$tag"
+          }
+
+          current="$(date -u +%Y.%m)"
+
+          # Latest YYYY.0M tag (ignore any .MICRO suffixes for month tracking).
+          last="$(git tag --list '[0-9][0-9][0-9][0-9].[0-9][0-9]' | sort -V | tail -1 || true)"
+
+          if [ -z "$last" ]; then
+            # No tags yet -- just tag the current month.
+            create_tag "$current"
+            exit 0
+          fi
+
+          # Walk month-by-month from the last tag up to the current month,
+          # creating any that are missing. Indices are months-since-year-0 so
+          # year rollover is handled. 10# forces base-10 (08/09 aren't octal).
+          last_idx=$((10#${last%.*} * 12 + 10#${last#*.} - 1))
+          cur_idx=$((10#${current%.*} * 12 + 10#${current#*.} - 1))
+
+          for ((i = last_idx + 1; i <= cur_idx; i++)); do
+            create_tag "$(printf '%04d.%02d' "$((i / 12))" "$((i % 12 + 1))")"
+          done
