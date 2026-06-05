@@ -20,7 +20,16 @@ import urllib.request
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
-CACHE_DIR = os.path.expanduser("~/.cache/wdate")
+def _cache_home():
+    # XDG Base Directory spec: honor $XDG_CACHE_HOME if set to an absolute
+    # path, otherwise fall back to its default of ~/.cache
+    xdg = os.environ.get("XDG_CACHE_HOME")
+    if xdg and os.path.isabs(xdg):
+        return xdg
+    return os.path.expanduser("~/.cache")
+
+
+CACHE_DIR = os.path.join(_cache_home(), "wdate")
 CACHE_FILE = os.path.join(CACHE_DIR, "ne_110m_land.geojson")
 DATA_URL = ("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/"
             "master/geojson/ne_110m_land.geojson")
