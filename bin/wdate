@@ -6,19 +6,22 @@ ramp (blue at night, orange at midday) that stays legible on both light and
 dark terminals. City markers and a clock list are printed below. City
 coordinates are resolved from the IANA tz database (zone1970.tab) by zone name.
 
-Usage: wdate [WIDTH]   (map width in characters; defaults to the terminal
-                        width, or 80 when output is not a terminal)
+Usage: wdate [-w WIDTH] [-z ZONE ...]
+  -w WIDTH map width in characters; defaults to fitting the terminal
+  -z ZONE  IANA time zone(s) to show instead of the default city set;
+           repeatable and/or comma-separated (e.g. -z Asia/Tokyo,Europe/London)
 
 Coastline data is Natural Earth 110m land, downloaded once and cached under
 ~/.cache/wdate/.
 """
+import argparse
 import json
 import os
 import re
 import sys
 import urllib.request
 from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 def _cache_home():
     # XDG Base Directory spec: honor $XDG_CACHE_HOME if set to an absolute
@@ -35,8 +38,9 @@ DATA_URL = ("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/"
             "master/geojson/ne_110m_land.geojson")
 
 # tzdata zones; label and coordinates are both resolved from the zone name.
-# A balanced spread of major hubs, plus a standalone UTC reference line.
-CITIES = [
+# A balanced spread of major hubs, plus a standalone UTC reference line. Used
+# unless overridden with -z/--zone.
+DEFAULT_CITIES = [
     "UTC",
     "America/Los_Angeles",   # US west
     "America/New_York",      # US east
@@ -138,7 +142,7 @@ def map_rows_for(chars_w):
     return (px_h + 3) // 4
 
 
-def render_map(chars_w, utc_hour, coords):
+def render_map(chars_w, utc_hour, coords, cities):
     # Braille cell = 2px wide x 4px tall. Pixel height tracks the cropped
     # latitude span so the equirectangular aspect ratio stays undistorted.
     px_w = chars_w * 2
@@ -212,7 +216,7 @@ def render_map(chars_w, utc_hour, coords):
                 row[cx] = f"\033[{col_color[cx]}m{glyph}{RESET}"
 
     # overlay each city marker in the complement of its local-time tint
-    for tz in CITIES:
+    for tz in cities:
         loc = coords.get(tz)
         if loc is None:
             continue
@@ -225,12 +229,12 @@ def render_map(chars_w, utc_hour, coords):
     return "\n".join("".join(row).rstrip() for row in cells)
 
 
-def render_clock(coords, utc_hour):
+def render_clock(coords, utc_hour, cities):
     # location-less rows (e.g. UTC) first as a reference, then cities ordered
     # west-to-east so the list matches the markers' left-to-right positions
-    located = sorted((tz for tz in CITIES if tz in coords),
+    located = sorted((tz for tz in cities if tz in coords),
                      key=lambda tz: coords[tz][1])
-    other = [tz for tz in CITIES if tz not in coords]
+    other = [tz for tz in cities if tz not in coords]
     rows = []
     for tz in other + located:
         t = datetime.now(ZoneInfo(tz))
@@ -246,29 +250,54 @@ def render_clock(coords, utc_hour):
     return "\n".join(lines)
 
 
+def parse_zones(zone_args):
+    # accept repeated -z and comma-separated values: -z A,B -z C
+    zones = []
+    for chunk in zone_args:
+        zones.extend(z.strip() for z in chunk.split(",") if z.strip())
+    for tz in zones:
+        try:
+            ZoneInfo(tz)
+        except (ZoneInfoNotFoundError, ValueError):
+            sys.exit(f"wdate: unknown time zone: {tz}")
+    return zones
+
+
 def main():
+    parser = argparse.ArgumentParser(
+        description="World map shaded by local solar time, with a clock list.")
+    parser.add_argument("-w", "--width", type=int,
+                        help="map width in characters (default: fit terminal)")
+    parser.add_argument("-z", "--zone", action="append", default=[],
+                        metavar="ZONE",
+                        help="IANA time zone to show; repeatable and/or "
+                             "comma-separated. Replaces the default city set.")
+    args = parser.parse_args()
+
+    cities = parse_zones(args.zone) if args.zone else DEFAULT_CITIES
+
     try:
         term = os.get_terminal_size()
         cols, lines = term.columns, term.lines
     except OSError:  # stdout is not a terminal (piped/redirected)
         cols, lines = 80, 24
-    if len(sys.argv) > 1:
-        width = int(sys.argv[1])  # explicit width is used as-is
+    if args.width is not None:
+        width = args.width  # explicit width is used as-is
     else:
         # leave a 2-column side margin; then narrow the (whole-world) map
         # further if needed to fit the rows left after a 4-line bottom margin,
         # the blank, and the clock
         margin = 4
-        budget = max(1, lines - margin - 1 - len(CITIES))
+        budget = max(1, lines - margin - 1 - len(cities))
         width = max(1, cols - 2)
         while width > 1 and map_rows_for(width) > budget:
             width -= 1
     now = datetime.now(timezone.utc)
     utc_hour = now.hour + now.minute / 60.0
     coords = tz_coords()
-    print(render_map(width, utc_hour, coords))
+    print(render_map(width, utc_hour, coords, cities))
     print()
-    print(render_clock(coords, utc_hour))
+    print(render_clock(coords, utc_hour, cities))
 
 
 if __name__ == "__main__":
