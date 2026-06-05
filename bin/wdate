@@ -83,11 +83,9 @@ def band_color(solar_hour):
     return TIME_BANDS[-1][1]
 
 
-def marker_color(lon, utc_hour):
-    # opposite of the land's local-time tint (the band 12 hours away), so a
-    # marker always contrasts with the shade it sits on
-    solar = (utc_hour + lon / 15.0) % 24.0
-    return band_color((solar + 12.0) % 24.0)
+def solar_color(lon, utc_hour):
+    # the land tint at this longitude (its local-solar-time band color)
+    return band_color((utc_hour + lon / 15.0) % 24.0)
 
 
 def load_land():
@@ -215,7 +213,7 @@ def render_map(chars_w, utc_hour, coords, cities):
             if glyph != BLANK:
                 row[cx] = f"\033[{col_color[cx]}m{glyph}{RESET}"
 
-    # overlay each city marker in the complement of its local-time tint
+    # overlay each city marker, tinted the same as the land cell it sits on
     for tz in cities:
         loc = coords.get(tz)
         if loc is None:
@@ -224,7 +222,7 @@ def render_map(chars_w, utc_hour, coords, cities):
         x, y = project(lon, lat)
         cx, cy = int(x) // 2, int(y) // 4
         if 0 <= cy < chars_h and 0 <= cx < chars_w:
-            cells[cy][cx] = f"\033[{marker_color(lon, utc_hour)}m◉{RESET}"
+            cells[cy][cx] = f"\033[{col_color[cx]}m◉{RESET}"
 
     return "\n".join("".join(row).rstrip() for row in cells)
 
@@ -238,7 +236,7 @@ def render_clock(coords, utc_hour, cities):
     rows = []
     for tz in other + located:
         t = datetime.now(ZoneInfo(tz))
-        marker = (f"\033[{marker_color(coords[tz][1], utc_hour)}m◉{RESET}"
+        marker = (f"\033[{solar_color(coords[tz][1], utc_hour)}m◉{RESET}"
                   if tz in coords else " ")
         rows.append((marker, zone_label(tz), t))
     # pad name and abbreviation columns to their widest so everything aligns
