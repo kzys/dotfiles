@@ -57,9 +57,6 @@ LAT_MAX = 84.0
 LAT_MIN = -56.0
 
 
-def zone_label(tz):
-    # "America/Los_Angeles" -> "Los Angeles"; "UTC" -> "UTC"
-    return tz.rsplit("/", 1)[-1].replace("_", " ")
 BLANK = "⠀"  # empty braille cell (ocean)
 
 # local-solar-time -> cool/warm temperature ramp (blue night -> orange midday).
@@ -238,7 +235,7 @@ def render_clock(coords, utc_hour, cities):
         t = datetime.now(ZoneInfo(tz))
         marker = (f"\033[{solar_color(coords[tz][1], utc_hour)}m◉{RESET}"
                   if tz in coords else " ")
-        rows.append((marker, zone_label(tz), t))
+        rows.append((marker, tz, t))
     # pad name and abbreviation columns to their widest so everything aligns
     name_w = max(len(label) for _, label, _ in rows)
     abbr_w = max(len(t.strftime("%Z")) for _, _, t in rows)
