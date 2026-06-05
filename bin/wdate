@@ -24,12 +24,17 @@ CACHE_FILE = os.path.join(CACHE_DIR, "ne_110m_land.geojson")
 DATA_URL = ("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/"
             "master/geojson/ne_110m_land.geojson")
 
-# tzdata zones; label and coordinates are both resolved from the zone name
+# tzdata zones; label and coordinates are both resolved from the zone name.
+# A balanced spread of major hubs, plus a standalone UTC reference line.
 CITIES = [
     "UTC",
-    "America/Los_Angeles",
-    "America/New_York",
-    "Asia/Tokyo",
+    "America/Los_Angeles",   # US west
+    "America/New_York",      # US east
+    "Europe/London",         # Europe
+    "Asia/Dubai",            # Gulf
+    "Asia/Singapore",        # SE Asia
+    "Asia/Tokyo",            # East Asia
+    "Australia/Sydney",      # Oceania
 ]
 RESET = "\033[0m"
 
@@ -93,7 +98,11 @@ def _parse_iso6709(s):
 
 
 def tz_coords():
-    """Map each IANA zone to its reference-city (lat, lon) from the tz db."""
+    """Map each IANA zone to its reference-city (lat, lon) from the tz db.
+
+    Reads zone1970.tab first, then zone.tab as a fallback for zones the newer
+    table merged away (e.g. Atlantic/Reykjavik); the first hit wins.
+    """
     base = os.environ.get("TZDIR", "/usr/share/zoneinfo")
     coords = {}
     for tab in ("zone1970.tab", "zone.tab"):
@@ -109,8 +118,7 @@ def tz_coords():
                     continue
                 latlon = _parse_iso6709(parts[1])
                 if latlon:
-                    coords.setdefault(parts[2], latlon)  # prefer zone1970.tab
-        break  # zone1970.tab is sufficient when present
+                    coords.setdefault(parts[2], latlon)
     return coords
 
 
