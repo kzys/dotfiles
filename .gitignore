@@ -5,6 +5,9 @@ emacs.d/lisp/*.gz
 emacs.d/auto-save-list
 ido.last
 *~
+emacs.d/session.*
+.claude/
+
 
 emacs.d/init/private-*.el
 gitconfig.private
@@ -14,3 +17,5 @@ emacs.d/url/cookies
 
 zsh/compdump
 zsh/history
+
+__pycache__
