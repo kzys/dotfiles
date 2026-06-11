@@ -18,6 +18,7 @@ HERE = os.path.dirname(os.path.realpath(__file__))
 # missing files are skipped.
 CONFIG_FILES = [
     ".zshrc",
+    ".tmux.conf",
     ".claude.json",
     ".claude/.credentials.json",
     ".claude/settings.json",
