@@ -208,6 +208,29 @@ if [ -d $HOME/local/lib/rustlib/x86_64-apple-darwin/lib ]; then
     export DYLD_LIBRARY_PATH=$HOME/local/lib/rustlib/x86_64-apple-darwin/lib
 fi
 
+# nvm
+# https://github.com/nvm-sh/nvm#installing-and-updating
+# Lazy-load nvm since sourcing nvm.sh is slow; the first invocation of
+# any of these commands loads the real thing.
+if [ -d $HOME/.nvm ]; then
+    export NVM_DIR="$HOME/.nvm"
+    function _load_nvm {
+        unset -f nvm node npm npx corepack _load_nvm
+        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+    }
+    for cmd in node npm npx corepack; do
+        function $cmd {
+            _load_nvm
+            command "$0" "$@"
+        }
+    done
+    unset cmd
+    function nvm {
+        _load_nvm
+        nvm "$@"
+    }
+fi
+
 cdw_dirs=(
     ~/ws(N)
     ~/ec2-ws(N)
