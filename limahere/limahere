@@ -24,6 +24,12 @@ CONFIG_FILES = [
     ".claude/settings.json",
 ]
 
+# A single fully-provisioned base VM. Per-directory VMs are cloned from its
+# disk instead of re-running provisioning (apt, Go, Claude, zsh) every time,
+# which is the slow part of a fresh create. Rebuild it with --clean after
+# changing system.sh/user.sh.
+GOLDEN = "limahere-golden"
+
 
 def provisions():
     """Provision steps run on first boot, in order."""
@@ -60,22 +66,53 @@ def status(name):
     return out.stdout.strip()
 
 
-def create(name, here):
-    # Base on the default template, but replace its mounts so the guest
-    # sees *only* this directory (not the whole home directory).
-    mounts = json.dumps([{"location": here, "writable": True}])
+def build_golden():
+    """Provision the shared base VM once: apt packages, Go, Claude Code, zsh
+    login shell — all baked into its disk. It has no host mount (clones add
+    their own) and is left stopped so it can be cloned consistently."""
     provision = json.dumps(provisions())
     # Run containerd as root (system) instead of the default rootless user.
     sets = (
-        f".mounts = {mounts} | .provision = {provision}"
+        f".mounts = [] | .provision = {provision}"
         " | .containerd.system = true | .containerd.user = false"
     )
     subprocess.run(
         [
-            "limactl", "start", "--tty=false", "--progress", "--name", name,
+            "limactl", "start", "--tty=false", "--progress", "--name", GOLDEN,
             "--set", sets,
             "template://default",
         ],
+        check=True,
+    )
+    subprocess.run(["limactl", "stop", GOLDEN], check=True)
+
+
+def create(name, here):
+    # Clone the fully-provisioned golden disk instead of re-provisioning.
+    if GOLDEN not in existing_instances():
+        build_golden()
+    elif status(GOLDEN) == "Running":
+        # clone needs the source stopped for a consistent disk copy.
+        subprocess.run(["limactl", "stop", GOLDEN], check=True)
+
+    # Replace the (empty) golden mounts with *only* this directory, and drop
+    # .provision: it already ran in golden and is baked into the cloned disk.
+    subprocess.run(
+        [
+            "limactl", "clone", "--tty=false", "--start",
+            "--mount-only", f"{here}:w",
+            "--set", ".provision = []",
+            GOLDEN, name,
+        ],
+        check=True,
+    )
+
+    # Lima sets the guest hostname from the instance name via cloud-init, which
+    # doesn't re-run on the cloned disk; reset it so %m (and the lima- prompt
+    # highlight) reflect this VM, not the golden one.
+    subprocess.run(
+        ["limactl", "shell", name, "sudo", "hostnamectl", "set-hostname",
+         f"lima-{name}"],
         check=True,
     )
 
@@ -118,12 +155,21 @@ def main():
     parser.add_argument(
         "--provision",
         action="store_true",
-        help="delete any existing VM for this directory and create a fresh one",
+        help="delete any existing VM for this directory and re-clone it",
+    )
+    parser.add_argument(
+        "--clean",
+        action="store_true",
+        help="delete the golden base VM so it is re-provisioned (use after "
+             "changing system.sh/user.sh)",
     )
     args = parser.parse_args()
 
     here = os.getcwd()
     name = instance_name(here)
+
+    if args.clean and GOLDEN in existing_instances():
+        subprocess.run(["limactl", "delete", "--force", GOLDEN], check=True)
 
     if args.provision and name in existing_instances():
         subprocess.run(["limactl", "delete", "--force", name], check=True)
