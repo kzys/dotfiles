@@ -22,6 +22,10 @@ CONFIG_FILES = [
     ".claude.json",
     ".claude/.credentials.json",
     ".claude/settings.json",
+    # gh's prefs (git_protocol, user). The token is NOT in hosts.yml on macOS
+    # (it lives in the keychain); seed_gh_auth() injects it separately.
+    ".config/gh/config.yml",
+    ".config/gh/hosts.yml",
 ]
 
 # A single fully-provisioned base VM. Per-directory VMs are cloned from its
@@ -150,6 +154,30 @@ def seed_config(name):
         )
 
 
+def seed_gh_auth(name):
+    """Authenticate gh in the guest with the host's token.
+
+    On macOS the token lives in the keychain (not hosts.yml), so we read it
+    via `gh auth token` and pipe it into the guest's `gh auth login
+    --with-token`, which merges it into the seeded hosts.yml as plaintext
+    (the guest has no keyring). Skipped if the host has no usable token."""
+    try:
+        out = subprocess.run(
+            ["gh", "auth", "token"], capture_output=True, text=True
+        )
+    except FileNotFoundError:
+        return
+    token = out.stdout.strip()
+    if out.returncode != 0 or not token:
+        return
+    subprocess.run(
+        ["limactl", "shell", name, "gh", "auth", "login", "--with-token"],
+        input=token + "\n",
+        text=True,
+        check=True,
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -180,6 +208,7 @@ def main():
         subprocess.run(["limactl", "start", name], check=True)
 
     seed_config(name)
+    seed_gh_auth(name)
 
     # ssh forwards $TERM into the guest. The host's terminal (e.g.
     # xterm-ghostty) may have no terminfo entry there, breaking curses apps
