@@ -136,8 +136,10 @@ def main():
 
     # ssh forwards $TERM into the guest. The host's terminal (e.g.
     # xterm-ghostty) may have no terminfo entry there, breaking curses apps
-    # like top; xterm is universally available, so force it.
-    os.environ["TERM"] = "xterm"
+    # like top; xterm-256color is universally available (ncurses-base) and
+    # gives 256 colors, so force it. (24-bit truecolor comes from COLORTERM,
+    # which ssh does NOT forward; the seeded .zshrc sets it in the guest.)
+    os.environ["TERM"] = "xterm-256color"
 
     # Open the interactive login shell with no command: ssh allocates a PTY
     # and forwards $TERM only when no remote command is given, and the login

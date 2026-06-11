@@ -16,6 +16,11 @@ if test ! -d ~/.zsh; then
   mkdir ~/.zsh
 fi
 
+# Advertise 24-bit color so terminal apps (emacs, tmux) use truecolor.
+# ghostty sets this on the host already; ssh/limactl doesn't forward it, so
+# this fills it in inside a limahere guest. The :- keeps any existing value.
+export COLORTERM=${COLORTERM:-truecolor}
+
 # Go
 # https://go.dev/doc/manage-install#installing-multiple installs Go under ~/sdk.
 # Pick the latest from the directory.
