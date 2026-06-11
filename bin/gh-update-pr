@@ -1,0 +1,170 @@
+#!/usr/bin/env python3
+"""Update a GitHub PR title and body based on a commit message."""
+
+import argparse
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+
+def run_command(cmd: list[str]) -> str:
+    """Run a shell command and return output."""
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"Error: {result.stderr}", file=sys.stderr)
+        sys.exit(1)
+    return result.stdout.strip()
+
+
+def get_repo_root() -> Path:
+    """Get the root directory of the current git repository."""
+    root = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        capture_output=True, text=True,
+    ).stdout.strip()
+    return Path(root)
+
+
+def find_pr_template() -> str | None:
+    """Find a PR template in conventional locations, return its contents or None."""
+    root = get_repo_root()
+    candidates = [
+        root / ".github" / "PULL_REQUEST_TEMPLATE.md",
+        root / "PULL_REQUEST_TEMPLATE.md",
+        root / "docs" / "PULL_REQUEST_TEMPLATE.md",
+    ]
+    for path in candidates:
+        if path.is_file():
+            return path.read_text()
+    # Check for templates directory (use first file found)
+    template_dir = root / ".github" / "PULL_REQUEST_TEMPLATE"
+    if template_dir.is_dir():
+        for f in sorted(template_dir.iterdir()):
+            if f.is_file():
+                return f.read_text()
+    return None
+
+
+# Lines that carry markdown structure and must keep their own line (matched
+# against the already-stripped line, so no leading whitespace to worry about).
+_STRUCTURAL = re.compile(
+    r"""^(
+        [-*+]\s          # bullet list item
+        | \d+[.)]\s      # ordered list item
+        | \#{1,6}\s      # ATX heading
+        | >              # blockquote
+        | \|             # table row
+        | [-*_]{3,}\s*$  # horizontal rule
+    )""",
+    re.VERBOSE,
+)
+
+
+def normalize_body(text: str) -> str:
+    """Rewrap hard-wrapped prose into single lines so GitHub renders flowing
+    paragraphs, while leaving markdown structure intact: fenced code blocks,
+    lists, headings, tables, blockquotes, and indented blocks are emitted
+    verbatim; only consecutive unindented prose lines are joined with spaces."""
+    lines = text.split("\n")
+    out: list[str] = []
+    para: list[str] = []
+    fence: str | None = None  # active code-fence marker (``` or ~~~), if any
+
+    def flush() -> None:
+        if para:
+            out.append(" ".join(para))
+            para.clear()
+
+    for line in lines:
+        stripped = line.strip()
+        if fence is not None:
+            out.append(line)
+            if stripped.startswith(fence):
+                fence = None
+            continue
+        opening = re.match(r"```+|~~~+", stripped)
+        if opening:
+            flush()
+            out.append(line)
+            fence = opening.group(0)
+            continue
+        # Blank lines, indented blocks (code / list continuations), and
+        # structural markdown stay on their own line; everything else is prose.
+        if stripped == "" or line[:1] in (" ", "\t") or _STRUCTURAL.match(stripped):
+            flush()
+            out.append(line)
+        else:
+            para.append(stripped)
+    flush()
+    return "\n".join(out).strip()
+
+
+def get_commit_message(commit_ref: str = "HEAD") -> tuple[str, str]:
+    """Get commit title and body from a git commit."""
+    # Get the subject (first line)
+    title = run_command(["git", "log", "-1", "--format=%s", commit_ref])
+    # Get the body (everything after the first line)
+    body = run_command(["git", "log", "-1", "--format=%b", commit_ref])
+    return title, normalize_body(body)
+
+
+def get_current_pr_number() -> str:
+    """Get the PR number for the current branch."""
+    output = run_command(["gh", "pr", "view", "--json", "number", "-q", ".number"])
+    return output
+
+
+def update_pr(pr_number: str, title: str, body: str | None = None) -> None:
+    """Update a GitHub PR with the given title and optional body."""
+    cmd = ["gh", "pr", "edit", pr_number, "--title", title]
+    if body:
+        cmd.extend(["--body", body])
+    run_command(cmd)
+    print(f"Updated PR #{pr_number}")
+    print(f"  Title: {title}")
+    if body:
+        print(f"  Body: {body[:100]}..." if len(body) > 100 else f"  Body: {body}")
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Update a GitHub PR based on a commit message"
+    )
+    parser.add_argument(
+        "--pr",
+        help="PR number (defaults to PR for current branch)",
+    )
+    parser.add_argument(
+        "--commit",
+        default="HEAD",
+        help="Commit reference to get message from (default: HEAD)",
+    )
+    parser.add_argument(
+        "--title-only",
+        action="store_true",
+        help="Only update the PR title, not the body",
+    )
+    args = parser.parse_args()
+
+    # Get commit message
+    title, body = get_commit_message(args.commit)
+
+    # Append PR template if found
+    if not args.title_only:
+        template = find_pr_template()
+        if template:
+            if body:
+                body = body + "\n\n" + template.strip()
+            else:
+                body = template.strip()
+
+    # Get PR number
+    pr_number = args.pr or get_current_pr_number()
+
+    # Update PR
+    update_pr(pr_number, title, None if args.title_only else body or None)
+
+
+if __name__ == "__main__":
+    main()
