@@ -210,23 +210,32 @@ fi
 
 # nvm
 # https://github.com/nvm-sh/nvm#installing-and-updating
-# Lazy-load nvm since sourcing nvm.sh is slow; the first invocation of
-# any of these commands loads the real thing.
+# Eagerly add the default node's bin to PATH (fast: just reads alias files)
+# so that node/npm/npx are real binaries available to subprocesses (e.g.
+# Claude Code spawning MCP servers via npx). Full nvm.sh is lazy-loaded
+# only when the nvm command itself is needed (~600ms saved per shell).
 if [ -d $HOME/.nvm ]; then
     export NVM_DIR="$HOME/.nvm"
-    function _load_nvm {
-        unset -f nvm node npm npx corepack _load_nvm
-        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-    }
-    for cmd in node npm npx corepack; do
-        function $cmd {
-            _load_nvm
-            command "$0" "$@"
-        }
-    done
-    unset cmd
+    if [ -s "$NVM_DIR/alias/default" ]; then
+        _nvm_ver="$(cat "$NVM_DIR/alias/default")"
+        # Follow file-based alias chain (skip glob aliases like lts/*)
+        while [[ "$_nvm_ver" != *'*'* ]] && [ -s "$NVM_DIR/alias/$_nvm_ver" ]; do
+            _nvm_ver="$(cat "$NVM_DIR/alias/$_nvm_ver")"
+        done
+        [[ "$_nvm_ver" != v* ]] && _nvm_ver="v$_nvm_ver"
+        if [ -d "$NVM_DIR/versions/node/$_nvm_ver" ]; then
+            export PATH="$NVM_DIR/versions/node/$_nvm_ver/bin:$PATH"
+        else
+            # Partial version like "v22" — pick latest matching installed version
+            _nvm_bins=("$NVM_DIR"/versions/node/"${_nvm_ver}".*/bin(N))
+            (( ${#_nvm_bins[@]} > 0 )) && export PATH="${_nvm_bins[-1]}:$PATH"
+            unset _nvm_bins
+        fi
+        unset _nvm_ver
+    fi
     function nvm {
-        _load_nvm
+        unset -f nvm
+        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
         nvm "$@"
     }
 fi
