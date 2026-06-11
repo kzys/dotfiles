@@ -145,7 +145,14 @@ precmd () {
 	kube=" %{$bg[red]$fg[white]%}$helm $kube%{$reset_color%}"
     fi
 
-    PROMPT="%{%(?.$fg[green].$fg[red])%}%~ @ %m$kube%{$reset_color%}
+    # Flag a limahere guest (Lima names the host lima-<instance>) with a
+    # colored host, like the kubeconfig segment above.
+    local host=" @ %m"
+    if [[ "$HOST" == lima-* ]]; then
+	host=" @ %{$bg[blue]$fg[white]%}%m%{$reset_color%}"
+    fi
+
+    PROMPT="%{%(?.$fg[green].$fg[red])%}%~$host$kube%{$reset_color%}
 %# "
 
     # show git's status
