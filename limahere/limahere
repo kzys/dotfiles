@@ -20,8 +20,10 @@ CONFIG_FILES = [
     ".zshrc",
     ".tmux.conf",
     ".claude.json",
-    ".claude/.credentials.json",
     ".claude/settings.json",
+    # .claude/.credentials.json is NOT here: on macOS Claude's login lives in
+    # the keychain, not that file (which is what Claude reads on Linux);
+    # seed_claude_auth() reads the keychain and writes the guest file.
     # gh's prefs (git_protocol, user). The token is NOT in hosts.yml on macOS
     # (it lives in the keychain); seed_gh_auth() injects it separately.
     ".config/gh/config.yml",
@@ -178,6 +180,34 @@ def seed_gh_auth(name):
     )
 
 
+def seed_claude_auth(name):
+    """Seed Claude Code's login into the guest.
+
+    On macOS the OAuth credentials live in the login keychain, not in
+    ~/.claude/.credentials.json (which is what Claude reads on Linux). Read the
+    keychain payload and write it to the guest's file with the 600 perms Claude
+    expects. Skipped if the host has no keychain entry (e.g. not logged in, or
+    a non-macOS host where seed_config already copied the file)."""
+    out = subprocess.run(
+        ["security", "find-generic-password",
+         "-s", "Claude Code-credentials", "-w"],
+        capture_output=True,
+        text=True,
+    )
+    creds = out.stdout.strip()
+    if out.returncode != 0 or not creds:
+        return
+    home = guest_home(name)
+    subprocess.run(
+        ["limactl", "shell", name, "sh", "-c",
+         f"cat > {home}/.claude/.credentials.json && "
+         f"chmod 600 {home}/.claude/.credentials.json"],
+        input=creds + "\n",
+        text=True,
+        check=True,
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -209,6 +239,7 @@ def main():
 
     seed_config(name)
     seed_gh_auth(name)
+    seed_claude_auth(name)
 
     # ssh forwards $TERM into the guest. The host's terminal (e.g.
     # xterm-ghostty) may have no terminfo entry there, breaking curses apps
