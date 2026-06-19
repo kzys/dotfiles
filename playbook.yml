@@ -17,3 +17,18 @@
         src: keyboard.rules
         dest: /etc/udev/rules.d/
       become: true
+    # Atlassian keep-alive
+    - copy:
+        src: atlassian-keepalive.service
+        dest: ~/.config/systemd/user/
+      tags: atlassian
+    - copy:
+        src: atlassian-keepalive.timer
+        dest: ~/.config/systemd/user/
+      tags: atlassian
+    - command: systemctl --user daemon-reload
+      tags: atlassian
+    - command: systemctl --user enable atlassian-keepalive.timer
+      tags: atlassian
+    - command: systemctl --user start atlassian-keepalive.timer
+      tags: atlassian

@@ -1,0 +1,7 @@
+[Unit]
+Description=Atlassian Jira/Confluence keep-alive
+
+[Service]
+Type=oneshot
+EnvironmentFile=%h/.config/atlassian-keepalive.env
+ExecStart=%h/.local/bin/uv run %h/ws/dotfiles/atlassian_keepalive.py
