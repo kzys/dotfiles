@@ -9,13 +9,13 @@
     - command: systemctl --user enable xremap.service
     - command: systemctl --user start xremap.service
     # xremap + udev
-    - copy:
-        src: bin/systemctl-as-gnome-user
-        dest: /usr/local/bin
-      become: true
-    - copy:
-        src: keyboard.rules
-        dest: /etc/udev/rules.d/
+    - block:
+        - copy:
+            src: bin/systemctl-as-gnome-user
+            dest: /usr/local/bin
+        - copy:
+            src: keyboard.rules
+            dest: /etc/udev/rules.d/
       become: true
     # Atlassian keep-alive
     - copy:
@@ -33,61 +33,45 @@
     - command: systemctl --user start atlassian-keepalive.timer
       tags: atlassian
     # powertop auto-tune on boot
-    - apt:
-        name: powertop
-        state: present
-      become: true
-      tags: powertop
-    - copy:
-        src: powertop.service
-        dest: /etc/systemd/system/
-      become: true
-      tags: powertop
-    - command: systemctl daemon-reload
-      become: true
-      tags: powertop
-    - command: systemctl enable --now powertop.service
+    - block:
+        - apt:
+            name: powertop
+            state: present
+        - copy:
+            src: powertop.service
+            dest: /etc/systemd/system/
+        - command: systemctl daemon-reload
+        - command: systemctl enable --now powertop.service
       become: true
       tags: powertop
     # Firefox: snap build is heavier on CPU/battery than Mozilla's APT package
-    - command: snap remove --purge firefox
-      become: true
-      register: snap_remove_firefox
-      failed_when: snap_remove_firefox.rc != 0 and 'not installed' not in snap_remove_firefox.stderr
-      changed_when: snap_remove_firefox.rc == 0
-      tags: firefox
-    - file:
-        path: /etc/apt/keyrings
-        state: directory
-        mode: '0755'
-      become: true
-      tags: firefox
-    - get_url:
-        url: https://packages.mozilla.org/apt/repo-signing-key.gpg
-        dest: /etc/apt/keyrings/packages.mozilla.org.asc
-      become: true
-      tags: firefox
-    - copy:
-        content: |
-          deb [signed-by=/etc/apt/keyrings/packages.mozilla.org.asc] https://packages.mozilla.org/apt mozilla main
-        dest: /etc/apt/sources.list.d/mozilla.list
-      become: true
-      tags: firefox
-    - copy:
-        content: |
-          Package: *
-          Pin: origin packages.mozilla.org
-          Pin-Priority: 1000
-        dest: /etc/apt/preferences.d/mozilla
-      become: true
-      tags: firefox
-    - apt:
-        update_cache: true
-      become: true
-      tags: firefox
-    - apt:
-        name: firefox
-        state: latest
-        allow_downgrade: true
+    - block:
+        - command: snap remove --purge firefox
+          register: snap_remove_firefox
+          failed_when: snap_remove_firefox.rc != 0 and 'not installed' not in snap_remove_firefox.stderr
+          changed_when: snap_remove_firefox.rc == 0
+        - file:
+            path: /etc/apt/keyrings
+            state: directory
+            mode: '0755'
+        - get_url:
+            url: https://packages.mozilla.org/apt/repo-signing-key.gpg
+            dest: /etc/apt/keyrings/packages.mozilla.org.asc
+        - copy:
+            content: |
+              deb [signed-by=/etc/apt/keyrings/packages.mozilla.org.asc] https://packages.mozilla.org/apt mozilla main
+            dest: /etc/apt/sources.list.d/mozilla.list
+        - copy:
+            content: |
+              Package: *
+              Pin: origin packages.mozilla.org
+              Pin-Priority: 1000
+            dest: /etc/apt/preferences.d/mozilla
+        - apt:
+            update_cache: true
+        - apt:
+            name: firefox
+            state: latest
+            allow_downgrade: true
       become: true
       tags: firefox
