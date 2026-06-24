@@ -1,6 +1,10 @@
 - name: laptop
   hosts:
     - localhost
+  vars:
+    # drop sudo's default -S/-n flags so PAM (fingerprint, then password) can
+    # prompt on the real terminal instead of requiring --ask-become-pass
+    ansible_become_flags: -H
   tasks:
     - copy:
         src: xremap.service
@@ -48,7 +52,7 @@
     - block:
         - command: snap remove --purge firefox
           register: snap_remove_firefox
-          failed_when: snap_remove_firefox.rc != 0 and 'not installed' not in snap_remove_firefox.stderr
+          failed_when: snap_remove_firefox.rc != 0 and 'not installed' not in (snap_remove_firefox.stderr | default(''))
           changed_when: snap_remove_firefox.rc == 0
         - file:
             path: /etc/apt/keyrings
