@@ -46,3 +46,48 @@
     - command: systemctl daemon-reload
       become: true
       tags: powertop
+    - command: systemctl enable --now powertop.service
+      become: true
+      tags: powertop
+    # Firefox: snap build is heavier on CPU/battery than Mozilla's APT package
+    - command: snap remove --purge firefox
+      become: true
+      register: snap_remove_firefox
+      failed_when: snap_remove_firefox.rc != 0 and 'not installed' not in snap_remove_firefox.stderr
+      changed_when: snap_remove_firefox.rc == 0
+      tags: firefox
+    - file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+      become: true
+      tags: firefox
+    - get_url:
+        url: https://packages.mozilla.org/apt/repo-signing-key.gpg
+        dest: /etc/apt/keyrings/packages.mozilla.org.asc
+      become: true
+      tags: firefox
+    - copy:
+        content: |
+          deb [signed-by=/etc/apt/keyrings/packages.mozilla.org.asc] https://packages.mozilla.org/apt mozilla main
+        dest: /etc/apt/sources.list.d/mozilla.list
+      become: true
+      tags: firefox
+    - copy:
+        content: |
+          Package: *
+          Pin: origin packages.mozilla.org
+          Pin-Priority: 1000
+        dest: /etc/apt/preferences.d/mozilla
+      become: true
+      tags: firefox
+    - apt:
+        update_cache: true
+      become: true
+      tags: firefox
+    - apt:
+        name: firefox
+        state: latest
+        allow_downgrade: true
+      become: true
+      tags: firefox
