@@ -32,3 +32,17 @@
       tags: atlassian
     - command: systemctl --user start atlassian-keepalive.timer
       tags: atlassian
+    # powertop auto-tune on boot
+    - apt:
+        name: powertop
+        state: present
+      become: true
+      tags: powertop
+    - copy:
+        src: powertop.service
+        dest: /etc/systemd/system/
+      become: true
+      tags: powertop
+    - command: systemctl daemon-reload
+      become: true
+      tags: powertop
