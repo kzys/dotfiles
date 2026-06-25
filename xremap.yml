@@ -11,11 +11,11 @@ modmap:
       CapsLock: Ctrl_R
       Alt_L: F20
     application:
-      not: [Emacs, Code, firefox_firefox, google-chrome]
+      not: [Emacs, Code, firefox, google-chrome]
   # Mapping Alt to Ctrl where I use Cmd more than Ctrl such as Visual Studio Code.
   - name: CapsLock -> F21
     application:
-      only: [Code, firefox_firefox, google-chrome]
+      only: [Code, firefox, google-chrome]
     remap:
       Alt_L: Ctrl_R
       CapsLock: F21
@@ -32,7 +32,7 @@ keymap:
       F20-space: LeftMeta
   - name: Emacs-like shortcuts for moving a cursor
     application:
-      only: [Code, firefox_firefox, google-chrome]
+      only: [Code, firefox, google-chrome]
     remap:
       F21-f: right
       F21-b: left
