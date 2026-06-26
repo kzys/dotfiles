@@ -1,0 +1,87 @@
+#! /bin/bash
+# tmuxx - thin tmux wrapper for listing and attaching to sessions.
+#
+#   tmuxx           pick an existing session (fzf), or start one if none exist
+#   tmuxx <name>    attach to <name>, creating it if it does not exist
+#   tmuxx ls        list sessions (plain)
+#
+# A tmux "session" is a set of tabs; the tabs themselves are "windows".
+set -euo pipefail
+
+NEW_ENTRY='+ new session'
+
+# Attach from outside tmux, switch from within (you can't nest attaches).
+connect() {
+    local name=$1
+    if [[ -n "${TMUX:-}" ]]; then
+        tmux switch-client -t "$name"
+    else
+        tmux attach-session -t "$name"
+    fi
+}
+
+# Create a fresh session. With a name, reuse it if it already exists.
+create() {
+    local name=${1:-}
+    if [[ -n "${TMUX:-}" ]]; then
+        if [[ -n "$name" ]]; then
+            tmux new-session -d -s "$name" 2>/dev/null || true
+            tmux switch-client -t "$name"
+        else
+            tmux new-session -d && tmux switch-client -t "$(tmux display -p '#S')"
+        fi
+    else
+        if [[ -n "$name" ]]; then
+            exec tmux new-session -A -s "$name"
+        else
+            exec tmux new-session
+        fi
+    fi
+}
+
+case "${1:-}" in
+    ls|list)
+        tmux list-sessions 2>/dev/null || echo "no tmux server running"
+        exit 0
+        ;;
+    "")
+        ;;  # fall through to the picker
+    *)
+        # A name was given: attach if it exists, otherwise create it.
+        if tmux has-session -t "$1" 2>/dev/null; then
+            connect "$1"
+        else
+            create "$1"
+        fi
+        exit 0
+        ;;
+esac
+
+# No args: list sessions and pick one. A trailing " (attached)" marks a
+# session that is currently open in some terminal; it is stripped on selection.
+sessions=$(tmux list-sessions -F '#{session_name}#{?session_attached, (attached),}' 2>/dev/null || true)
+
+if [[ -z "$sessions" ]]; then
+    create
+    exit 0
+fi
+
+if ! command -v fzf >/dev/null 2>&1; then
+    tmux list-sessions
+    exit 0
+fi
+
+choice=$(printf '%s\n%s\n' "$sessions" "$NEW_ENTRY" | fzf \
+    --prompt='tmux session> ' \
+    --height=40% --reverse \
+    --preview='n={}; n=${n% (attached)}; tmux list-windows -t "$n" -F "#{window_index}: #{window_name}#{?window_active, (active),}" 2>/dev/null' \
+    --preview-window=right:50%) || exit 0
+
+# Drop the " (attached)" marker before acting on the chosen name.
+choice=${choice% (attached)}
+
+case "$choice" in
+    "")            exit 0 ;;
+    "$NEW_ENTRY")  create ;;
+    *)             connect "$choice" ;;
+esac
