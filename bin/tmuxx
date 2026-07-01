@@ -1,7 +1,7 @@
 #! /bin/bash
 # tmuxx - thin tmux wrapper for listing and attaching to sessions.
 #
-#   tmuxx           pick an existing session (fzf), or start one if none exist
+#   tmuxx           pick an existing session via fzf, or start one if none exist
 #   tmuxx <name>    attach to <name>, creating it if it does not exist
 #   tmuxx ls        list sessions (plain)
 #
@@ -66,30 +66,23 @@ if [[ -z "$sessions" ]]; then
     exit 0
 fi
 
-# If every session is already attached, create a new one rather than showing
-# a picker with nothing useful to switch to.
-if ! tmux list-sessions -f '#{==:#{session_attached},0}' 2>/dev/null | grep -q .; then
-    create
-    exit 0
-fi
+unattached=()
+while IFS= read -r s; do [[ -n "$s" ]] && unattached+=("$s"); done \
+    < <(tmux list-sessions -F '#{session_name}' -f '#{==:#{session_attached},0}' 2>/dev/null || true)
 
-if command -v fzf >/dev/null 2>&1; then
-    choice=$(printf '%s\n%s\n' "$sessions" "$NEW_ENTRY" | fzf \
-        --prompt='tmux session> ' \
-        --height=40% --reverse \
-        --preview='n={}; n=${n% (attached)}; tmux list-windows -t "$n" -F "#{window_index}: #{window_name}#{?window_active, (active),}" 2>/dev/null' \
-        --preview-window=right:50%) || exit 0
-else
-    # fzf not available: fall back to a numbered menu.
-    items=()
-    while IFS= read -r line; do items+=("$line"); done <<< "$sessions"
-    items+=("$NEW_ENTRY")
-    PS3='tmux session> '
-    select choice in "${items[@]}"; do
-        [[ -n "$choice" ]] && break
-    done
-    [[ -z "${choice:-}" ]] && exit 0
-fi
+case ${#unattached[@]} in
+    0) create;                 exit 0 ;;  # all attached: start fresh
+    1) connect "${unattached[0]}"; exit 0 ;;  # one free: attach directly
+esac
+# 2+: fall through to picker
+
+command -v fzf >/dev/null 2>&1 || { echo "tmuxx: fzf is required" >&2; exit 1; }
+
+choice=$(printf '%s\n%s\n' "$sessions" "$NEW_ENTRY" | fzf \
+    --prompt='tmux session> ' \
+    --height=40% --reverse \
+    --preview='n={}; n=${n% (attached)}; tmux list-windows -t "$n" -F "#{window_index}: #{window_name}#{?window_active, (active),}" 2>/dev/null' \
+    --preview-window=right:50%) || exit 0
 
 # Drop the " (attached)" marker before acting on the chosen name.
 choice=${choice% (attached)}
