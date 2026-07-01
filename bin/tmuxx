@@ -66,6 +66,13 @@ if [[ -z "$sessions" ]]; then
     exit 0
 fi
 
+# If every session is already attached, create a new one rather than showing
+# a picker with nothing useful to switch to.
+if ! tmux list-sessions -f '#{==:#{session_attached},0}' 2>/dev/null | grep -q .; then
+    create
+    exit 0
+fi
+
 if command -v fzf >/dev/null 2>&1; then
     choice=$(printf '%s\n%s\n' "$sessions" "$NEW_ENTRY" | fzf \
         --prompt='tmux session> ' \
