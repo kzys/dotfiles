@@ -278,6 +278,7 @@ export LD_LIBRARY_PATH="$HOME/.local/lib:$LD_LIBRARY_PATH"
 _init_msg=$(milestone "zsh (pid:$$) was initalized in")
 REPORTTIME=1
 
-cal
-echo "$(date)  $_init_msg"
+week
+echo
+echo "$(date +%T)  $_init_msg"
 unset _init_msg
