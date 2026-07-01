@@ -66,16 +66,23 @@ if [[ -z "$sessions" ]]; then
     exit 0
 fi
 
-if ! command -v fzf >/dev/null 2>&1; then
-    tmux list-sessions
-    exit 0
+if command -v fzf >/dev/null 2>&1; then
+    choice=$(printf '%s\n%s\n' "$sessions" "$NEW_ENTRY" | fzf \
+        --prompt='tmux session> ' \
+        --height=40% --reverse \
+        --preview='n={}; n=${n% (attached)}; tmux list-windows -t "$n" -F "#{window_index}: #{window_name}#{?window_active, (active),}" 2>/dev/null' \
+        --preview-window=right:50%) || exit 0
+else
+    # fzf not available: fall back to a numbered menu.
+    items=()
+    while IFS= read -r line; do items+=("$line"); done <<< "$sessions"
+    items+=("$NEW_ENTRY")
+    PS3='tmux session> '
+    select choice in "${items[@]}"; do
+        [[ -n "$choice" ]] && break
+    done
+    [[ -z "${choice:-}" ]] && exit 0
 fi
-
-choice=$(printf '%s\n%s\n' "$sessions" "$NEW_ENTRY" | fzf \
-    --prompt='tmux session> ' \
-    --height=40% --reverse \
-    --preview='n={}; n=${n% (attached)}; tmux list-windows -t "$n" -F "#{window_index}: #{window_name}#{?window_active, (active),}" 2>/dev/null' \
-    --preview-window=right:50%) || exit 0
 
 # Drop the " (attached)" marker before acting on the chosen name.
 choice=${choice% (attached)}
