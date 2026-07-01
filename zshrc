@@ -61,10 +61,9 @@ fi
 
 if [[ $(uname) == Linux ]]; then
     alias ls='ls -F'
-    alias cal3='ncal -C3'
+    alias cal='ncal -C'
 else
     alias ls='ls -wF'
-    alias cal3='cal -3'
 fi
 alias tmuxa='tmux attach || tmux'
 
@@ -276,5 +275,9 @@ export LD_LIBRARY_PATH="$HOME/.local/lib:$LD_LIBRARY_PATH"
 # THIS SECTION MUST BE AT THE END
 #
 # Be mindful about slowness
-milestone "$(date); zsh (pid:$$) was initalized in"
+_init_msg=$(milestone "zsh (pid:$$) was initalized in")
 REPORTTIME=1
+
+cal
+echo "$(date)  $_init_msg"
+unset _init_msg
