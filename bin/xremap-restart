@@ -1,0 +1,9 @@
+#! /bin/bash
+set -euo pipefail
+
+if systemctl --user restart xremap; then
+    notify-send "xremap" "Service restarted" --icon=input-keyboard
+else
+    notify-send "xremap" "Restart failed — check: systemctl --user status xremap" \
+        --icon=dialog-error --urgency=critical
+fi
