@@ -36,6 +36,13 @@ CONFIG_FILES = [
 # changing system.sh/user.sh.
 GOLDEN = "limahere-golden"
 
+# VM size. Lima's defaults (4 CPUs, 4GiB, 100GiB) are cramped for builds;
+# clones inherit these from the golden VM, so rebuild it with --clean after
+# changing them. The disk is sparse, so the guest only uses what it writes.
+CPUS = 8
+MEMORY = "16GiB"
+DISK = "200GiB"
+
 
 def provisions():
     """Provision steps run on first boot, in order."""
@@ -72,6 +79,46 @@ def status(name):
     return out.stdout.strip()
 
 
+def parse_size(size):
+    """'16GiB' -> bytes, matching the units limactl reports."""
+    units = {"KiB": 1024, "MiB": 1024**2, "GiB": 1024**3, "TiB": 1024**4}
+    num, unit = re.fullmatch(r"(\d+)([KMGT]iB)", size).groups()
+    return int(num) * units[unit]
+
+
+def resize(name):
+    """Bring an existing VM's size in line with CPUS/MEMORY/DISK, so size
+    bumps apply to already-created VMs without recreating them (their disks
+    keep all content). Stops the VM if an edit is needed; the disk is grow-
+    only (qcow2 can't shrink), and the guest fs expands on next boot."""
+    out = subprocess.run(
+        ["limactl", "list", "--format", "{{.CPUs}} {{.Memory}} {{.Disk}}",
+         name],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    cpus, memory, disk = (int(v) for v in out.stdout.split())
+    sets = []
+    if cpus != CPUS:
+        sets.append(f".cpus = {CPUS}")
+    if memory != parse_size(MEMORY):
+        sets.append(f'.memory = "{MEMORY}"')
+    if disk < parse_size(DISK):
+        sets.append(f'.disk = "{DISK}"')
+    if not sets:
+        return
+    print(
+        f"Resizing {name} to {CPUS} CPUs, {MEMORY} memory, {DISK} disk...",
+        file=sys.stderr,
+    )
+    if status(name) == "Running":
+        subprocess.run(["limactl", "stop", name], check=True)
+    subprocess.run(
+        ["limactl", "edit", name, "--set", " | ".join(sets)], check=True
+    )
+
+
 def build_golden():
     """Provision the shared base VM once: apt packages, Go, Claude Code, zsh
     login shell — all baked into its disk. It has no host mount (clones add
@@ -81,6 +128,7 @@ def build_golden():
     sets = (
         f".mounts = [] | .provision = {provision}"
         " | .containerd.system = true | .containerd.user = false"
+        f' | .cpus = {CPUS} | .memory = "{MEMORY}" | .disk = "{DISK}"'
     )
     subprocess.run(
         [
@@ -97,9 +145,12 @@ def create(name, here):
     # Clone the fully-provisioned golden disk instead of re-provisioning.
     if GOLDEN not in existing_instances():
         build_golden()
-    elif status(GOLDEN) == "Running":
-        # clone needs the source stopped for a consistent disk copy.
-        subprocess.run(["limactl", "stop", GOLDEN], check=True)
+    else:
+        # An older golden may predate a size bump; clones inherit its size.
+        resize(GOLDEN)
+        if status(GOLDEN) == "Running":
+            # clone needs the source stopped for a consistent disk copy.
+            subprocess.run(["limactl", "stop", GOLDEN], check=True)
 
     # Replace the (empty) golden mounts with *only* this directory, and drop
     # .provision: it already ran in golden and is baked into the cloned disk.
@@ -234,8 +285,10 @@ def main():
 
     if name not in existing_instances():
         create(name, here)
-    elif status(name) != "Running":
-        subprocess.run(["limactl", "start", name], check=True)
+    else:
+        resize(name)  # may stop the VM to apply a size bump
+        if status(name) != "Running":
+            subprocess.run(["limactl", "start", name], check=True)
 
     seed_config(name)
     seed_gh_auth(name)
