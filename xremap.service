@@ -1,5 +1,5 @@
 [Service]
-ExecStart=%h/local/bin/xremap %h/ws/dotfiles/xremap.yml
+ExecStart=%h/.cargo/bin/xremap %h/ws/dotfiles/xremap.yml
 
 [Install]
 WantedBy=org.gnome.Shell.target
