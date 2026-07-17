@@ -6,7 +6,10 @@
 # ]
 # ///
 """
-Keeps Atlassian Cloud accounts active by hitting Jira and Confluence APIs.
+Keeps Atlassian Cloud accounts active by performing read-only Jira and
+Confluence activity (profile, searches, and content reads). Plain
+authentication pings don't seem to count as product usage for Atlassian's
+free-plan dormancy checks, so this mimics light browsing instead.
 
 Required env vars:
   ATLASSIAN_DOMAIN    — subdomain only, e.g. "mycompany" for mycompany.atlassian.net
@@ -19,10 +22,24 @@ import sys
 import logging
 from datetime import datetime, timezone
 import requests
+from requests.adapters import HTTPAdapter
 from requests.auth import HTTPBasicAuth
+from urllib3.util.retry import Retry
 
 logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s", level=logging.INFO)
 log = logging.getLogger(__name__)
+
+# (service, label, path, query params)
+ACTIVITIES = [
+    ("Jira", "profile", "/rest/api/3/myself", {}),
+    ("Jira", "recent issues", "/rest/api/3/search/jql",
+     {"jql": "created >= -365d order by created desc", "maxResults": "5", "fields": "summary"}),
+    ("Jira", "projects", "/rest/api/3/project/search", {"maxResults": "5"}),
+    ("Confluence", "profile", "/wiki/rest/api/user/current", {}),
+    ("Confluence", "spaces", "/wiki/api/v2/spaces", {"limit": "5"}),
+    ("Confluence", "recent pages", "/wiki/api/v2/pages",
+     {"limit": "5", "sort": "-modified-date"}),
+]
 
 
 def get_config():
@@ -36,35 +53,40 @@ def get_config():
     return domain, email, token
 
 
-def ping(session, url, service):
+def make_session(email, token):
+    session = requests.Session()
+    session.auth = HTTPBasicAuth(email, token)
+    session.headers.update({"Accept": "application/json"})
+    # Right after boot the timer can fire before DNS is up; back off and retry.
+    retry = Retry(total=5, connect=5, backoff_factor=3, status_forcelist=[429, 502, 503, 504])
+    session.mount("https://", HTTPAdapter(max_retries=retry))
+    return session
+
+
+def visit(session, base, service, label, path, params):
     try:
-        r = session.get(url, timeout=15)
+        r = session.get(f"{base}{path}", params=params, timeout=30)
         r.raise_for_status()
-        data = r.json()
-        display = data.get("displayName") or data.get("username") or data.get("accountId", "?")
-        log.info("%s  OK — logged in as: %s", service, display)
+        log.info("%-10s  %-14s OK", service, label)
         return True
     except requests.HTTPError as e:
-        log.error("%s  HTTP %s: %s", service, e.response.status_code, e.response.text[:200])
+        log.error("%-10s  %-14s HTTP %s: %s", service, label, e.response.status_code, e.response.text[:200])
     except requests.RequestException as e:
-        log.error("%s  request failed: %s", service, e)
+        log.error("%-10s  %-14s request failed: %s", service, label, e)
     return False
 
 
 def main():
     domain, email, token = get_config()
     base = f"https://{domain}.atlassian.net"
+    session = make_session(email, token)
 
-    session = requests.Session()
-    session.auth = HTTPBasicAuth(email, token)
-    session.headers.update({"Accept": "application/json"})
+    log.info("Visiting Atlassian Cloud (%s) at %s", domain, datetime.now(timezone.utc).isoformat())
 
-    log.info("Pinging Atlassian Cloud (%s) at %s", domain, datetime.now(timezone.utc).isoformat())
+    results = [visit(session, base, service, label, path, params)
+               for service, label, path, params in ACTIVITIES]
 
-    jira_ok = ping(session, f"{base}/rest/api/3/myself", "Jira      ")
-    confluence_ok = ping(session, f"{base}/wiki/rest/api/user/current", "Confluence")
-
-    if not (jira_ok and confluence_ok):
+    if not all(results):
         sys.exit(1)
 
 
