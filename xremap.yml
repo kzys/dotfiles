@@ -9,7 +9,7 @@ modmap:
   - name: CapsLock -> Ctrl_R
     remap:
       CapsLock: Ctrl_R
-      Alt_L: F20
+      LeftAlt: F20
     application:
       not: [Emacs, Code, firefox, google-chrome]
   # Mapping Alt to Ctrl where I use Cmd more than Ctrl such as Visual Studio Code.
@@ -17,8 +17,15 @@ modmap:
     application:
       only: [Code, firefox, google-chrome]
     remap:
-      Alt_L: Ctrl_R
+      LeftAlt: Ctrl_R
       CapsLock: F21
+  - name: LeftMeta -> Ctrl_R (Keychron only)
+    device:
+      only: ["Keychron"]
+    application:
+      only: [Code, firefox, google-chrome]
+    remap:
+      LeftMeta: Ctrl_R
 
 keymap:
   - name: Terminal
@@ -42,4 +49,4 @@ keymap:
       F21-e: end
       F21-g: Esc
       F21-h: Backspace
-      C-space: LeftMeta
+#      C-space: LeftMeta
