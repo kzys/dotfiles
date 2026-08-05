@@ -2,39 +2,83 @@
 import datetime
 import sys
 
-count = 1
-if len(sys.argv) > 1:
-    arg = sys.argv[1]
-    if arg.startswith('-') and arg[1:].isdigit():
-        count = int(arg[1:])
-    else:
-        print(f'usage: week [-N]', file=sys.stderr)
-        sys.exit(1)
+HEADER = 'Mo Tu We Th Fr Sa Su'
+SEP = '   '
+USAGE = 'usage: week [-N]'
 
-today = datetime.date.today()
-current_monday = today - datetime.timedelta(days=today.weekday())
+CELL = 2
+STRIDE = len(HEADER) + len(SEP)
 
-offset = -(count // 2)
-weeks = [
-    [current_monday + datetime.timedelta(weeks=offset + i, days=j) for j in range(7)]
-    for i in range(count)
-]
 
-color = sys.stdout.isatty()
-sep = '   '
+def parse_count(argv):
+    """Number of weeks asked for on the command line."""
+    if not argv:
+        return 1
+    arg = argv[0]
+    count = int(arg[1:]) if arg.startswith('-') and arg[1:].isdigit() else 0
+    if count < 1:
+        raise ValueError(USAGE)
+    return count
 
-month = weeks[0][0].strftime('%b')
-indent = ' ' * (len(month) + 1)
 
-print(indent + sep.join('Mo Tu We Th Fr Sa Su' for _ in weeks))
+def weeks(today, count):
+    """The count weeks to show, Monday first, with today's week in the middle."""
+    monday = today - datetime.timedelta(days=today.weekday())
+    start = monday + datetime.timedelta(weeks=-(count // 2))
+    return [
+        [start + datetime.timedelta(weeks=i, days=j) for j in range(7)]
+        for i in range(count)
+    ]
 
-rows = []
-for week in weeks:
-    parts = []
-    for d in week:
-        s = f'{d.day:2d}'
-        if d == today and color:
-            s = f'\033[7m{s}\033[0m'
-        parts.append(s)
-    rows.append(' '.join(parts))
-print(month + ' ' + sep.join(rows))
+
+def month_labels(grid):
+    """Each month in the grid as (number, column), the column its 1st sits in.
+
+    Numbers rather than names because a name is as wide as a whole day column
+    and would collide with the next label when a month starts on a Tuesday.
+    """
+    labels = []
+    for i, week in enumerate(grid):
+        for j, d in enumerate(week):
+            if (i, j) == (0, 0) or d.day == 1:
+                labels.append((d.strftime('%m'), i * STRIDE + j * (CELL + 1)))
+    return labels
+
+
+def calendar(today, count=1, color=False):
+    """Render count weeks side by side, with today's week in the middle."""
+    grid = weeks(today, count)
+
+    months = ''
+    for number, col in month_labels(grid):
+        months = months.ljust(col) + number
+
+    rows = []
+    for week in grid:
+        parts = []
+        for d in week:
+            s = f'{d.day:{CELL}d}'
+            if d == today and color:
+                s = f'\033[7m{s}\033[0m'
+            parts.append(s)
+        rows.append(' '.join(parts))
+
+    return '\n'.join([
+        months,
+        SEP.join(HEADER for _ in grid),
+        SEP.join(rows),
+    ])
+
+
+def main(argv):
+    try:
+        count = parse_count(argv)
+    except ValueError as e:
+        print(e, file=sys.stderr)
+        return 1
+    print(calendar(datetime.date.today(), count, sys.stdout.isatty()))
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv[1:]))
