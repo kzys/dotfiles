@@ -6,39 +6,21 @@
     # prompt on the real terminal instead of requiring --ask-become-pass
     ansible_become_flags: -H
   tasks:
+    # files/home and files/root mirror the paths they install to
     - copy:
-        src: xremap.service
-        dest: ~/.config/systemd/user/
+        src: home/
+        dest: ~/
+        mode: preserve
+      tags: always
     - copy:
-        src: xremap-restart.desktop
-        dest: ~/.local/share/applications/
-    - command: systemctl --user daemon-reload
-    - command: systemctl --user enable xremap.service
-    - command: systemctl --user start xremap.service
-    # xremap + udev
-    - block:
-        - copy:
-            src: bin/systemctl-as-gnome-user
-            dest: /usr/local/bin
-        - copy:
-            src: keyboard.rules
-            dest: /etc/udev/rules.d/
+        src: root/
+        dest: /
+        mode: preserve
       become: true
-    # Atlassian keep-alive
-    - copy:
-        src: atlassian-keepalive.service
-        dest: ~/.config/systemd/user/
-      tags: atlassian
-    - copy:
-        src: atlassian-keepalive.timer
-        dest: ~/.config/systemd/user/
-      tags: atlassian
+      tags: always
     - command: systemctl --user daemon-reload
-      tags: atlassian
-    - command: systemctl --user enable atlassian-keepalive.timer
-      tags: atlassian
-    - command: systemctl --user start atlassian-keepalive.timer
-      tags: atlassian
+    - command: systemctl --user enable --now xremap.service
+    - command: systemctl --user enable --now atlassian-keepalive.timer
     # powertop auto-tune on boot
     - block:
         - apt:
