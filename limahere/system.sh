@@ -7,6 +7,9 @@ apt-get update
 apt-get install -y build-essential curl tmux zsh
 
 # Add GitHub CLI's apt repo so `gh` is available.
+# -m applies to the deepest directory only, which is all we create: /etc/apt
+# is already there on any Debian-derived image.
+# shellcheck disable=SC2174
 mkdir -p -m 755 /etc/apt/keyrings
 curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
   -o /etc/apt/keyrings/githubcli-archive-keyring.gpg
