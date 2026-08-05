@@ -17,20 +17,25 @@ def parse_count(argv):
     return int(arg[1:])
 
 
-def calendar(today, count=1, color=False):
-    """Render count weeks side by side, with today's week in the middle."""
+def weeks(today, count):
+    """The count weeks to show, Monday first, with today's week in the middle."""
     monday = today - datetime.timedelta(days=today.weekday())
-    offset = -(count // 2)
-    weeks = [
-        [monday + datetime.timedelta(weeks=offset + i, days=j) for j in range(7)]
+    start = monday + datetime.timedelta(weeks=-(count // 2))
+    return [
+        [start + datetime.timedelta(weeks=i, days=j) for j in range(7)]
         for i in range(count)
     ]
 
-    month = weeks[0][0].strftime('%b')
+
+def calendar(today, count=1, color=False):
+    """Render count weeks side by side, with today's week in the middle."""
+    grid = weeks(today, count)
+
+    month = grid[0][0].strftime('%b')
     indent = ' ' * (len(month) + 1)
 
     rows = []
-    for week in weeks:
+    for week in grid:
         parts = []
         for d in week:
             s = f'{d.day:2d}'
@@ -40,7 +45,7 @@ def calendar(today, count=1, color=False):
         rows.append(' '.join(parts))
 
     return '\n'.join([
-        indent + SEP.join(HEADER for _ in weeks),
+        indent + SEP.join(HEADER for _ in grid),
         month + ' ' + SEP.join(rows),
     ])
 
