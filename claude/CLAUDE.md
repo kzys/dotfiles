@@ -5,6 +5,7 @@
 - Git commit messages should follow this classic style:
   https://tbaggery.com/2008/04/19/a-note-about-git-commit-messages.html
 - In code comments, don't name specific callers. They will change over time.
+- If CI runs some tests automatically, don't mention the tests in the PR description.
 
 ## Go
 
