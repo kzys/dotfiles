@@ -6,6 +6,9 @@ HEADER = 'Mo Tu We Th Fr Sa Su'
 SEP = '   '
 USAGE = 'usage: week [-N]'
 
+CELL = 2
+STRIDE = len(HEADER) + len(SEP)
+
 
 def parse_count(argv):
     """Number of weeks asked for on the command line."""
@@ -28,26 +31,42 @@ def weeks(today, count):
     ]
 
 
+def month_labels(grid):
+    """Each month in the grid as (number, column), the column its 1st sits in.
+
+    Numbers rather than names because a name is as wide as a whole day column
+    and would collide with the next label when a month starts on a Tuesday.
+    """
+    labels = []
+    for i, week in enumerate(grid):
+        for j, d in enumerate(week):
+            if (i, j) == (0, 0) or d.day == 1:
+                labels.append((d.strftime('%m'), i * STRIDE + j * (CELL + 1)))
+    return labels
+
+
 def calendar(today, count=1, color=False):
     """Render count weeks side by side, with today's week in the middle."""
     grid = weeks(today, count)
 
-    month = grid[0][0].strftime('%b')
-    indent = ' ' * (len(month) + 1)
+    months = ''
+    for number, col in month_labels(grid):
+        months = months.ljust(col) + number
 
     rows = []
     for week in grid:
         parts = []
         for d in week:
-            s = f'{d.day:2d}'
+            s = f'{d.day:{CELL}d}'
             if d == today and color:
                 s = f'\033[7m{s}\033[0m'
             parts.append(s)
         rows.append(' '.join(parts))
 
     return '\n'.join([
-        indent + SEP.join(HEADER for _ in grid),
-        month + ' ' + SEP.join(rows),
+        months,
+        SEP.join(HEADER for _ in grid),
+        SEP.join(rows),
     ])
 
 
