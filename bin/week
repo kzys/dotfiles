@@ -12,9 +12,10 @@ def parse_count(argv):
     if not argv:
         return 1
     arg = argv[0]
-    if not (arg.startswith('-') and arg[1:].isdigit()):
+    count = int(arg[1:]) if arg.startswith('-') and arg[1:].isdigit() else 0
+    if count < 1:
         raise ValueError(USAGE)
-    return int(arg[1:])
+    return count
 
 
 def weeks(today, count):

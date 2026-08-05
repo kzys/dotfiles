@@ -35,6 +35,12 @@ class TestCount(unittest.TestCase):
     def test_reads_a_leading_dash_number(self):
         self.assertEqual(week.parse_count(['-3']), 3)
 
+    def test_rejects_a_count_of_zero(self):
+        for arg in ('-0', '-00'):
+            with self.subTest(arg=arg):
+                with self.assertRaises(ValueError):
+                    week.parse_count([arg])
+
     def test_rejects_anything_else(self):
         for arg in ('-x', '3', '--weeks=3', '-', ''):
             with self.subTest(arg=arg):
