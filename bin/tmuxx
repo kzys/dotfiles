@@ -78,6 +78,8 @@ esac
 
 command -v fzf >/dev/null 2>&1 || { echo "tmuxx: fzf is required" >&2; exit 1; }
 
+# The preview template is expanded by fzf, not here, so it has to stay quoted.
+# shellcheck disable=SC2016
 choice=$(printf '%s\n%s\n' "$sessions" "$NEW_ENTRY" | fzf \
     --prompt='tmux session> ' \
     --height=40% --reverse \
