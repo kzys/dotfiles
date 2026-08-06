@@ -11,3 +11,5 @@
 
 - Doc comments should follow this official style:
   https://go.dev/doc/comment
+- Use t.Context() in new tests.
+- Don't panic when you can bubble up an error, even when the case seems unreachable. Third-party packages in particular may introduce new error states later.
