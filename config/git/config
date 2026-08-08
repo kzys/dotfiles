@@ -1,6 +1,5 @@
 [core]
 	pager = less -R
-	excludesfile = /Users/katokazu/.gitignore_global
 
 [log]
 	date = local
@@ -18,6 +17,7 @@
 	ui = auto
 
 [alias]
+	b = for-each-ref --sort=-committerdate --format='%(committerdate:short) %(objectname:short) %(refname:short)' refs/heads/
 	co = checkout
 	dag = log --graph --format='format:%C(yellow)%h%C(reset) %C(blue)\"%an\" <%ae>%C(reset) %C(magenta)%cr%C(reset)%C(auto)%d%C(reset)%n%s' --date-order
 
@@ -38,9 +38,6 @@
 
 [http]
 	cookiefile = ~/.gitcookies
-
-[include]
-    path = src/dotfiles/gitconfig-alias
 
 [credential]
     helper =

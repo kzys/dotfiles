@@ -21,10 +21,17 @@ link() {
 }
 
 main() {
-    local -a files=(zshrc emacs.d gitconfig tmux.conf bashrc)
+    local -a files=(zshrc emacs.d tmux.conf bashrc)
     for file in "${files[@]}"
     do
         link "$PWD/$file" "$HOME/.$file"
+    done
+
+    # config/ mirrors ~/.config, so each name is both source and destination.
+    local -a config_files=(git/config git/ignore)
+    for file in "${config_files[@]}"
+    do
+        link "$PWD/config/$file" "$HOME/.config/$file"
     done
 
     link "$PWD/claude/CLAUDE.md" "$HOME/.claude/CLAUDE.md"
