@@ -1,0 +1,147 @@
+#!/usr/bin/env python3
+"""Move videos out of an iTunes music library into Jellyfin video libraries.
+
+iTunes kept music videos beside the albums and everything else under its own
+media kind directories, so a Jellyfin music library ends up showing videos as
+albums.  Sort them into one destination directory to point a Jellyfin music
+video library at:
+
+    <dest>/<artist>/<artist> - <title>.<ext>
+    <dest>/other/<file name>
+
+A video filed under an artist is that artist's music video, as is anything
+the tags name an artist for.  The rest -- the iTunes media kind directories,
+which are not artists at all -- lands flat under other, being too mixed to
+name automatically.
+"""
+
+import argparse
+import json
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+VIDEO_SUFFIXES = {'.m4v', '.mp4', '.mov', '.mpg', '.mpeg', '.avi', '.mkv',
+                  '.wmv', '.flv', '.webm', '.m2ts'}
+MEDIA_KINDS = {'Movies', 'Podcasts', 'TV Shows', 'Audiobooks', 'Home Videos',
+               'Music Videos', 'Voice Memos'}
+# Values of iTunes' media kind atom that mean the file is not about music.
+MOVIE_KINDS = {'0', '9', '10'}
+TRACK_NUMBER = re.compile(r'^\d+\s+')
+
+
+def read_tags(path):
+    """Tags of one video file, empty if ffprobe cannot read it."""
+    cmd = ['ffprobe', '-v', 'error', '-of', 'json',
+           '-show_entries', 'format_tags=artist,title,media_type', str(path)]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        return {}
+    tags = json.loads(result.stdout).get('format', {}).get('tags', {})
+    return {key.lower(): value for key, value in tags.items()}
+
+
+def videos(root):
+    """Every video file under root, deepest path first."""
+    return sorted(path for path in root.rglob('*')
+                  if path.is_file() and path.suffix.lower() in VIDEO_SUFFIXES)
+
+
+def name(artist, title, suffix):
+    """The "artist - title" file name Jellyfin reads a music video from."""
+    if title.lower().startswith(f'{artist.lower()} - '):
+        stem = title
+    else:
+        stem = f'{artist} - {title}'
+    return stem.replace('/', '-') + suffix
+
+
+def is_music_video(tags):
+    """Whether a file iTunes filed under a media kind is a music video.
+
+    A talk carries an artist tag too -- the speaker -- so the media kind has
+    to rule those out.
+    """
+    return bool(tags.get('artist')) and tags.get('media_type') not in MOVIE_KINDS
+
+
+def destination(path, root, dest):
+    """Where one video belongs under dest."""
+    relative = path.relative_to(root)
+    tags = read_tags(path)
+    if relative.parts[0] in MEDIA_KINDS and not is_music_video(tags):
+        # The media kind directories name nothing a video library wants.
+        return dest / 'other' / path.name
+
+    artist = tags.get('artist') or relative.parts[0]
+    title = tags.get('title') or TRACK_NUMBER.sub('', path.stem)
+    return dest / artist.replace('/', '-') / name(artist, title, path.suffix)
+
+
+def plan(root, dest):
+    """[(source, destination)] for every video, skipping name clashes."""
+    moves = []
+    taken = set()
+    for path in videos(root):
+        target = destination(path, root, dest)
+        if target in taken or target.exists():
+            print(f'skip: {target} is taken', file=sys.stderr)
+            continue
+        taken.add(target)
+        moves.append((path, target))
+    return moves
+
+
+def prune(path, root):
+    """Remove the directories a move emptied, up to root."""
+    while path != root and not any(path.iterdir()):
+        path.rmdir()
+        path = path.parent
+
+
+def apply_moves(moves, root):
+    """Move the planned files, reporting rather than raising on failure.
+
+    Rename rather than copy: a half-copied video is worse than a video left
+    where it was.
+    """
+    sources = set()
+    failed = 0
+    for source, target in moves:
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            source.rename(target)
+        except OSError as error:
+            print(f'error: {source}: {error.strerror}', file=sys.stderr)
+            failed += 1
+            continue
+        sources.add(source.parent)
+    for path in sources:
+        prune(path, root)
+    return failed
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('root', type=Path, help='music library to clean up')
+    parser.add_argument('dest', type=Path,
+                        help='directory to put the video libraries in')
+    parser.add_argument('--apply', action='store_true',
+                        help='move the files (default: dry run)')
+    args = parser.parse_args(argv)
+
+    moves = plan(args.root, args.dest)
+    for source, target in moves:
+        print(f'{source.relative_to(args.root)} -> '
+              f'{target.relative_to(args.dest)}')
+    if not args.apply:
+        print(f'{len(moves)} files to move (dry run; pass --apply to move)')
+        return 0
+    failed = apply_moves(moves, args.root)
+    print(f'{len(moves) - failed} files moved, {failed} failed')
+    return 1 if failed else 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
