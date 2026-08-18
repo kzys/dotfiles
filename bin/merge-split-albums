@@ -1,0 +1,201 @@
+#!/usr/bin/env python3
+"""Merge album directories that iTunes split across several artists.
+
+iTunes files a track credited to "X feat. Y" under its own artist directory,
+so one release ends up as two albums in Jellyfin.  Scan a library laid out as
+<root>/<artist>/<album>/<track>, then move the stray tracks back into the
+directory holding the bulk of the release.
+"""
+
+import argparse
+import json
+import subprocess
+import sys
+from collections import defaultdict
+from pathlib import Path
+
+AUDIO_SUFFIXES = {'.m4a', '.m4p', '.mp3', '.aac', '.flac', '.ogg', '.wav'}
+TAGS = ('album', 'artist', 'date', 'compilation', 'iTunes_CDDB_IDs')
+
+
+def read_tags(path):
+    """Tags of one audio file, or None if ffprobe cannot read it."""
+    cmd = ['ffprobe', '-v', 'error', '-of', 'json',
+           '-show_entries', 'format_tags=' + ','.join(TAGS), str(path)]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        return None
+    tags = json.loads(result.stdout).get('format', {}).get('tags', {})
+    return {key.lower(): value for key, value in tags.items()}
+
+
+def album_dirs(root):
+    """<album name> -> [directory], for every <root>/<artist>/<album>."""
+    dirs = defaultdict(list)
+    for artist in sorted(p for p in root.iterdir() if p.is_dir()):
+        for album in sorted(p for p in artist.iterdir() if p.is_dir()):
+            dirs[album.name].append(album)
+    return dirs
+
+
+def files(path):
+    """Sorted files directly in path, empty if it vanished during the scan."""
+    try:
+        return sorted(p for p in path.iterdir() if p.is_file())
+    except FileNotFoundError:
+        print(f'warning: {path} disappeared', file=sys.stderr)
+        return []
+
+
+def scan_dir(path):
+    """[(file, tags)] for the audio files in one album directory."""
+    tracks = []
+    for entry in files(path):
+        if entry.suffix.lower() not in AUDIO_SUFFIXES:
+            continue
+        tags = read_tags(entry)
+        if tags is None:
+            print(f'warning: cannot read {entry}', file=sys.stderr)
+            continue
+        tracks.append((entry, tags))
+    return tracks
+
+
+def release_key(tags):
+    """Identity of the release a track belongs to, or None if it has none.
+
+    The CDDB id iTunes stores is per disc, so it names the release outright.
+    Untagged tracks land in an "Unknown Album" directory per artist and say
+    nothing about where they came from, so they are left alone.
+    """
+    if not tags.get('album'):
+        return None
+    return tags.get('itunes_cddb_ids') or (tags['album'], tags.get('date', ''))
+
+
+def is_one_release(key, tracks):
+    """Whether directories sharing a release key really hold one release.
+
+    A CDDB id is proof on its own.  Without one, matching album and year is
+    weak -- unrelated bands share album titles -- so the credits have to
+    explain the split too: a various artists disc, or a guest credit
+    extending the main artist.
+    """
+    if not isinstance(key, tuple):
+        return True
+    if any(tags.get('compilation') == '1' for _, tags in tracks):
+        return True
+    artists = {tags.get('artist', '') for _, tags in tracks}
+    main = min(artists, key=len)
+    return all(main in artist for artist in artists)
+
+
+def split_releases(dirs):
+    """Releases spread over more than one of the given album directories.
+
+    Yields {directory: [(file, tags)]} for each of them.
+    """
+    releases = defaultdict(dict)
+    for path in dirs:
+        for entry, tags in scan_dir(path):
+            key = release_key(tags)
+            if key is not None:
+                releases[key].setdefault(path, []).append((entry, tags))
+    for key, by_dir in releases.items():
+        tracks = [track for group in by_dir.values() for track in group]
+        if len(by_dir) > 1 and is_one_release(key, tracks):
+            yield by_dir
+
+
+def pick_target(by_dir):
+    """The directory the release should live in.
+
+    An ASCII artist name comes first: iTunes wrote a localized duplicate of
+    the compilations directory, and the two should not both survive.  A guest
+    credit reads as the main artist plus a suffix, so it is in the same script
+    as the main artist and the track count decides those.
+    """
+    def rank(path):
+        name = path.parent.name
+        return name.isascii(), len(by_dir[path]), -len(name)
+
+    return max(by_dir, key=rank)
+
+
+def plan_moves(by_dir, target):
+    """[(source, destination)] for every file outside the target directory."""
+    moves = []
+    for path in by_dir:
+        if path == target:
+            continue
+        # Cover art and the like travel with the tracks.
+        for entry in files(path):
+            moves.append((entry, target / entry.name))
+    return moves
+
+
+def prune(path, root):
+    """Remove path and its parent once they are empty."""
+    for candidate in (path, path.parent):
+        if candidate == root or any(candidate.iterdir()):
+            return
+        candidate.rmdir()
+
+
+def apply_moves(moves, root):
+    """Move the planned files, skipping any name already taken.
+
+    Rename rather than copy: a half-copied track is worse than a track left
+    where it was, and a read-only share should not be rewritten one file at
+    a time.
+    """
+    sources = set()
+    failed = 0
+    for source, destination in moves:
+        if destination.exists():
+            print(f'skip: {destination} exists', file=sys.stderr)
+            continue
+        try:
+            source.rename(destination)
+        except OSError as error:
+            print(f'error: {source}: {error.strerror}', file=sys.stderr)
+            failed += 1
+            continue
+        sources.add(source.parent)
+    for path in sources:
+        prune(path, root)
+    return failed
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('root', type=Path,
+                        help='library root holding <artist>/<album> directories')
+    parser.add_argument('--apply', action='store_true',
+                        help='move the files (default: dry run)')
+    args = parser.parse_args(argv)
+
+    moves = []
+    for name, dirs in sorted(album_dirs(args.root).items()):
+        if len(dirs) < 2:
+            continue
+        for by_dir in split_releases(dirs):
+            target = pick_target(by_dir)
+            print(f'{name} -> {target.parent.name}')
+            for path in sorted(by_dir, key=lambda p: p.parent.name):
+                mark = '*' if path == target else ' '
+                print(f'  {mark} {path.parent.name} ({len(by_dir[path])})')
+            moves += plan_moves(by_dir, target)
+
+    for source, destination in moves:
+        print(f'{source} -> {destination}')
+    if not args.apply:
+        print(f'{len(moves)} files to move (dry run; pass --apply to move)')
+        return 0
+    failed = apply_moves(moves, args.root)
+    print(f'{len(moves) - failed} files moved, {failed} failed')
+    return 1 if failed else 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
