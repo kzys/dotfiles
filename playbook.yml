@@ -21,6 +21,15 @@
     - command: systemctl --user daemon-reload
     - command: systemctl --user enable --now xremap.service
     - command: systemctl --user enable --now atlassian-keepalive.timer
+    # bin/pino runs pi under bubblewrap, which needs the profile in files/root to
+    # create a user namespace.
+    - block:
+        - apt:
+            name: bubblewrap
+            state: present
+        - command: apparmor_parser -r -T -W /etc/apparmor.d/bwrap
+      become: true
+      tags: pi-sandbox
     # powertop auto-tune on boot
     - block:
         - apt:

@@ -1,0 +1,62 @@
+#! /bin/bash
+set -euo pipefail
+
+# pi has no sandbox of its own and its docs point at the OS for one, so run the
+# whole process under bubblewrap. Everything inherits the restrictions that way:
+# the bash tool, the read/write/edit tools, ! commands and extension code alike.
+#
+# The root is an empty tmpfs, so a path is invisible unless it is listed below.
+# Reaching for a toolchain that is not here should look like a missing tool, and
+# the fix is a new entry rather than a hole that was open all along.
+
+repo=$(cd "$(dirname "$0")/.." && pwd)
+
+# The installer drops the binary here, outside PATH. Keep it on PATH inside the
+# sandbox too, so "pi install" can reach its own npm.
+pi_bin=$HOME/.local/share/pi-node/current/bin
+export PATH="$pi_bin:$PATH"
+
+args=(
+    --tmpfs /
+    --proc /proc
+    --dev /dev
+    --tmpfs /dev/shm
+    --tmpfs /tmp
+    --tmpfs "$HOME"
+)
+
+# Readable: the system and the toolchains pi builds with. /etc is whole because
+# TLS roots, resolv.conf and passwd all live there; the secrets it holds are
+# root-only anyway. resolv.conf is a symlink into /run, so DNS needs that too.
+for dir in \
+    /usr \
+    /etc \
+    /run/systemd/resolve \
+    "$HOME/.local/share/pi-node" \
+    "$HOME/sdk" \
+    "$HOME/.cargo"
+do
+    args+=(--ro-bind-try "$dir" "$dir")
+done
+
+# ~/.config/git holds symlinks back into this repository, which is not otherwise
+# mounted, so bind what they point at instead of the links.
+args+=(--ro-bind-try "$repo/config/git" "$HOME/.config/git")
+
+# Writable: the project being worked on, pi's own state, and the build caches.
+for dir in \
+    "$PWD" \
+    "$HOME/.pi/agent" \
+    "$HOME/.cache" \
+    "$HOME/go"
+do
+    args+=(--bind-try "$dir" "$dir")
+done
+
+# Ubuntu keeps these as symlinks into /usr, and the tmpfs root loses them.
+for dir in bin lib lib64 sbin
+do
+    args+=(--symlink "usr/$dir" "/$dir")
+done
+
+exec bwrap "${args[@]}" --unshare-pid --die-with-parent "$pi_bin/pi" "$@"

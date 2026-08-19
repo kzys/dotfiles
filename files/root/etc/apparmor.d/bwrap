@@ -1,0 +1,12 @@
+# Ubuntu 24.04 denies unprivileged user namespaces to unconfined binaries, so
+# bubblewrap needs a profile granting only that. Everything else stays
+# unconfined, matching the profiles Ubuntu ships for other userns helpers.
+abi <abi/4.0>,
+
+include <tunables/global>
+
+profile bwrap /usr/bin/bwrap flags=(unconfined) {
+  userns,
+
+  include if exists <local/bwrap>
+}
