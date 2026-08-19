@@ -1,0 +1,24 @@
+#! /bin/bash
+set -euo pipefail
+
+# opencode's installer drops the binary here, outside PATH.
+PATH=$PATH:$HOME/.opencode/bin
+
+# opencode takes a session id but has no picker, so -r mimics "claude --resume".
+if [[ "${1:-}" != "-r" && "${1:-}" != "--resume" ]]; then
+    exec opencode "$@"
+fi
+shift
+
+id=${1:-}
+if [[ -n "$id" ]]; then
+    shift
+else
+    id=$(opencode session list --format json |
+             jq -r '.[] | "\(.id)\t\(.title)"' |
+             fzf --no-sort |
+             cut -f1) || exit
+    [[ -n "$id" ]] || exit
+fi
+
+exec opencode --session "$id" "$@"
