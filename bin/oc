@@ -8,32 +8,47 @@ PATH=$PATH:$HOME/.opencode/bin
 export OTUI_PALETTE_IDLE_TIMEOUT_MS=${OTUI_PALETTE_IDLE_TIMEOUT_MS-1}
 export OPENCODE_FAST_BOOT=${OPENCODE_FAST_BOOT-1}
 
-# -2 runs the 2.0 preview binary, which starts faster.
-bin=opencode
-if [[ "${1:-}" == "-2" ]]; then
-    bin=opencode2
-    shift
-fi
+# The 2.0 preview starts about twice as fast, so it is the default.
+bin=opencode2
+case "${1:-}" in
+    -1) bin=opencode; shift ;;
+    -2) shift ;;
+esac
 
-# opencode takes a session id but has no picker, so -r mimics "claude --resume".
+# Neither binary has a session picker, so -r mimics "claude --resume".
 if [[ "${1:-}" != "-r" && "${1:-}" != "--resume" ]]; then
     exec "$bin" "$@"
 fi
 shift
 
-if [[ "$bin" == opencode2 ]]; then
-    echo "oc: opencode2 keeps its own sessions and cannot list them" >&2
-    exit 1
-fi
+# 1.x lists sessions itself. The preview keeps them in a table of its own and
+# has no command to read it, so go to the database. That schema is not stable.
+sessions() {
+    if [[ "$bin" == opencode ]]; then
+        opencode session list --format json | jq -r '.[] | "\(.id)\t\(.title)"'
+        return
+    fi
+
+    python3 - "$PWD" <<'PYTHON'
+import os, sqlite3, sys
+
+share = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
+db = os.path.join(share, "opencode", "opencode.db")
+con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+
+query = "select id, title from session_v2 %s order by time_updated desc"
+rows = con.execute(query % "where directory = ?", (sys.argv[1],)).fetchall()
+rows = rows or con.execute(query % "").fetchall()
+for row in rows:
+    print("%s\t%s" % row)
+PYTHON
+}
 
 id=${1:-}
 if [[ -n "$id" ]]; then
     shift
 else
-    id=$(opencode session list --format json |
-             jq -r '.[] | "\(.id)\t\(.title)"' |
-             fzf --no-sort |
-             cut -f1) || exit
+    id=$(sessions | fzf --no-sort | cut -f1) || exit
     [[ -n "$id" ]] || exit
 fi
 
