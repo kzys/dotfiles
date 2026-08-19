@@ -28,7 +28,7 @@ main() {
     done
 
     # config/ mirrors ~/.config, so each name is both source and destination.
-    local -a config_files=(git/config git/ignore opencode/AGENTS.md)
+    local -a config_files=(git/config git/ignore opencode/tui.json)
     for file in "${config_files[@]}"
     do
         link "$PWD/config/$file" "$HOME/.config/$file"
