@@ -25,18 +25,31 @@ args=(
     --tmpfs "$HOME"
 )
 
-# Readable: the system and the toolchains pi builds with. /etc is whole because
-# TLS roots, resolv.conf and passwd all live there; the secrets it holds are
-# root-only anyway. resolv.conf is a symlink into /run, so DNS needs that too.
+# Readable: the system and the toolchains pi builds with.
 for dir in \
     /usr \
-    /etc \
     /run/systemd/resolve \
     "$HOME/.local/share/pi-node" \
     "$HOME/sdk" \
     "$HOME/.cargo"
 do
     args+=(--ro-bind-try "$dir" "$dir")
+done
+
+# Keep /etc tight: mount only TLS roots/config plus the small set of files that
+# libc and Node need for DNS. resolv.conf is a symlink into
+# /run/systemd/resolve, so DNS also needs that tree above.
+for dir in /etc /etc/ssl
+do
+    args+=(--dir "$dir")
+done
+
+for path in \
+    /etc/ssl/certs \
+    /etc/resolv.conf \
+    /etc/hosts
+do
+    args+=(--ro-bind-try "$path" "$path")
 done
 
 # ~/.config/git holds symlinks back into this repository, which is not otherwise
