@@ -282,3 +282,6 @@ week -3
 echo
 echo "$(date +%T)  $_init_msg"
 unset _init_msg
+
+# Pi
+export PATH="/home/kazuyoshi/.local/share/pi-node/node-v22.23.2-linux-x64/bin:$PATH"

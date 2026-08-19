@@ -38,6 +38,9 @@ main() {
     link "$PWD/claude/CLAUDE.md" "$HOME/.claude/CLAUDE.md"
     link "$PWD/claude/CLAUDE.md" "$HOME/.config/opencode/AGENTS.md"
 
+    # pi config is stored in ~/.pi, so mirror the repo's ./pi directory there.
+    link "$PWD/pi" "$HOME/.pi"
+
     if [[ -n "${CODESPACES:-}" ]]; then
         setup_codespaces
     fi

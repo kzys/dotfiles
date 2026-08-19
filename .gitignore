@@ -19,3 +19,10 @@ zsh/compdump
 zsh/history
 
 __pycache__
+
+pi/*
+!pi/agent/
+pi/agent/*
+!pi/agent/extensions/
+!pi/agent/extensions/**
+
