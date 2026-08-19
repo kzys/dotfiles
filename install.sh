@@ -34,7 +34,9 @@ main() {
         link "$PWD/config/$file" "$HOME/.config/$file"
     done
 
+    # Claude Code and opencode read the same house rules under different names.
     link "$PWD/claude/CLAUDE.md" "$HOME/.claude/CLAUDE.md"
+    link "$PWD/claude/CLAUDE.md" "$HOME/.config/opencode/AGENTS.md"
 
     if [[ -n "${CODESPACES:-}" ]]; then
         setup_codespaces
