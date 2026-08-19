@@ -4,6 +4,10 @@ set -euo pipefail
 # opencode's installer drops the binary here, outside PATH.
 PATH=$PATH:$HOME/.opencode/bin
 
+# Startup workarounds from anomalyco/opencode#14965. Both binaries read them.
+export OTUI_PALETTE_IDLE_TIMEOUT_MS=${OTUI_PALETTE_IDLE_TIMEOUT_MS-1}
+export OPENCODE_FAST_BOOT=${OPENCODE_FAST_BOOT-1}
+
 # -2 runs the 2.0 preview binary, which starts faster.
 bin=opencode
 if [[ "${1:-}" == "-2" ]]; then
