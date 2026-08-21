@@ -1,5 +1,10 @@
+# Safety first
+
+- Don't force-push unless explicitly mentioned.
+
 # House Rules
 
+- Follow ASD-STE100.
 - Keep PR descriptions, commit messages and comments concise and brief.
 - Change as little as possible to do the job. Reduce the lines that reviewers need to read.
 - Git commit messages should follow this classic style:
@@ -13,3 +18,7 @@
   https://go.dev/doc/comment
 - Use t.Context() in new tests.
 - Don't panic when you can bubble up an error, even when the case seems unreachable. Third-party packages in particular may introduce new error states later.
+
+## Attribution
+
+- Start GitHub comments with `[THIS IS AI]`. Commits carry a Co-Authored-By trailer, but comments have no such marker.
