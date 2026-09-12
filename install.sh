@@ -40,6 +40,13 @@ main() {
     # pi config is stored in ~/.pi, so mirror the repo's ./pi directory there.
     link "$PWD/pi" "$HOME/.pi"
 
+    # skills/ mirrors ~/.claude/skills, one directory per skill.
+    local -a skills=(kwsk)
+    for skill in "${skills[@]}"
+    do
+        link "$PWD/skills/$skill" "$HOME/.claude/skills/$skill"
+    done
+
     if [[ -n "${CODESPACES:-}" ]]; then
         setup_codespaces
     fi
