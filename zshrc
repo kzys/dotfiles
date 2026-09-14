@@ -255,6 +255,15 @@ function cdw {
     fi
 }
 
+# cd into a directory a past Claude Code session ran in, picked with fzf.
+function ccd {
+    local dir
+    dir=$(claude-session-dirs | fzf --no-sort --with-nth=1,2,3 --delimiter='\t' | cut -f1)
+    if [ -n "$dir" ]; then
+        cd "$dir"
+    fi
+}
+
 if [ -f ~/.zsh/init-work.sh ]; then
     . ~/.zsh/init-work.sh
 fi

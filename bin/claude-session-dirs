@@ -1,0 +1,41 @@
+#!/usr/bin/env python3
+"""List directories past Claude Code sessions ran in, most recent first.
+
+Reads ~/.claude/projects/*/*.jsonl and prints one line per directory as
+tab-separated cwd, git branch, and last-activity timestamp. Sessions are
+deduped by cwd, keeping only the most recent one.
+"""
+
+import glob
+import json
+import os
+
+
+def latest_by_cwd():
+    seen = {}
+    pattern = os.path.expanduser("~/.claude/projects/*/*.jsonl")
+    for f in glob.glob(pattern):
+        cwd = branch = ts = None
+        try:
+            with open(f) as fh:
+                for line in fh:
+                    try:
+                        d = json.loads(line)
+                    except ValueError:
+                        continue
+                    if "cwd" in d:
+                        cwd, branch, ts = d["cwd"], d.get("gitBranch"), d.get("timestamp")
+        except OSError:
+            continue
+        if cwd and ts and (cwd not in seen or ts > seen[cwd][1]):
+            seen[cwd] = (branch, ts)
+    return seen
+
+
+def main():
+    for cwd, (branch, ts) in sorted(latest_by_cwd().items(), key=lambda kv: kv[1][1], reverse=True):
+        print(f"{cwd}\t{branch}\t{ts}")
+
+
+if __name__ == "__main__":
+    main()
