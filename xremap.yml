@@ -30,7 +30,7 @@ modmap:
 keymap:
   - name: Terminal
     application:
-      only: [gnome-terminal-server, Gnome-terminal, ghostty]
+      only: [gnome-terminal-server, Gnome-terminal, ghostty, foot]
     remap:
       F20-n: C-Shift-n
       F20-c: C-Shift-c
