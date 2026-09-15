@@ -256,7 +256,7 @@ function cdw {
 }
 
 # cd into a directory a past Claude Code session ran in, picked with fzf.
-function ccd {
+function cdc {
     local dir
     dir=$(claude-session-dirs --pick) && cd "$dir"
 }

@@ -68,21 +68,43 @@ def latest_by_cwd():
     return seen
 
 
-def main():
-    rows = sorted(latest_by_cwd().items(), key=lambda kv: kv[1][1], reverse=True)
-    lines = [f"{cwd}\t{branch}\t{ts}\t{title}" for cwd, (branch, ts, title) in rows]
-    if "--pick" not in sys.argv[1:]:
-        print("\n".join(lines))
-        return
+def short_path(cwd):
+    """Abbreviate cwd for display: ~ for $HOME and [name] for a worktree."""
+    home = os.path.expanduser("~")
+    if cwd == home or cwd.startswith(home + "/"):
+        cwd = "~" + cwd[len(home):]
+    repo, sep, name = cwd.partition("/.claude/worktrees/")
+    if sep:
+        cwd = f"{repo} [{name}]"
+    return cwd
+
+
+def pick(rows):
+    """Let the user choose a row with fzf and return its cwd, or None."""
+    cols = [(short_path(cwd), branch or "", title) for cwd, (branch, _, title) in rows]
+    widths = [max(len(c[i]) for c in cols) for i in range(2)]
+    lines = [
+        f"{cwd}\t{path:<{widths[0]}}  {branch:<{widths[1]}}  {title}"
+        for (cwd, _), (path, branch, title) in zip(rows, cols)
+    ]
     fzf = subprocess.run(
-        ["fzf", "--height=~7", "--no-sort", "--with-nth=1,2,4", "--delimiter=\t"],
+        ["fzf", "--height=~7", "--no-sort", "--with-nth=2", "--delimiter=\t"],
         input="\n".join(lines),
         stdout=subprocess.PIPE,
         text=True,
     )
     if fzf.returncode != 0:
         sys.exit(fzf.returncode)
-    print(fzf.stdout.split("\t")[0])
+    return fzf.stdout.split("\t")[0]
+
+
+def main():
+    rows = sorted(latest_by_cwd().items(), key=lambda kv: kv[1][1], reverse=True)
+    if "--pick" in sys.argv[1:]:
+        print(pick(rows))
+        return
+    for cwd, (branch, ts, title) in rows:
+        print(f"{cwd}\t{branch}\t{ts}\t{title}")
 
 
 if __name__ == "__main__":
