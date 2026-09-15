@@ -21,6 +21,10 @@ fi
 # this fills it in inside a limahere guest. The :- keeps any existing value.
 export COLORTERM=${COLORTERM:-truecolor}
 
+# fzf defaults to its dark 256-color theme whenever COLORTERM is truecolor,
+# which puts a dark highlight bar on a white terminal background.
+export FZF_DEFAULT_OPTS='--color=light'
+
 # Go
 # https://go.dev/doc/manage-install#installing-multiple installs Go under ~/sdk.
 # Pick the latest from the directory.
