@@ -2,39 +2,87 @@
 """List directories past Claude Code sessions ran in, most recent first.
 
 Reads ~/.claude/projects/*/*.jsonl and prints one line per directory as
-tab-separated cwd, git branch, and last-activity timestamp. Sessions are
+tab-separated cwd, git branch, last-activity timestamp, and title. Sessions are
 deduped by cwd, keeping only the most recent one.
+
+With --pick, lets the user choose one with fzf and prints just the cwd.
 """
 
 import glob
 import json
 import os
+import subprocess
+import sys
+
+
+def tail_info(f, tail=65536):
+    """Return (last record with a cwd, session title) from f, or None.
+
+    Records are appended chronologically and cwd never changes within a
+    session, so the last few KB are enough; fall back to the whole file
+    only if they contain no such record. The title is the newest
+    customTitle (set with /rename) if any, else the newest aiTitle.
+    """
+    size = os.path.getsize(f)
+    with open(f, "rb") as fh:
+        fh.seek(max(0, size - tail))
+        lines = fh.read().split(b"\n")
+        if size > tail:
+            lines = lines[1:]  # first line is probably cut off
+    last = None
+    titles = {}
+    for line in reversed(lines):
+        want = [k for k in (b'"aiTitle"', b'"customTitle"') if k in line and k not in titles]
+        if not want and (last or b'"cwd"' not in line):
+            continue
+        try:
+            d = json.loads(line)
+        except ValueError:
+            continue
+        if last is None and "cwd" in d:
+            last = d
+        for k in ("aiTitle", "customTitle"):
+            if d.get(k) and k not in titles:
+                titles[k] = d[k]
+    if last is None and size > tail:
+        return tail_info(f, size)
+    if last is None:
+        return None
+    return last, titles.get("customTitle") or titles.get("aiTitle") or ""
 
 
 def latest_by_cwd():
     seen = {}
     pattern = os.path.expanduser("~/.claude/projects/*/*.jsonl")
     for f in glob.glob(pattern):
-        cwd = branch = ts = None
         try:
-            with open(f) as fh:
-                for line in fh:
-                    try:
-                        d = json.loads(line)
-                    except ValueError:
-                        continue
-                    if "cwd" in d:
-                        cwd, branch, ts = d["cwd"], d.get("gitBranch"), d.get("timestamp")
+            info = tail_info(f)
         except OSError:
             continue
-        if cwd and ts and (cwd not in seen or ts > seen[cwd][1]):
-            seen[cwd] = (branch, ts)
+        if info is None:
+            continue
+        d, title = info
+        cwd, branch, ts = d["cwd"], d.get("gitBranch"), d.get("timestamp")
+        if ts and (cwd not in seen or ts > seen[cwd][1]):
+            seen[cwd] = (branch, ts, title)
     return seen
 
 
 def main():
-    for cwd, (branch, ts) in sorted(latest_by_cwd().items(), key=lambda kv: kv[1][1], reverse=True):
-        print(f"{cwd}\t{branch}\t{ts}")
+    rows = sorted(latest_by_cwd().items(), key=lambda kv: kv[1][1], reverse=True)
+    lines = [f"{cwd}\t{branch}\t{ts}\t{title}" for cwd, (branch, ts, title) in rows]
+    if "--pick" not in sys.argv[1:]:
+        print("\n".join(lines))
+        return
+    fzf = subprocess.run(
+        ["fzf", "--height=~7", "--no-sort", "--with-nth=1,2,4", "--delimiter=\t"],
+        input="\n".join(lines),
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    if fzf.returncode != 0:
+        sys.exit(fzf.returncode)
+    print(fzf.stdout.split("\t")[0])
 
 
 if __name__ == "__main__":
