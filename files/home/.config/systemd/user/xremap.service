@@ -2,4 +2,4 @@
 ExecStart=%h/.cargo/bin/xremap %h/ws/dotfiles/xremap.yml
 
 [Install]
-WantedBy=org.gnome.Shell.target
+WantedBy=graphical-session.target

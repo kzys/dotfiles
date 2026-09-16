@@ -4,6 +4,7 @@ virtual_modifiers:
   - F20
   - F21
 
+# KWin reports lowercase classes (code, emacs); GNOME reports WM_CLASS as-is.
 modmap:
   # Mapping CapsLock to Ctrl where I don't use Cmd much
   - name: CapsLock -> Ctrl_R
@@ -11,11 +12,11 @@ modmap:
       CapsLock: Ctrl_R
       LeftAlt: F20
     application:
-      not: [Emacs, Code, firefox, google-chrome]
+      not: [Emacs, emacs, Code, code, firefox, google-chrome]
   # Mapping Alt to Ctrl where I use Cmd more than Ctrl such as Visual Studio Code.
   - name: CapsLock -> F21
     application:
-      only: [Code, firefox, google-chrome]
+      only: [Code, code, firefox, google-chrome]
     remap:
       LeftAlt: Ctrl_R
       CapsLock: F21
@@ -23,14 +24,14 @@ modmap:
     device:
       only: ["Keychron"]
     application:
-      only: [Code, firefox, google-chrome]
+      only: [Code, code, firefox, google-chrome]
     remap:
       LeftMeta: Ctrl_R
 
 keymap:
   - name: Terminal
     application:
-      only: [gnome-terminal-server, Gnome-terminal, ghostty, foot]
+      only: [gnome-terminal-server, Gnome-terminal, org.kde.konsole, ghostty, foot]
     remap:
       F20-n: C-Shift-n
       F20-c: C-Shift-c
@@ -39,7 +40,7 @@ keymap:
       F20-space: LeftMeta
   - name: Emacs-like shortcuts for moving a cursor
     application:
-      only: [Code, firefox, google-chrome]
+      only: [Code, code, firefox, google-chrome]
     remap:
       F21-f: right
       F21-b: left
