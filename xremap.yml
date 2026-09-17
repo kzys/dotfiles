@@ -34,6 +34,7 @@ keymap:
       only: [gnome-terminal-server, Gnome-terminal, org.kde.konsole, ghostty, foot]
     remap:
       F20-n: C-Shift-n
+      F20-t: C-Shift-t
       F20-c: C-Shift-c
       F20-v: C-Shift-v
       F20-w: C-Shift-w
