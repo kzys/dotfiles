@@ -123,11 +123,26 @@ def first_line(text, limit=120):
     return text if len(text) <= limit else text[:limit - 1] + "…"
 
 
+# How much a state wants the user, low first. States not listed fall back to
+# the status and the pid, which is all an interactive session reports.
+STATE_RANK = {"blocked": 0, "working": 2, "done": 3, "failed": 3}
+
+
+def rank(a):
+    """Sort rank for a session: waiting on the user, idle, running, finished."""
+    state = a.get("state") or ""
+    if state in STATE_RANK:
+        return STATE_RANK[state]
+    if a.get("status") == "waiting":
+        return 0
+    if a.get("status") == "busy":
+        return 2
+    return 1 if a.get("pid") is not None else 3
+
+
 def sort_key(a):
-    # Live sessions first, busiest first, then newest first.
-    live = a.get("pid") is not None
-    busy = a.get("status") == "busy"
-    return (not live, not busy, -(a.get("startedAt") or 0))
+    # Sessions that want the user first, then newest first within a rank.
+    return (rank(a), -(a.get("startedAt") or 0))
 
 
 class App:
