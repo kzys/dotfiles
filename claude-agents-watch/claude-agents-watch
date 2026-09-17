@@ -165,8 +165,8 @@ class App:
 
 def main():
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    p.add_argument("--all", action="store_true",
-                   help="also show completed background sessions")
+    p.add_argument("--live", dest="all", action="store_false",
+                   help="hide completed background sessions")
     p.add_argument("--interval", type=float, default=2.0, metavar="SEC",
                    help="seconds between refreshes (default: 2)")
     p.add_argument("--no-topmost", dest="topmost", action="store_false",
