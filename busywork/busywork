@@ -1,7 +1,8 @@
 #! /usr/bin/env python3
 """Show Claude Code sessions in a small window, refreshed from
-`claude agents --json` and each session's transcript under
-~/.claude/projects. Sessions of a running opencode server are listed too.
+`claude agents --json`, each session's transcript under ~/.claude/projects
+and, for background jobs, their state under ~/.claude/jobs. Sessions of a
+running opencode server are listed too.
 
 Needs only python3 with tkinter. On macOS the Homebrew python has it via
 `brew install python-tk`; the Linux package is usually python3-tk.
@@ -39,9 +40,11 @@ CONTEXT_FULL_PCT = 90
 # The columns compact mode leaves on show, in display order.
 COMPACT_COLUMNS = ("mark", "name", "model", "context")
 
-# Smallest window the full column set is usable in. Compact mode drops the
-# floor, since the point of it is a window narrower than that.
-FULL_MIN_WIDTH = 600
+# Widest the prompt column is sized to; the window can be dragged wider,
+# and the prompt takes the extra.
+PROMPT_MAX_WIDTH = 480
+
+MIN_WIDTH = 200
 MIN_HEIGHT = 60
 
 # Animation frames for the mark column, one frame per tick. A waving hand for
@@ -115,6 +118,12 @@ def first_line(text, limit=120):
     return text if len(text) <= limit else text[:limit - 1] + "…"
 
 
+def doing(a):
+    """What to show for a session's activity: its own account of what it is
+    doing, else the last prompt it was given."""
+    return a.detail or a.transcript.prompt or ""
+
+
 def context_full(tokens, window):
     """Whether a session has used enough of its window to be worth warning
     about. Unknown numbers are not a warning."""
@@ -127,10 +136,10 @@ def row_tag(a):
     """The tag that colours a row. A nearly full context window outranks the
     state: the state says what the session is doing, this says it is about to
     stop being able to."""
-    t = a.get("transcript") or {}
-    if context_full(t.get("context"), t.get("window")):
+    t = a.transcript
+    if context_full(t.context, t.window):
         return "full"
-    return a.get("state") or ""
+    return a.state
 
 
 # How much a state wants the user, low first. States not listed fall back to
@@ -140,20 +149,19 @@ STATE_RANK = {"blocked": 0, "working": 2, "done": 3, "failed": 3}
 
 def rank(a):
     """Sort rank for a session: waiting on the user, idle, running, finished."""
-    state = a.get("state") or ""
-    if state in STATE_RANK:
-        return STATE_RANK[state]
-    if a.get("status") == "waiting":
+    if a.state in STATE_RANK:
+        return STATE_RANK[a.state]
+    if a.status == "waiting":
         return 0
-    if a.get("status") == "busy":
+    if a.status == "busy":
         return 2
-    return 1 if a.get("pid") is not None else 3
+    return 1 if a.pid is not None else 3
 
 
 def last_seen(a):
     """Seconds since the session last wrote to its transcript, or infinity when
     it has none, so a session with no activity to show sorts last."""
-    last = (a.get("transcript") or {}).get("last")
+    last = a.transcript.last
     return since(last) if last else float("inf")
 
 
@@ -166,9 +174,9 @@ def mark(a, frame):
     """Marker for a session: a wave when it wants the user, a runner while it
     runs, nothing when it is idle or finished. Interactive sessions report only
     a status, background ones a state, so both spellings mean running."""
-    if a.get("state") == "blocked":
+    if a.state == "blocked":
         return WAVE[frame % len(WAVE)]
-    if a.get("state") == "working" or a.get("status") == "busy":
+    if a.state == "working" or a.status == "busy":
         return RUN[frame % len(RUN)]
     return ""
 
@@ -183,7 +191,6 @@ class App:
         self.frame = 0
         self.rows = 0
         self.compact = False
-        self.full_width = None
 
         root.title("busywork")
         root.attributes("-topmost", args.topmost)
@@ -211,14 +218,14 @@ class App:
 
         # Widths are placeholders until fit() sizes them to their content.
         # Only the prompt stretches, so ttk hands it whatever is left over
-        # when the other columns or the window change size.
+        # when the window is dragged wider than the columns need.
         # redraw() builds each row positionally, so keep the two in lockstep.
         columns = (
             ("mark", "", 34),
             ("name", "Name", 220),
             ("model", "Model", 70),
             ("context", "Context", 100),
-            ("prompt", "Last prompt", 300),
+            ("prompt", "Doing", 300),
             ("last", "Last", 50),
             ("cwd", "Directory", 200),
             ("branch", "Branch", 120),
@@ -251,23 +258,16 @@ class App:
 
     def toggle_compact(self, _event=None):
         """Show either every column or just the status, name, model and
-        context. The window narrows to what is left and widens back to the
-        width it had, since compact columns in a wide window are mostly gap."""
+        context, and size the window to whichever it is."""
         self.compact = not self.compact
-        if self.compact:
-            self.full_width = self.root.winfo_width()
         self.tree.configure(
             displaycolumns=COMPACT_COLUMNS if self.compact else "#all")
-        self.root.minsize(1 if self.compact else FULL_MIN_WIDTH, MIN_HEIGHT)
-        # Measure before stretching name: a stretched column fills whatever
-        # width the window already has, which would just measure that back.
-        self.root.update_idletasks()
-        width = self.root.winfo_reqwidth() if self.compact else self.full_width
-        # Only the prompt stretches, and it is hidden here, so name takes over.
+        # The prompt stretches; in compact mode it is hidden, so name does.
         self.tree.column("name", stretch=self.compact)
+        self.tree.column("prompt", stretch=not self.compact)
         self.compact_button.configure(
             text="Full" if self.compact else "Compact")
-        self.root.geometry(f"{width}x{self.root.winfo_height()}")
+        self.fit(width=True)
 
     def quit(self):
         self.stop.set()
@@ -299,43 +299,59 @@ class App:
             self.fit()
         self.root.after(TICK_MS, self.tick)
 
-    def fit(self):
-        """Size each column to its widest cell; the prompt takes the rest.
-        The window height follows the row count; the width is left alone."""
+    def fit(self, width=False):
+        """Size each column to its widest cell. The window height follows
+        the row count; the width is fitted to the columns only when asked,
+        so a window dragged wider stays that way."""
         for col in self.tree["columns"]:
-            if col in ("mark", "prompt"):
+            if col == "mark":
                 continue
             texts = [self.tree.heading(col, "text")]
             texts += [self.tree.set(iid, col) for iid in self.tree.get_children()]
-            width = max(self.font.measure(t) for t in texts) + 16
-            self.tree.column(col, width=width)
+            w = max(self.font.measure(t) for t in texts) + 16
+            if col == "prompt":
+                w = min(w, PROMPT_MAX_WIDTH)
+            self.tree.column(col, width=w)
 
         rows = max(1, len(self.sessions))
-        if rows != self.rows:
+        if width or rows != self.rows:
             self.rows = rows
             self.tree.configure(height=rows)
-            self.root.update_idletasks()
-            height = min(self.root.winfo_reqheight(),
-                         self.root.winfo_screenheight() * 3 // 4)
-            self.root.geometry(f"{self.root.winfo_width()}x{height}")
+            self.root.geometry("x".join(map(str, self.size(width))))
+
+    def size(self, width):
+        """The window size that shows every row of every column and nothing
+        more; the width is the current one unless asked for. A stretched
+        column has already grown to fill the window, and would just measure
+        that back, so stretching is off while the columns are measured."""
+        stretch = {c: self.tree.column(c, "stretch") for c in self.tree["columns"]}
+        for c in stretch:
+            self.tree.column(c, stretch=False)
+        self.root.update_idletasks()
+        w, h = self.root.winfo_reqwidth(), self.root.winfo_reqheight()
+        for c, v in stretch.items():
+            self.tree.column(c, stretch=v)
+        return (min(w, self.root.winfo_screenwidth() * 3 // 4) if width
+                else self.root.winfo_width(),
+                min(h, self.root.winfo_screenheight() * 3 // 4))
 
     def redraw(self):
         """Sync tree rows to self.sessions, keyed by session id so the
         selection survives refreshes."""
         seen = set()
         for i, a in enumerate(self.sessions):
-            iid = a["id"]
+            iid = a.id
             seen.add(iid)
-            t = a.get("transcript") or {}
+            t = a.transcript
             values = (
                 mark(a, self.frame),
-                a.get("name") or "(untitled)",
-                (t.get("model") or "").removeprefix("claude-"),
-                context(t.get("context"), t.get("window")),
-                first_line(t.get("prompt") or ""),
-                duration(since(t["last"])) if t.get("last") else "",
-                short_cwd(a.get("cwd") or ""),
-                t.get("branch") or "",
+                a.name or "(untitled)",
+                (t.model or "").removeprefix("claude-"),
+                context(t.context, t.window),
+                first_line(doing(a)),
+                duration(since(t.last)) if t.last else "",
+                short_cwd(a.cwd),
+                t.branch or "",
             )
             if self.tree.exists(iid):
                 self.tree.item(iid, values=values, tags=(row_tag(a),))
@@ -346,8 +362,8 @@ class App:
             if iid not in seen:
                 self.tree.delete(iid)
 
-        blocked = sum(1 for a in self.sessions if a.get("state") == "blocked")
-        busy = sum(1 for a in self.sessions if a.get("status") == "busy")
+        blocked = sum(1 for a in self.sessions if a.state == "blocked")
+        busy = sum(1 for a in self.sessions if a.status == "busy")
         counts = [f"{n} {what}" for n, what in ((blocked, "blocked"), (busy, "busy")) if n]
         self.root.title(f"busywork ({', '.join(counts)})" if counts else "busywork")
 
@@ -366,7 +382,7 @@ def main():
 
     root = tk.Tk()
     root.geometry("1100x240")
-    root.minsize(FULL_MIN_WIDTH, MIN_HEIGHT)
+    root.minsize(MIN_WIDTH, MIN_HEIGHT)
     App(root, args)
     root.mainloop()
 

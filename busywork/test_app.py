@@ -4,6 +4,8 @@ import pathlib
 
 import pytest
 
+from session import Session, Transcript
+
 
 def load(path):
     """Import a script that has no .py suffix."""
@@ -56,18 +58,22 @@ def test_first_line_keeps_only_the_first_line_and_clips():
 def at(hour):
     """A transcript last touched at a fixed past time; a later hour is more
     recent, so it sorts higher."""
-    return {"last": f"2026-09-15T{hour:02d}:00:00Z"}
+    return Transcript(last=f"2026-09-15T{hour:02d}:00:00Z")
+
+
+def S(**fields):
+    return Session(id="", **fields)
 
 
 def test_sort_key_puts_sessions_wanting_the_user_first():
-    blocked = {"pid": None, "state": "blocked", "transcript": at(1)}
-    waiting = {"pid": 4, "status": "waiting", "transcript": at(2)}
-    live_idle_new = {"pid": 2, "status": "idle", "transcript": at(4)}
-    live_idle_old = {"pid": 3, "status": "idle", "transcript": at(3)}
-    live_busy = {"pid": 1, "status": "busy", "transcript": at(6)}
-    working = {"pid": None, "state": "working", "transcript": at(5)}
-    done = {"pid": None, "state": "done", "transcript": at(8)}
-    failed = {"pid": None, "state": "failed", "transcript": at(7)}
+    blocked = S(state="blocked", transcript=at(1))
+    waiting = S(pid=4, status="waiting", transcript=at(2))
+    live_idle_new = S(pid=2, status="idle", transcript=at(4))
+    live_idle_old = S(pid=3, status="idle", transcript=at(3))
+    live_busy = S(pid=1, status="busy", transcript=at(6))
+    working = S(state="working", transcript=at(5))
+    done = S(state="done", transcript=at(8))
+    failed = S(state="failed", transcript=at(7))
     rows = [done, live_busy, live_idle_old, failed, working, blocked,
             live_idle_new, waiting]
     assert sorted(rows, key=app.sort_key) == [
@@ -76,31 +82,31 @@ def test_sort_key_puts_sessions_wanting_the_user_first():
 
 
 def test_mark_animates_blocked_and_running_only():
-    assert app.mark({"state": "blocked"}, 0) == app.WAVE[0]
-    assert app.mark({"state": "working"}, 0) == app.RUN[0]
-    assert app.mark({"status": "busy"}, 0) == app.RUN[0]
-    assert app.mark({"status": "idle", "pid": 1}, 0) == ""
-    assert app.mark({"state": "done"}, 0) == ""
-    assert app.mark({"state": "failed"}, 0) == ""
+    assert app.mark(S(state="blocked"), 0) == app.WAVE[0]
+    assert app.mark(S(state="working"), 0) == app.RUN[0]
+    assert app.mark(S(status="busy"), 0) == app.RUN[0]
+    assert app.mark(S(status="idle", pid=1), 0) == ""
+    assert app.mark(S(state="done"), 0) == ""
+    assert app.mark(S(state="failed"), 0) == ""
 
 
 def test_mark_advances_a_frame_at_a_time_and_wraps():
-    working = {"state": "working"}
+    working = S(state="working")
     frames = [app.mark(working, f) for f in range(len(app.RUN))]
     assert frames == app.RUN
     assert app.mark(working, len(app.RUN)) == app.RUN[0]
 
 
 def test_sort_key_ranks_recent_activity_over_an_early_start():
-    old_start = {"pid": 1, "status": "idle", "startedAt": 1, "transcript": at(9)}
-    new_start = {"pid": 2, "status": "idle", "startedAt": 99, "transcript": at(8)}
+    old_start = S(pid=1, status="idle", transcript=at(9))
+    new_start = S(pid=2, status="idle", transcript=at(8))
     assert sorted([new_start, old_start], key=app.sort_key) == [old_start,
                                                                 new_start]
 
 
 def test_sort_key_puts_sessions_without_a_transcript_last():
-    quiet = {"pid": 1, "status": "idle"}
-    active = {"pid": 2, "status": "idle", "transcript": at(3)}
+    quiet = S(pid=1, status="idle")
+    active = S(pid=2, status="idle", transcript=at(3))
     assert sorted([quiet, active], key=app.sort_key) == [active, quiet]
     assert app.last_seen(quiet) == float("inf")
 
@@ -115,11 +121,17 @@ def test_context_full_only_over_the_threshold_and_with_both_numbers():
 
 
 def test_row_tag_prefers_a_full_context_over_the_state():
-    room = {"context": 50000, "window": 100000}
-    tight = {"context": 95000, "window": 100000}
-    assert app.row_tag({"state": "working", "transcript": room}) == "working"
-    assert app.row_tag({"state": "working", "transcript": tight}) == "full"
-    assert app.row_tag({"state": "done", "transcript": tight}) == "full"
-    assert app.row_tag({"state": "done"}) == "done"
-    assert app.row_tag({}) == ""
+    room = Transcript(context=50000, window=100000)
+    tight = Transcript(context=95000, window=100000)
+    assert app.row_tag(S(state="working", transcript=room)) == "working"
+    assert app.row_tag(S(state="working", transcript=tight)) == "full"
+    assert app.row_tag(S(state="done", transcript=tight)) == "full"
+    assert app.row_tag(S(state="done")) == "done"
+    assert app.row_tag(S()) == ""
     assert "full" in app.ROW_COLORS
+
+
+def test_doing_prefers_the_sessions_own_account():
+    assert app.doing(S(transcript=Transcript(prompt="p"))) == "p"
+    assert app.doing(S(detail="d", transcript=Transcript(prompt="p"))) == "d"
+    assert app.doing(S()) == ""
