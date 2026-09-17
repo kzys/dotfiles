@@ -138,6 +138,7 @@ class App:
         self.results = queue.Queue()
         self.stop = threading.Event()
         self.frame = 0
+        self.rows = 0
 
         root.title("claude agents")
         root.attributes("-topmost", args.topmost)
@@ -222,7 +223,8 @@ class App:
         self.root.after(TICK_MS, self.tick)
 
     def fit(self):
-        """Size each column to its widest cell; the prompt takes the rest."""
+        """Size each column to its widest cell; the prompt takes the rest.
+        The window height follows the row count; the width is left alone."""
         for col in self.tree["columns"]:
             if col in ("mark", "prompt"):
                 continue
@@ -230,6 +232,15 @@ class App:
             texts += [self.tree.set(iid, col) for iid in self.tree.get_children()]
             width = max(self.font.measure(t) for t in texts) + 16
             self.tree.column(col, width=width)
+
+        rows = max(1, len(self.sessions))
+        if rows != self.rows:
+            self.rows = rows
+            self.tree.configure(height=rows)
+            self.root.update_idletasks()
+            height = min(self.root.winfo_reqheight(),
+                         self.root.winfo_screenheight() * 3 // 4)
+            self.root.geometry(f"{self.root.winfo_width()}x{height}")
 
     def redraw(self):
         """Sync tree rows to self.sessions, keyed by session id so the
@@ -277,7 +288,7 @@ def main():
 
     root = tk.Tk()
     root.geometry("1100x240")
-    root.minsize(600, 120)
+    root.minsize(600, 60)
     App(root, args)
     root.mainloop()
 
