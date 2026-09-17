@@ -21,18 +21,34 @@ from tkinter import ttk
 from transcripts import Transcripts
 from windows import Windows
 
-# Row colours by state, the only place state is shown. Anything else falls
-# back to the default foreground.
-STATE_COLORS = {
+# Row colours by tag, the only place state is shown. Anything else falls
+# back to the default foreground. "full" is a nearly exhausted context window,
+# a brighter red than a failure so the two stay apart.
+ROW_COLORS = {
     "working": "#1a7f37",
     "blocked": "#b35c00",
     "failed": "#c0392b",
     "done": "#6e7781",
+    "full": "#e5534b",
 }
 
-# Blinked, one frame per tick, in front of sessions waiting on the user:
-# those are the ones that need attention, so they get the motion.
-BLINK = ["👋"] * 2 + ["✋"] * 2 + ["🤚"] * 2 + ["🖐"] * 2
+# Percent of the context window that turns a row red.
+CONTEXT_FULL_PCT = 90
+
+# The columns compact mode leaves on show, in display order.
+COMPACT_COLUMNS = ("mark", "name", "model", "context")
+
+# Smallest window the full column set is usable in. Compact mode drops the
+# floor, since the point of it is a window narrower than that.
+FULL_MIN_WIDTH = 600
+MIN_HEIGHT = 60
+
+# Animation frames for the mark column, one frame per tick. A waving hand for
+# sessions waiting on the user, a runner for the ones still going: both states
+# are worth an eye, and only motion catches one. Single-codepoint emoji only,
+# so every frame is the same width and the column can't jitter.
+WAVE = ["👋"] * 2 + ["🖐"] * 2
+RUN = ["🚶"] * 2 + ["🏃"] * 2
 TICK_MS = 150
 
 
@@ -123,6 +139,24 @@ def first_line(text, limit=120):
     return text if len(text) <= limit else text[:limit - 1] + "…"
 
 
+def context_full(tokens, window):
+    """Whether a session has used enough of its window to be worth warning
+    about. Unknown numbers are not a warning."""
+    if not tokens or not window:
+        return False
+    return 100 * tokens / window > CONTEXT_FULL_PCT
+
+
+def row_tag(a):
+    """The tag that colours a row. A nearly full context window outranks the
+    state: the state says what the session is doing, this says it is about to
+    stop being able to."""
+    t = a.get("transcript") or {}
+    if context_full(t.get("context"), t.get("window")):
+        return "full"
+    return a.get("state") or ""
+
+
 # How much a state wants the user, low first. States not listed fall back to
 # the status and the pid, which is all an interactive session reports.
 STATE_RANK = {"blocked": 0, "working": 2, "done": 3, "failed": 3}
@@ -140,9 +174,27 @@ def rank(a):
     return 1 if a.get("pid") is not None else 3
 
 
+def last_seen(a):
+    """Seconds since the session last wrote to its transcript, or infinity when
+    it has none, so a session with no activity to show sorts last."""
+    last = (a.get("transcript") or {}).get("last")
+    return since(last) if last else float("inf")
+
+
 def sort_key(a):
-    # Sessions that want the user first, then newest first within a rank.
-    return (rank(a), -(a.get("startedAt") or 0))
+    # Sessions that want the user first, then most recently active in a rank.
+    return (rank(a), last_seen(a))
+
+
+def mark(a, frame):
+    """Marker for a session: a wave when it wants the user, a runner while it
+    runs, nothing when it is idle or finished. Interactive sessions report only
+    a status, background ones a state, so both spellings mean running."""
+    if a.get("state") == "blocked":
+        return WAVE[frame % len(WAVE)]
+    if a.get("state") == "working" or a.get("status") == "busy":
+        return RUN[frame % len(RUN)]
+    return ""
 
 
 class App:
@@ -154,18 +206,27 @@ class App:
         self.stop = threading.Event()
         self.frame = 0
         self.rows = 0
+        self.compact = False
+        self.full_width = None
 
         root.title("claude agents")
         root.attributes("-topmost", args.topmost)
         root.bind("t", self.toggle_topmost)
+        root.bind("c", self.toggle_compact)
         root.bind("q", lambda e: self.quit())
         root.protocol("WM_DELETE_WINDOW", self.quit)
 
         # Packed first so the tree can't squeeze it out of a small window.
         self.status = tk.StringVar()
         self.version = ""
-        ttk.Label(root, textvariable=self.status, anchor="w",
-                  padding=(4, 2)).pack(side="bottom", fill="x")
+        bar = ttk.Frame(root)
+        bar.pack(side="bottom", fill="x")
+        ttk.Label(bar, textvariable=self.status, anchor="w",
+                  padding=(4, 2)).pack(side="left", fill="x", expand=True)
+        # A fixed width, so the label doesn't shift when the text changes.
+        self.compact_button = ttk.Button(bar, text="Compact", width=8,
+                                         command=self.toggle_compact)
+        self.compact_button.pack(side="right", padx=4, pady=2)
 
         # ttk's default row height ignores the font and clips it on HiDPI.
         self.font = tkfont.nametofont("TkDefaultFont")
@@ -175,15 +236,16 @@ class App:
         # Widths are placeholders until fit() sizes them to their content.
         # Only the prompt stretches, so ttk hands it whatever is left over
         # when the other columns or the window change size.
+        # redraw() builds each row positionally, so keep the two in lockstep.
         columns = (
             ("mark", "", 34),
             ("name", "Name", 220),
+            ("model", "Model", 70),
+            ("context", "Context", 100),
             ("prompt", "Last prompt", 300),
             ("last", "Last", 50),
             ("cwd", "Directory", 200),
             ("branch", "Branch", 120),
-            ("model", "Model", 70),
-            ("context", "Context", 100),
         )
         self.tree = ttk.Treeview(root, columns=[c[0] for c in columns],
                                  show="headings")
@@ -192,8 +254,8 @@ class App:
             self.tree.column(col, width=width, stretch=col == "prompt",
                              anchor="e" if col in ("last", "context") else "w")
         self.tree.column("prompt", minwidth=100)
-        for state, color in STATE_COLORS.items():
-            self.tree.tag_configure(state, foreground=color)
+        for tag, color in ROW_COLORS.items():
+            self.tree.tag_configure(tag, foreground=color)
         self.tree.pack(fill="both", expand=True)
 
         # On X11 alpha only sticks once the window is mapped.
@@ -209,6 +271,26 @@ class App:
 
     def toggle_topmost(self, _event=None):
         self.root.attributes("-topmost", not self.root.attributes("-topmost"))
+
+    def toggle_compact(self, _event=None):
+        """Show either every column or just the status, name, model and
+        context. The window narrows to what is left and widens back to the
+        width it had, since compact columns in a wide window are mostly gap."""
+        self.compact = not self.compact
+        if self.compact:
+            self.full_width = self.root.winfo_width()
+        self.tree.configure(
+            displaycolumns=COMPACT_COLUMNS if self.compact else "#all")
+        self.root.minsize(1 if self.compact else FULL_MIN_WIDTH, MIN_HEIGHT)
+        # Measure before stretching name: a stretched column fills whatever
+        # width the window already has, which would just measure that back.
+        self.root.update_idletasks()
+        width = self.root.winfo_reqwidth() if self.compact else self.full_width
+        # Only the prompt stretches, and it is hidden here, so name takes over.
+        self.tree.column("name", stretch=self.compact)
+        self.compact_button.configure(
+            text="Full" if self.compact else "Compact")
+        self.root.geometry(f"{width}x{self.root.winfo_height()}")
 
     def quit(self):
         self.stop.set()
@@ -268,23 +350,22 @@ class App:
         for i, a in enumerate(self.sessions):
             iid = a.get("id") or a.get("sessionId")
             seen.add(iid)
-            state = a.get("state") or ""
             t = a.get("transcript") or {}
             values = (
-                BLINK[self.frame % len(BLINK)] if state == "blocked" else "",
+                mark(a, self.frame),
                 a.get("name") or "(untitled)",
+                (t.get("model") or "").removeprefix("claude-"),
+                context(t.get("context"), t.get("window")),
                 first_line(t.get("prompt") or ""),
                 duration(since(t["last"])) if t.get("last") else "",
                 short_cwd(a.get("cwd") or ""),
                 t.get("branch") or "",
-                (t.get("model") or "").removeprefix("claude-"),
-                context(t.get("context"), t.get("window")),
             )
             if self.tree.exists(iid):
-                self.tree.item(iid, values=values, tags=(state,))
+                self.tree.item(iid, values=values, tags=(row_tag(a),))
                 self.tree.move(iid, "", i)
             else:
-                self.tree.insert("", i, iid=iid, values=values, tags=(state,))
+                self.tree.insert("", i, iid=iid, values=values, tags=(row_tag(a),))
         for iid in self.tree.get_children():
             if iid not in seen:
                 self.tree.delete(iid)
@@ -309,7 +390,7 @@ def main():
 
     root = tk.Tk()
     root.geometry("1100x240")
-    root.minsize(600, 60)
+    root.minsize(FULL_MIN_WIDTH, MIN_HEIGHT)
     App(root, args)
     root.mainloop()
 
