@@ -29,7 +29,8 @@ Options: `--interval SEC` (refresh gap, default 2), `--no-topmost`,
 `--alpha A` (opacity, default 0.9). Keys: `t` toggles always-on-top,
 `c` toggles compact mode (status, name, model, context only), `q` quits.
 
-Columns are sized to their content and the height follows the row count.
+Columns are sized to their content and the height follows the row count;
+toggling compact sizes the width to the columns too.
 `~` stands for `$HOME`; a path like `~/ws/x [wt]` is a worktree.
 
 ## How it works
