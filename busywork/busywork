@@ -185,7 +185,7 @@ class App:
         self.compact = False
         self.full_width = None
 
-        root.title("claude agents")
+        root.title("busywork")
         root.attributes("-topmost", args.topmost)
         root.bind("t", self.toggle_topmost)
         root.bind("c", self.toggle_compact)
@@ -349,7 +349,7 @@ class App:
         blocked = sum(1 for a in self.sessions if a.get("state") == "blocked")
         busy = sum(1 for a in self.sessions if a.get("status") == "busy")
         counts = [f"{n} {what}" for n, what in ((blocked, "blocked"), (busy, "busy")) if n]
-        self.root.title(f"claude agents ({', '.join(counts)})" if counts else "claude agents")
+        self.root.title(f"busywork ({', '.join(counts)})" if counts else "busywork")
 
 
 def main():

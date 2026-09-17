@@ -10,7 +10,7 @@ from windows import Windows
 @pytest.fixture
 def cache(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
-    return tmp_path / "claude-agents-watch" / "windows.json"
+    return tmp_path / "busywork" / "windows.json"
 
 
 class FakeClaude:
