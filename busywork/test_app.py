@@ -14,7 +14,7 @@ def load(path):
     return module
 
 
-app = load(pathlib.Path(__file__).resolve().parent / "claude-agents-watch")
+app = load(pathlib.Path(__file__).resolve().parent / "busywork")
 
 
 @pytest.mark.parametrize("seconds, text", [
