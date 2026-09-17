@@ -18,6 +18,8 @@ class Source:
                   in the last request), "window" (the model's limit),
                   "prompt" (the last one), "last" (ISO-8601 time of the
                   last activity) and "branch"
+      job         what a background job reports about itself: "detail", its
+                  one-line summary of what it is doing
 
     A tool that isn't installed or running yields no sessions and no
     version; anything else that goes wrong raises, and the window shows it.

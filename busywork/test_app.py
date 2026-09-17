@@ -123,3 +123,9 @@ def test_row_tag_prefers_a_full_context_over_the_state():
     assert app.row_tag({"state": "done"}) == "done"
     assert app.row_tag({}) == ""
     assert "full" in app.ROW_COLORS
+
+
+def test_doing_prefers_the_job_detail():
+    assert app.doing({"transcript": {"prompt": "p"}}) == "p"
+    assert app.doing({"job": {"detail": "d"}, "transcript": {"prompt": "p"}}) == "d"
+    assert app.doing({}) == ""

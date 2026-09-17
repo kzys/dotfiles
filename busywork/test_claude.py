@@ -22,11 +22,14 @@ def test_rows_get_an_id_and_transcript_details(tmp_path, monkeypatch):
     monkeypatch.setattr(c.transcripts, "info",
                         lambda sid: {"model": "m"} if sid == "s1" else {})
     monkeypatch.setattr(c.windows, "get", lambda model: 1000)
+    monkeypatch.setattr(c.jobs, "info",
+                        lambda jid: {"detail": "d"} if jid == "abc" else {})
     assert c.version() == "9.9.9"
     assert c.sessions(True) == [
-        {"id": "abc", "sessionId": "s1", "name": "x",
+        {"id": "abc", "sessionId": "s1", "name": "x", "job": {"detail": "d"},
          "transcript": {"model": "m", "window": 1000}},
-        {"id": "s2", "sessionId": "s2", "status": "busy", "transcript": {}},
+        {"id": "s2", "sessionId": "s2", "status": "busy", "job": {},
+         "transcript": {}},
     ]
 
 

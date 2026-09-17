@@ -1,7 +1,8 @@
 #! /usr/bin/env python3
 """Show Claude Code sessions in a small window, refreshed from
-`claude agents --json` and each session's transcript under
-~/.claude/projects. Sessions of a running opencode server are listed too.
+`claude agents --json`, each session's transcript under ~/.claude/projects
+and, for background jobs, their state under ~/.claude/jobs. Sessions of a
+running opencode server are listed too.
 
 Needs only python3 with tkinter. On macOS the Homebrew python has it via
 `brew install python-tk`; the Linux package is usually python3-tk.
@@ -115,6 +116,12 @@ def first_line(text, limit=120):
     return text if len(text) <= limit else text[:limit - 1] + "…"
 
 
+def doing(a):
+    """What to show for a session's activity: a background job's own summary
+    of what it is doing, else the last prompt it was given."""
+    return (a.get("job") or {}).get("detail") or (a.get("transcript") or {}).get("prompt") or ""
+
+
 def context_full(tokens, window):
     """Whether a session has used enough of its window to be worth warning
     about. Unknown numbers are not a warning."""
@@ -218,7 +225,7 @@ class App:
             ("name", "Name", 220),
             ("model", "Model", 70),
             ("context", "Context", 100),
-            ("prompt", "Last prompt", 300),
+            ("prompt", "Doing", 300),
             ("last", "Last", 50),
             ("cwd", "Directory", 200),
             ("branch", "Branch", 120),
@@ -332,7 +339,7 @@ class App:
                 a.get("name") or "(untitled)",
                 (t.get("model") or "").removeprefix("claude-"),
                 context(t.get("context"), t.get("window")),
-                first_line(t.get("prompt") or ""),
+                first_line(doing(a)),
                 duration(since(t["last"])) if t.get("last") else "",
                 short_cwd(a.get("cwd") or ""),
                 t.get("branch") or "",
