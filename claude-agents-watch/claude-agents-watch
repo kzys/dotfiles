@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 """Show Claude Code sessions in a small window, refreshed from
 `claude agents --json` and each session's transcript under
-~/.claude/projects.
+~/.claude/projects. Sessions of a running opencode server are listed too.
 
 Needs only python3 with tkinter. On macOS the Homebrew python has it via
 `brew install python-tk`; the Linux package is usually python3-tk.
@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from tkinter import font as tkfont
 from tkinter import ttk
 
+from opencode import OpenCode
 from transcripts import Transcripts
 from windows import Windows
 
@@ -74,8 +75,12 @@ def version():
 def poll(show_all, interval, results, stop):
     """Fetch forever on a thread, posting (sessions, error) to results.
     Transcript details are merged into each session under "transcript".
-    The first item posted is (version, None) instead."""
-    results.put((version(), None))
+    The first item posted is (versions, None) instead, a label naming the
+    tools found."""
+    opencode = OpenCode()
+    versions = [f"{tool} {v}" for tool, v in (
+        ("claude", version()), ("opencode", opencode.version())) if v]
+    results.put(("  ·  ".join(versions), None))
     transcripts = Transcripts()
     windows = Windows()
     while not stop.is_set():
@@ -89,6 +94,7 @@ def poll(show_all, interval, results, stop):
                 model = a["transcript"].get("model")
                 if model:
                     a["transcript"]["window"] = windows.get(model)
+            sessions += opencode.sessions(show_all)
             results.put((sessions, None))
         except Exception as e:  # subprocess or JSON failure; show it, keep going
             results.put((None, str(e).strip() or type(e).__name__))
@@ -313,7 +319,7 @@ class App:
                 n = len(self.sessions)
                 parts = [f"{n} session{'' if n == 1 else 's'}"]
                 if self.version:
-                    parts.append(f"claude {self.version}")
+                    parts.append(self.version)
                 self.status.set("  ·  ".join(parts))
         except queue.Empty:
             pass
