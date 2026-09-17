@@ -181,6 +181,10 @@ class App:
             self.tree.tag_configure(state, foreground=color)
         self.tree.pack(fill="both", expand=True)
 
+        # On X11 alpha only sticks once the window is mapped.
+        root.update_idletasks()
+        root.attributes("-alpha", args.alpha)
+
         threading.Thread(
             target=poll,
             args=(args.all, args.interval, self.results, self.stop),
@@ -284,6 +288,8 @@ def main():
                    help="seconds between refreshes (default: 2)")
     p.add_argument("--no-topmost", dest="topmost", action="store_false",
                    help="don't keep the window above others (t toggles)")
+    p.add_argument("--alpha", type=float, default=0.9, metavar="A",
+                   help="window opacity, 0 to 1 (default: 0.9)")
     args = p.parse_args()
 
     root = tk.Tk()
