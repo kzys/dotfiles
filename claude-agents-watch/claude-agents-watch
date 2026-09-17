@@ -1,6 +1,7 @@
 #! /usr/bin/env python3
 """Show Claude Code sessions in a small window, refreshed from
-`claude agents --json`.
+`claude agents --json` and each session's transcript under
+~/.claude/projects.
 
 Needs only python3 with tkinter. On macOS the Homebrew python has it via
 `brew install python-tk`; the Linux package is usually python3-tk.
@@ -12,18 +13,27 @@ import os
 import queue
 import subprocess
 import threading
-import time
 import tkinter as tk
+from datetime import datetime, timezone
 from tkinter import font as tkfont
 from tkinter import ttk
 
-# Row colours by state. Anything else falls back to the default foreground.
+from transcripts import Transcripts
+from windows import Windows
+
+# Row colours by state, the only place state is shown. Anything else falls
+# back to the default foreground.
 STATE_COLORS = {
     "working": "#1a7f37",
-    "needs_input": "#b35c00",
+    "blocked": "#b35c00",
     "failed": "#c0392b",
     "done": "#6e7781",
 }
+
+# Blinked, one frame per tick, in front of sessions waiting on the user:
+# those are the ones that need attention, so they get the motion.
+BLINK = ["👋"] * 2 + ["✋"] * 2 + ["🤚"] * 2 + ["🖐"] * 2
+TICK_MS = 150
 
 
 def fetch(show_all):
@@ -35,30 +45,82 @@ def fetch(show_all):
     return json.loads(out.stdout)
 
 
+def version():
+    """Claude Code's version, e.g. "2.1.274", or "" if unavailable."""
+    try:
+        out = subprocess.run(["claude", "--version"], capture_output=True,
+                             text=True, check=True).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return ""
+    return out.split()[0] if out.split() else ""
+
+
 def poll(show_all, interval, results, stop):
-    """Fetch forever on a thread, posting (sessions, error) to results."""
+    """Fetch forever on a thread, posting (sessions, error) to results.
+    Transcript details are merged into each session under "transcript".
+    The first item posted is (version, None) instead."""
+    results.put((version(), None))
+    transcripts = Transcripts()
+    windows = Windows()
     while not stop.is_set():
         try:
-            results.put((fetch(show_all), None))
+            sessions = fetch(show_all)
+            for a in sessions:
+                try:
+                    a["transcript"] = transcripts.info(a.get("sessionId", ""))
+                except OSError:
+                    a["transcript"] = {}
+                model = a["transcript"].get("model")
+                if model:
+                    a["transcript"]["window"] = windows.get(model)
+            results.put((sessions, None))
         except Exception as e:  # subprocess or JSON failure; show it, keep going
             results.put((None, str(e).strip() or type(e).__name__))
         stop.wait(interval)
 
 
-def elapsed(started_ms):
-    s = int(time.time() - started_ms / 1000)
+def duration(seconds):
+    """Coarse age, so a value changes at most once a minute."""
+    s = int(seconds)
     if s < 60:
-        return f"{s}s"
+        return "now"
     if s < 3600:
         return f"{s // 60}m"
-    return f"{s // 3600}h{(s % 3600) // 60:02d}m"
+    if s < 86400:
+        return f"{s // 3600}h"
+    return f"{s // 86400}d"
+
+
+def since(iso):
+    """Seconds since an ISO-8601 timestamp like 2026-09-16T01:39:29.123Z."""
+    t = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+    return (datetime.now(timezone.utc) - t).total_seconds()
 
 
 def short_cwd(path):
+    """Abbreviate cwd for display: ~ for $HOME and [name] for a worktree."""
     home = os.path.expanduser("~")
     if path == home or path.startswith(home + os.sep):
-        return "~" + path[len(home):]
+        path = "~" + path[len(home):]
+    repo, sep, name = path.partition("/.claude/worktrees/")
+    if sep:
+        path = f"{repo} [{name}]"
     return path
+
+
+def context(tokens, window):
+    """Context size as "147k 15%", or just "147k" if the window is unknown."""
+    if not tokens:
+        return ""
+    s = f"{round(tokens / 1000)}k"
+    if window:
+        s += f" {round(100 * tokens / window)}%"
+    return s
+
+
+def first_line(text, limit=120):
+    text = text.strip().split("\n", 1)[0]
+    return text if len(text) <= limit else text[:limit - 1] + "…"
 
 
 def sort_key(a):
@@ -75,6 +137,7 @@ class App:
         self.sessions = []
         self.results = queue.Queue()
         self.stop = threading.Event()
+        self.frame = 0
 
         root.title("claude agents")
         root.attributes("-topmost", args.topmost)
@@ -84,24 +147,30 @@ class App:
 
         # Packed first so the tree can't squeeze it out of a small window.
         self.status = tk.StringVar()
+        self.version = ""
         ttk.Label(root, textvariable=self.status, anchor="w",
                   padding=(4, 2)).pack(side="bottom", fill="x")
 
         # ttk's default row height ignores the font and clips it on HiDPI.
         linespace = tkfont.nametofont("TkDefaultFont").metrics("linespace")
-        ttk.Style().configure("Treeview", rowheight=linespace + 4)
+        ttk.Style().configure("Treeview", rowheight=linespace + 10)
 
-        cols = ("name", "state", "elapsed", "cwd")
-        self.tree = ttk.Treeview(root, columns=cols, show="headings")
-        for col, title, width, stretch in (
+        columns = (
+            ("mark", "", 34, False),
             ("name", "Name", 220, True),
-            ("state", "State", 90, False),
-            ("elapsed", "Time", 60, False),
+            ("prompt", "Last prompt", 300, True),
+            ("last", "Last", 50, False),
             ("cwd", "Directory", 200, True),
-        ):
+            ("branch", "Branch", 120, False),
+            ("model", "Model", 70, False),
+            ("context", "Context", 100, False),
+        )
+        self.tree = ttk.Treeview(root, columns=[c[0] for c in columns],
+                                 show="headings")
+        for col, title, width, stretch in columns:
             self.tree.heading(col, text=title)
             self.tree.column(col, width=width, stretch=stretch,
-                             anchor="e" if col == "elapsed" else "w")
+                             anchor="e" if col in ("last", "context") else "w")
         for state, color in STATE_COLORS.items():
             self.tree.tag_configure(state, foreground=color)
         self.tree.pack(fill="both", expand=True)
@@ -121,19 +190,27 @@ class App:
         self.root.destroy()
 
     def tick(self):
-        """Apply any poll results, then redraw so elapsed times advance."""
+        """Apply any poll results, then redraw to advance markers and ages."""
         try:
             while True:
-                sessions, err = self.results.get_nowait()
-                if err is None:
-                    self.sessions = sorted(sessions, key=sort_key)
-                    self.status.set(time.strftime("updated %H:%M:%S"))
-                else:
+                item, err = self.results.get_nowait()
+                if err is not None:
                     self.status.set(f"error: {err}")
+                    continue
+                if isinstance(item, str):
+                    self.version = item
+                else:
+                    self.sessions = sorted(item, key=sort_key)
+                n = len(self.sessions)
+                parts = [f"{n} session{'' if n == 1 else 's'}"]
+                if self.version:
+                    parts.append(f"claude {self.version}")
+                self.status.set("  ·  ".join(parts))
         except queue.Empty:
             pass
+        self.frame += 1
         self.redraw()
-        self.root.after(1000, self.tick)
+        self.root.after(TICK_MS, self.tick)
 
     def redraw(self):
         """Sync tree rows to self.sessions, keyed by session id so the
@@ -142,13 +219,17 @@ class App:
         for i, a in enumerate(self.sessions):
             iid = a.get("id") or a.get("sessionId")
             seen.add(iid)
-            live = a.get("pid") is not None
             state = a.get("state") or ""
+            t = a.get("transcript") or {}
             values = (
+                BLINK[self.frame % len(BLINK)] if state == "blocked" else "",
                 a.get("name") or "(untitled)",
-                state,
-                elapsed(a["startedAt"]) if live and a.get("startedAt") else "",
+                first_line(t.get("prompt") or ""),
+                duration(since(t["last"])) if t.get("last") else "",
                 short_cwd(a.get("cwd") or ""),
+                t.get("branch") or "",
+                (t.get("model") or "").removeprefix("claude-"),
+                context(t.get("context"), t.get("window")),
             )
             if self.tree.exists(iid):
                 self.tree.item(iid, values=values, tags=(state,))
@@ -159,8 +240,10 @@ class App:
             if iid not in seen:
                 self.tree.delete(iid)
 
+        blocked = sum(1 for a in self.sessions if a.get("state") == "blocked")
         busy = sum(1 for a in self.sessions if a.get("status") == "busy")
-        self.root.title(f"claude agents ({busy} busy)" if busy else "claude agents")
+        counts = [f"{n} {what}" for n, what in ((blocked, "blocked"), (busy, "busy")) if n]
+        self.root.title(f"claude agents ({', '.join(counts)})" if counts else "claude agents")
 
 
 def main():
@@ -174,7 +257,7 @@ def main():
     args = p.parse_args()
 
     root = tk.Tk()
-    root.geometry("640x240")
+    root.geometry("1100x240")
     App(root, args)
     root.mainloop()
 
