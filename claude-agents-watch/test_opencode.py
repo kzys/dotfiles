@@ -1,5 +1,7 @@
 import urllib.error
 
+import pytest
+
 from opencode import OpenCode
 
 
@@ -108,11 +110,19 @@ def test_messages_are_cached_until_the_session_updates():
     assert sum(p.startswith("/api/session/ses_a/message") for p in oc.calls) == 2
 
 
-def test_server_errors_give_no_rows_and_a_fresh_lookup():
+def test_unreachable_server_gives_no_rows_and_a_fresh_lookup():
+    def refuse(path):
+        raise urllib.error.URLError("Connection refused")
     oc = Fake({})
-    oc.find = lambda: "http://fake"
+    oc.get = refuse
     assert oc.sessions(True) == []
     assert oc.url is None
+
+
+def test_server_errors_raise():
+    oc = Fake({})
+    with pytest.raises(urllib.error.HTTPError):
+        oc.sessions(True)
 
 
 def test_missing_binary_gives_no_rows():

@@ -1,5 +1,4 @@
-"""Read sessions from the opencode background server, shaped like the rows
-`claude agents --json` returns so the window can show both."""
+"""Read sessions from the opencode background server."""
 
 import base64
 import json
@@ -8,6 +7,8 @@ import subprocess
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
+
+from source import Source
 
 # Messages to look back through for the last prompt and assistant reply.
 MESSAGES = 20
@@ -19,11 +20,12 @@ OUTCOMES = {"succeeded": "done", "failed": "failed"}
 TIMEOUT = 5
 
 
-class OpenCode:
+class OpenCode(Source):
     """Sessions of the opencode server, found through `opencode service
-    status` and read over its HTTP API. A missing binary or a stopped server
-    means no sessions, not an error, since Claude sessions are still worth
-    showing. Message reads are cached by the session's update time."""
+    status` and read over its HTTP API. Message reads are cached by the
+    session's update time."""
+
+    name = "opencode"
 
     def __init__(self, exe="opencode"):
         self.exe = exe
@@ -42,19 +44,16 @@ class OpenCode:
         return out.split()[-1] if out.split() else ""
 
     def sessions(self, show_all):
-        """Rows for every session, or only the running and blocked ones."""
         if self.missing:
             return []
         try:
             return self.fetch(show_all)
+        except urllib.error.HTTPError:
+            raise
         except (urllib.error.URLError, OSError):
-            # The server may have restarted on another port; look again next
-            # time rather than failing forever.
+            # Can't reach the server: it stopped, or restarted on another
+            # port. Look it up again next time rather than failing forever.
             self.url = None
-            return []
-        except (ValueError, KeyError, TypeError):
-            # The API is a beta; a shape we don't understand costs its rows,
-            # not the window.
             return []
 
     def fetch(self, show_all):
@@ -140,8 +139,6 @@ class OpenCode:
         return self.windows[key]
 
     def row(self, s, state, messages):
-        """One session as the window expects it: the fields of a background
-        Claude session plus the details its transcript would give."""
         t = {}
         for m in messages:
             if "prompt" not in t and m.get("type") == "user" and m.get("text"):
@@ -160,7 +157,6 @@ class OpenCode:
                 updated / 1000, timezone.utc).isoformat()
         return {
             "id": s["id"],
-            "sessionId": s["id"],
             "name": s.get("title") or s.get("slug") or "",
             "cwd": (s.get("location") or {}).get("directory") or "",
             "state": state,

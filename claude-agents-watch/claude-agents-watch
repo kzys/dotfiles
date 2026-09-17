@@ -8,19 +8,19 @@ Needs only python3 with tkinter. On macOS the Homebrew python has it via
 """
 
 import argparse
-import json
 import os
 import queue
-import subprocess
 import threading
 import tkinter as tk
 from datetime import datetime, timezone
 from tkinter import font as tkfont
 from tkinter import ttk
 
+from claude import Claude
 from opencode import OpenCode
-from transcripts import Transcripts
-from windows import Windows
+
+# The tools whose sessions are listed, in the order their versions show.
+SOURCES = (Claude, OpenCode)
 
 # Row colours by tag, the only place state is shown. Anything else falls
 # back to the default foreground. "full" is a nearly exhausted context window,
@@ -53,51 +53,21 @@ RUN = ["🚶"] * 2 + ["🏃"] * 2
 TICK_MS = 150
 
 
-def fetch(show_all):
-    """Run `claude agents --json` and return its list, or raise."""
-    cmd = ["claude", "agents", "--json"]
-    if show_all:
-        cmd.append("--all")
-    out = subprocess.run(cmd, capture_output=True, text=True, check=True)
-    return json.loads(out.stdout)
-
-
-def version():
-    """Claude Code's version, e.g. "2.1.274", or "" if unavailable."""
-    try:
-        out = subprocess.run(["claude", "--version"], capture_output=True,
-                             text=True, check=True).stdout
-    except (OSError, subprocess.CalledProcessError):
-        return ""
-    return out.split()[0] if out.split() else ""
-
-
-def poll(show_all, interval, results, stop):
-    """Fetch forever on a thread, posting (sessions, error) to results.
-    Transcript details are merged into each session under "transcript".
-    The first item posted is (versions, None) instead, a label naming the
-    tools found."""
-    opencode = OpenCode()
-    versions = [f"{tool} {v}" for tool, v in (
-        ("claude", version()), ("opencode", opencode.version())) if v]
+def poll(sources, show_all, interval, results, stop):
+    """Read every source forever on a thread, posting (sessions, error) to
+    results: the rows of the sources that worked, and what went wrong with
+    the rest. The first item posted is (versions, None) instead, a label
+    naming the tools found."""
+    versions = [f"{s.name} {v}" for s in sources if (v := s.version())]
     results.put(("  ·  ".join(versions), None))
-    transcripts = Transcripts()
-    windows = Windows()
     while not stop.is_set():
-        try:
-            sessions = fetch(show_all)
-            for a in sessions:
-                try:
-                    a["transcript"] = transcripts.info(a.get("sessionId", ""))
-                except OSError:
-                    a["transcript"] = {}
-                model = a["transcript"].get("model")
-                if model:
-                    a["transcript"]["window"] = windows.get(model)
-            sessions += opencode.sessions(show_all)
-            results.put((sessions, None))
-        except Exception as e:  # subprocess or JSON failure; show it, keep going
-            results.put((None, str(e).strip() or type(e).__name__))
+        sessions, errors = [], []
+        for source in sources:
+            try:
+                sessions += source.sessions(show_all)
+            except Exception as e:  # subprocess, HTTP or JSON failure
+                errors.append(f"{source.name}: {str(e).strip() or type(e).__name__}")
+        results.put((sessions, "; ".join(errors) or None))
         stop.wait(interval)
 
 
@@ -270,7 +240,8 @@ class App:
 
         threading.Thread(
             target=poll,
-            args=(args.all, args.interval, self.results, self.stop),
+            args=([s() for s in SOURCES], args.all, args.interval,
+                  self.results, self.stop),
             daemon=True,
         ).start()
         self.tick()
@@ -308,9 +279,6 @@ class App:
         try:
             while True:
                 item, err = self.results.get_nowait()
-                if err is not None:
-                    self.status.set(f"error: {err}")
-                    continue
                 if isinstance(item, str):
                     self.version = item
                 else:
@@ -320,6 +288,8 @@ class App:
                 parts = [f"{n} session{'' if n == 1 else 's'}"]
                 if self.version:
                     parts.append(self.version)
+                if err:
+                    parts.append(f"error: {err}")
                 self.status.set("  ·  ".join(parts))
         except queue.Empty:
             pass
@@ -354,7 +324,7 @@ class App:
         selection survives refreshes."""
         seen = set()
         for i, a in enumerate(self.sessions):
-            iid = a.get("id") or a.get("sessionId")
+            iid = a["id"]
             seen.add(iid)
             t = a.get("transcript") or {}
             values = (
