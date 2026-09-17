@@ -11,7 +11,7 @@ class Windows:
 
     def __init__(self):
         cache = os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache")
-        self.path = os.path.join(cache, "claude-agents-watch", "windows.json")
+        self.path = os.path.join(cache, "busywork", "windows.json")
         try:
             with open(self.path) as f:
                 self.sizes = json.load(f)
