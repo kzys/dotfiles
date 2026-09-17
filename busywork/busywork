@@ -119,9 +119,9 @@ def first_line(text, limit=120):
 
 
 def doing(a):
-    """What to show for a session's activity: a background job's own summary
-    of what it is doing, else the last prompt it was given."""
-    return (a.get("job") or {}).get("detail") or (a.get("transcript") or {}).get("prompt") or ""
+    """What to show for a session's activity: its own account of what it is
+    doing, else the last prompt it was given."""
+    return a.detail or a.transcript.prompt or ""
 
 
 def context_full(tokens, window):
@@ -136,10 +136,10 @@ def row_tag(a):
     """The tag that colours a row. A nearly full context window outranks the
     state: the state says what the session is doing, this says it is about to
     stop being able to."""
-    t = a.get("transcript") or {}
-    if context_full(t.get("context"), t.get("window")):
+    t = a.transcript
+    if context_full(t.context, t.window):
         return "full"
-    return a.get("state") or ""
+    return a.state
 
 
 # How much a state wants the user, low first. States not listed fall back to
@@ -149,20 +149,19 @@ STATE_RANK = {"blocked": 0, "working": 2, "done": 3, "failed": 3}
 
 def rank(a):
     """Sort rank for a session: waiting on the user, idle, running, finished."""
-    state = a.get("state") or ""
-    if state in STATE_RANK:
-        return STATE_RANK[state]
-    if a.get("status") == "waiting":
+    if a.state in STATE_RANK:
+        return STATE_RANK[a.state]
+    if a.status == "waiting":
         return 0
-    if a.get("status") == "busy":
+    if a.status == "busy":
         return 2
-    return 1 if a.get("pid") is not None else 3
+    return 1 if a.pid is not None else 3
 
 
 def last_seen(a):
     """Seconds since the session last wrote to its transcript, or infinity when
     it has none, so a session with no activity to show sorts last."""
-    last = (a.get("transcript") or {}).get("last")
+    last = a.transcript.last
     return since(last) if last else float("inf")
 
 
@@ -175,9 +174,9 @@ def mark(a, frame):
     """Marker for a session: a wave when it wants the user, a runner while it
     runs, nothing when it is idle or finished. Interactive sessions report only
     a status, background ones a state, so both spellings mean running."""
-    if a.get("state") == "blocked":
+    if a.state == "blocked":
         return WAVE[frame % len(WAVE)]
-    if a.get("state") == "working" or a.get("status") == "busy":
+    if a.state == "working" or a.status == "busy":
         return RUN[frame % len(RUN)]
     return ""
 
@@ -341,18 +340,18 @@ class App:
         selection survives refreshes."""
         seen = set()
         for i, a in enumerate(self.sessions):
-            iid = a["id"]
+            iid = a.id
             seen.add(iid)
-            t = a.get("transcript") or {}
+            t = a.transcript
             values = (
                 mark(a, self.frame),
-                a.get("name") or "(untitled)",
-                (t.get("model") or "").removeprefix("claude-"),
-                context(t.get("context"), t.get("window")),
+                a.name or "(untitled)",
+                (t.model or "").removeprefix("claude-"),
+                context(t.context, t.window),
                 first_line(doing(a)),
-                duration(since(t["last"])) if t.get("last") else "",
-                short_cwd(a.get("cwd") or ""),
-                t.get("branch") or "",
+                duration(since(t.last)) if t.last else "",
+                short_cwd(a.cwd),
+                t.branch or "",
             )
             if self.tree.exists(iid):
                 self.tree.item(iid, values=values, tags=(row_tag(a),))
@@ -363,8 +362,8 @@ class App:
             if iid not in seen:
                 self.tree.delete(iid)
 
-        blocked = sum(1 for a in self.sessions if a.get("state") == "blocked")
-        busy = sum(1 for a in self.sessions if a.get("status") == "busy")
+        blocked = sum(1 for a in self.sessions if a.state == "blocked")
+        busy = sum(1 for a in self.sessions if a.status == "busy")
         counts = [f"{n} {what}" for n, what in ((blocked, "blocked"), (busy, "busy")) if n]
         self.root.title(f"busywork ({', '.join(counts)})" if counts else "busywork")
 

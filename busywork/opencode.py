@@ -8,6 +8,7 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 
+from session import Session, Transcript
 from source import Source
 
 # Messages to look back through for the last prompt and assistant reply.
@@ -139,27 +140,27 @@ class OpenCode(Source):
         return self.windows[key]
 
     def row(self, s, state, messages):
-        t = {}
+        t = Transcript()
         for m in messages:
-            if "prompt" not in t and m.get("type") == "user" and m.get("text"):
-                t["prompt"] = m["text"]
-            if "model" not in t and m.get("type") == "assistant" and m.get("model"):
+            if t.prompt is None and m.get("type") == "user" and m.get("text"):
+                t.prompt = m["text"]
+            if t.model is None and m.get("type") == "assistant" and m.get("model"):
                 model = m["model"]
-                t["model"] = model.get("id") or ""
+                t.model = model.get("id") or ""
                 tokens = m.get("tokens") or {}
                 cache = tokens.get("cache") or {}
-                t["context"] = sum(x or 0 for x in (
+                t.context = sum(x or 0 for x in (
                     tokens.get("input"), cache.get("read"), cache.get("write")))
-                t["window"] = self.window(model)
+                t.window = self.window(model)
         updated = (s.get("time") or {}).get("updated")
         if updated:
-            t["last"] = datetime.fromtimestamp(
+            t.last = datetime.fromtimestamp(
                 updated / 1000, timezone.utc).isoformat()
-        return {
-            "id": s["id"],
-            "name": s.get("title") or s.get("slug") or "",
-            "cwd": (s.get("location") or {}).get("directory") or "",
-            "state": state,
-            "status": "busy" if state == "working" else "",
-            "transcript": t,
-        }
+        return Session(
+            id=s["id"],
+            name=s.get("title") or s.get("slug") or "",
+            cwd=(s.get("location") or {}).get("directory") or "",
+            state=state,
+            status="busy" if state == "working" else "",
+            transcript=t,
+        )

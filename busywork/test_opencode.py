@@ -3,6 +3,7 @@ import urllib.error
 import pytest
 
 from opencode import OpenCode
+from session import Transcript
 
 
 def session(id, outcome=None, **fields):
@@ -49,24 +50,24 @@ def test_state_from_pending_active_and_outcome():
     oc = fake([session("ses_a"), session("ses_b"), session("ses_c", "failed"),
                session("ses_d", "succeeded"), session("ses_e", "interrupted")],
               active=["ses_a", "ses_b"], permissions=["ses_b"])
-    rows = {r["id"]: r for r in oc.sessions(True)}
-    assert rows["ses_a"]["state"] == "working"
-    assert rows["ses_a"]["status"] == "busy"
-    assert rows["ses_b"]["state"] == "blocked"
-    assert rows["ses_c"]["state"] == "failed"
-    assert rows["ses_d"]["state"] == "done"
-    assert rows["ses_e"]["state"] == ""
+    rows = {r.id: r for r in oc.sessions(True)}
+    assert rows["ses_a"].state == "working"
+    assert rows["ses_a"].status == "busy"
+    assert rows["ses_b"].state == "blocked"
+    assert rows["ses_c"].state == "failed"
+    assert rows["ses_d"].state == "done"
+    assert rows["ses_e"].state == ""
 
 
 def test_live_keeps_only_running_and_blocked():
     oc = fake([session("ses_a"), session("ses_b"), session("ses_c", "succeeded")],
               active=["ses_a"], forms=["ses_b"])
-    assert [r["id"] for r in oc.sessions(False)] == ["ses_a", "ses_b"]
+    assert [r.id for r in oc.sessions(False)] == ["ses_a", "ses_b"]
 
 
 def test_subagents_are_skipped():
     oc = fake([session("ses_a"), session("ses_b", parentID="ses_a")])
-    assert [r["id"] for r in oc.sessions(True)] == ["ses_a"]
+    assert [r.id for r in oc.sessions(True)] == ["ses_a"]
 
 
 def test_row_takes_details_from_newest_messages():
@@ -79,15 +80,15 @@ def test_row_takes_details_from_newest_messages():
         {"type": "user", "text": "first"},
     ])
     [row] = oc.sessions(True)
-    assert row["name"] == "Poem"
-    assert row["cwd"] == "/home/me/ws"
-    assert row["transcript"] == {
-        "model": "big-pickle",
-        "context": 123,
-        "window": 200000,
-        "prompt": "second",
-        "last": "2026-09-17T04:04:02.914000+00:00",
-    }
+    assert row.name == "Poem"
+    assert row.cwd == "/home/me/ws"
+    assert row.transcript == Transcript(
+        model="big-pickle",
+        context=123,
+        window=200000,
+        prompt="second",
+        last="2026-09-17T04:04:02.914000+00:00",
+    )
 
 
 def test_unknown_model_has_no_window():
@@ -95,7 +96,7 @@ def test_unknown_model_has_no_window():
         {"type": "assistant", "model": {"id": "new", "providerID": "x"},
          "tokens": {"input": 1}}])
     [row] = oc.sessions(True)
-    assert row["transcript"]["window"] is None
+    assert row.transcript.window is None
     oc.sessions(True)
     assert oc.calls.count("/api/model") == 1
 

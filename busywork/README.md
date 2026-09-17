@@ -35,11 +35,11 @@ toggling compact sizes the width to the columns too.
 
 ## How it works
 
-- `busywork` — the window; each tool is a `Source` (`source.py`)
+- `busywork` — the window; each tool is a `Source` (`source.py`) that
+  yields `Session`s (`session.py`)
 - `claude.py` — session list from `claude agents --json`, details from each
-  session's transcript under `~/.claude/projects` (`transcripts.py`) and,
-  for background jobs, what the job says it is doing from
-  `~/.claude/jobs/<id>/state.json` (`jobs.py`)
+  session's transcript under `~/.claude/projects` and, for background jobs,
+  what the job says it is doing from `~/.claude/jobs/<id>/state.json`
 - `opencode.py` — server URL from `opencode service status`, sessions and
   messages over its HTTP API
 - `windows.py` — each model's context window, probed once with a one-token
