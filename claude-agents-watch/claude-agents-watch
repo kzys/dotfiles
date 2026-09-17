@@ -169,8 +169,8 @@ def main():
                    help="also show completed background sessions")
     p.add_argument("--interval", type=float, default=2.0, metavar="SEC",
                    help="seconds between refreshes (default: 2)")
-    p.add_argument("--topmost", action="store_true",
-                   help="keep the window above others (press t to toggle)")
+    p.add_argument("--no-topmost", dest="topmost", action="store_false",
+                   help="don't keep the window above others (t toggles)")
     args = p.parse_args()
 
     root = tk.Tk()
