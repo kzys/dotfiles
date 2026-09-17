@@ -7,4 +7,4 @@
 # having run that instead.
 test:
 	python3 -m unittest discover -s ./test -v
-	python3 -m pytest busywork -v
+	uv run --with pytest python -m pytest busywork -v
