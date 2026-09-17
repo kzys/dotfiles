@@ -152,25 +152,30 @@ class App:
                   padding=(4, 2)).pack(side="bottom", fill="x")
 
         # ttk's default row height ignores the font and clips it on HiDPI.
-        linespace = tkfont.nametofont("TkDefaultFont").metrics("linespace")
+        self.font = tkfont.nametofont("TkDefaultFont")
+        linespace = self.font.metrics("linespace")
         ttk.Style().configure("Treeview", rowheight=linespace + 10)
 
+        # Widths are placeholders until fit() sizes them to their content.
+        # Only the prompt stretches, so ttk hands it whatever is left over
+        # when the other columns or the window change size.
         columns = (
-            ("mark", "", 34, False),
-            ("name", "Name", 220, True),
-            ("prompt", "Last prompt", 300, True),
-            ("last", "Last", 50, False),
-            ("cwd", "Directory", 200, True),
-            ("branch", "Branch", 120, False),
-            ("model", "Model", 70, False),
-            ("context", "Context", 100, False),
+            ("mark", "", 34),
+            ("name", "Name", 220),
+            ("prompt", "Last prompt", 300),
+            ("last", "Last", 50),
+            ("cwd", "Directory", 200),
+            ("branch", "Branch", 120),
+            ("model", "Model", 70),
+            ("context", "Context", 100),
         )
         self.tree = ttk.Treeview(root, columns=[c[0] for c in columns],
                                  show="headings")
-        for col, title, width, stretch in columns:
+        for col, title, width in columns:
             self.tree.heading(col, text=title)
-            self.tree.column(col, width=width, stretch=stretch,
+            self.tree.column(col, width=width, stretch=col == "prompt",
                              anchor="e" if col in ("last", "context") else "w")
+        self.tree.column("prompt", minwidth=100)
         for state, color in STATE_COLORS.items():
             self.tree.tag_configure(state, foreground=color)
         self.tree.pack(fill="both", expand=True)
@@ -191,6 +196,7 @@ class App:
 
     def tick(self):
         """Apply any poll results, then redraw to advance markers and ages."""
+        changed = False
         try:
             while True:
                 item, err = self.results.get_nowait()
@@ -201,6 +207,7 @@ class App:
                     self.version = item
                 else:
                     self.sessions = sorted(item, key=sort_key)
+                    changed = True
                 n = len(self.sessions)
                 parts = [f"{n} session{'' if n == 1 else 's'}"]
                 if self.version:
@@ -210,7 +217,19 @@ class App:
             pass
         self.frame += 1
         self.redraw()
+        if changed:
+            self.fit()
         self.root.after(TICK_MS, self.tick)
+
+    def fit(self):
+        """Size each column to its widest cell; the prompt takes the rest."""
+        for col in self.tree["columns"]:
+            if col in ("mark", "prompt"):
+                continue
+            texts = [self.tree.heading(col, "text")]
+            texts += [self.tree.set(iid, col) for iid in self.tree.get_children()]
+            width = max(self.font.measure(t) for t in texts) + 16
+            self.tree.column(col, width=width)
 
     def redraw(self):
         """Sync tree rows to self.sessions, keyed by session id so the
@@ -258,6 +277,7 @@ def main():
 
     root = tk.Tk()
     root.geometry("1100x240")
+    root.minsize(600, 120)
     App(root, args)
     root.mainloop()
 
