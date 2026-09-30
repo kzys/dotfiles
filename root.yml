@@ -1,26 +1,13 @@
 - name: laptop
   hosts:
     - localhost
-  vars:
-    # drop sudo's default -S/-n flags so PAM (fingerprint, then password) can
-    # prompt on the real terminal instead of requiring --ask-become-pass
-    ansible_become_flags: -H
   tasks:
-    # files/home and files/root mirror the paths they install to
-    - copy:
-        src: home/
-        dest: ~/
-        mode: preserve
-      tags: always
+    # files/root mirrors the paths it installs to
     - copy:
         src: root/
         dest: /
         mode: preserve
-      become: true
       tags: always
-    - command: systemctl --user daemon-reload
-    - command: systemctl --user enable --now xremap.service
-    - command: systemctl --user enable --now atlassian-keepalive.timer
     # bin/pino runs pi under bubblewrap, which needs the profile in files/root to
     # create a user namespace.
     - block:
@@ -28,19 +15,14 @@
             name: bubblewrap
             state: present
         - command: apparmor_parser -r -T -W /etc/apparmor.d/bwrap
-      become: true
       tags: pi-sandbox
     # powertop auto-tune on boot
     - block:
         - apt:
             name: powertop
             state: present
-        - copy:
-            src: powertop.service
-            dest: /etc/systemd/system/
         - command: systemctl daemon-reload
         - command: systemctl enable --now powertop.service
-      become: true
       tags: powertop
     # Firefox: snap build is heavier on CPU/battery than Mozilla's APT package
     - block:
@@ -81,5 +63,4 @@
             name: firefox
             state: latest
             allow_downgrade: true
-      become: true
       tags: firefox

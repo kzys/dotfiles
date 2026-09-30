@@ -4,14 +4,15 @@ This is my configuration files from day-to-day computers to
 [GitHub Codespaces](https://docs.github.com/en/codespaces/setting-your-user-preferences/personalizing-github-codespaces-for-your-account).
 
 ```
-ansible-playbook playbook.yml
+ansible-playbook user.yml
+sudo ansible-playbook root.yml
 ```
 
 ## Atlassian keep-alive
 
 Jira/Confluence Cloud accounts get deactivated from inactivity. `atlassian_keepalive.py`
 pings both APIs daily via a systemd user timer (`atlassian-keepalive.service`/`.timer`),
-set up by the same playbook.
+set up by `user.yml`.
 
 Credentials are kept **out of this repo**, in `~/.config/atlassian-keepalive.env`
 (mode 600, plain `VAR=value` lines):
