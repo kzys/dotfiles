@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+"""Point Claude Code's status line at bin/claude-statusline.
+
+~/.claude/settings.json also holds settings Claude Code writes itself, so
+it can't be a symlink into this repository like the other config files.
+This adds the one setting there instead, leaving the rest alone.
+"""
+
+import json
+import os
+import pathlib
+import sys
+
+SETTINGS = pathlib.Path.home() / '.claude' / 'settings.json'
+STATUSLINE = pathlib.Path(__file__).resolve().parent / 'claude-statusline'
+
+
+def update(settings, command):
+    """settings with the status line running command. Raises ValueError
+    rather than replace a status line set to something else."""
+    have = settings.get('statusLine')
+    if have is not None and os.path.expanduser(have.get('command', '')) != command:
+        raise ValueError(f'statusLine already runs {have.get("command")!r}')
+    if have is not None:
+        return settings
+    return {**settings, 'statusLine': {'type': 'command', 'command': command}}
+
+
+def main():
+    try:
+        with open(SETTINGS, encoding='utf-8') as f:
+            settings = json.load(f)
+    except FileNotFoundError:
+        settings = {}
+
+    try:
+        updated = update(settings, str(STATUSLINE))
+    except ValueError as e:
+        sys.exit(f'{SETTINGS}: {e}')
+    if updated == settings:
+        return
+
+    SETTINGS.parent.mkdir(parents=True, exist_ok=True)
+    with open(SETTINGS, 'w', encoding='utf-8') as f:
+        json.dump(updated, f, indent=2, ensure_ascii=False)
+        f.write('\n')
+
+
+if __name__ == '__main__':
+    main()
