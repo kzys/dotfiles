@@ -2,7 +2,7 @@ onboarding = false
 
 [theme]
 name = "catppuccin"
-auto_switch = false
+auto_switch = true
 
 [ui]
 # Create tabs right away with generated names, like tmux.
