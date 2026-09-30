@@ -1,0 +1,26 @@
+#!/bin/sh
+# Start claude in a scratch directory under ~/project with instructions
+# for finding checkouts, keeping notes, and naming the Herdr workspace.
+
+set -eu
+
+start=$(date '+%Y-%m-%d %H:%M %Z')
+
+instructions() {
+    cat <<EOF
+Git checkouts of Baseten repositories are under ~/baseten/. Use them
+instead of cloning.
+
+The current directory ($PWD) is this session's scratch directory. If
+NOTES.md exists there, read it first; it records earlier work. Keep
+NOTES.md there with what you have done so far. The session started at
+$start; check the time with date and update NOTES.md about every hour,
+and before you finish.
+
+About 5 minutes after the session started, once the task is clear,
+rename the Herdr workspace to a short name for the task, once:
+herdr-name-workspace <name>
+EOF
+}
+
+exec claude --append-system-prompt "$(instructions)" "$@"

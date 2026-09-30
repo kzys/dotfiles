@@ -1,0 +1,12 @@
+#!/bin/sh
+# Rename the Herdr workspace of the calling pane. Does nothing in a
+# background session, whose HERDR_* variables name another pane.
+
+set -eu
+
+[ $# -gt 0 ] || { echo "usage: herdr-name-workspace <name>" >&2; exit 2; }
+if ! "$(dirname "$0")/in-herdr-pane"; then
+    echo "herdr-name-workspace: not in a Herdr pane; skipping" >&2
+    exit 0
+fi
+exec "${HERDR_BIN_PATH:-herdr}" workspace rename "$HERDR_WORKSPACE_ID" "$@"

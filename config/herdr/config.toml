@@ -56,3 +56,11 @@ command = '''
 pane=$("$HERDR_BIN_PATH" workspace create --cwd "${HERDR_ACTIVE_PANE_CWD:-$HOME}" --focus | jq -r .result.root_pane.pane_id) &&
 "$HERDR_BIN_PATH" pane run "$pane" 'exec claude'
 '''
+
+[[keys.command]]
+key = "prefix+shift+q"
+type = "popup"
+description = "ask agent"
+command = '"$HOME/ws/dotfiles/bin/herdr-ask"'
+width = "80%"
+height = "60%"
