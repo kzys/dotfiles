@@ -17,10 +17,12 @@ tab_bar_right = [
 tab_bar_right_separator = " · "
 
 [ui.sidebar.agents]
-# $ctx and $prompt are reported by bin/claude-statusline.
+# $-tokens are reported by bin/claude-statusline.
 rows = [
-  ["state_icon", "machine", "workspace", "tab"],
-  ["agent", "$ctx"],
+  ["state_icon", "machine", "$dir", "tab"],
+  [{ token = "$bg", fg = "#f38ba8", bold = true }, "terminal_title_stripped"],
+  ["$branch"],
+  ["agent", "$model", "$ctx"],
   ["$prompt"],
 ]
 

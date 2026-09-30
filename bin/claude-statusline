@@ -1,7 +1,9 @@
 #!/bin/sh
 # Claude Code status line: prints context window usage and, inside a
-# Herdr pane, reports it and the last prompt as the pane's $ctx and
-# $prompt tokens for the agent panel.
+# Herdr pane, reports it, the last prompt, the model, and the working
+# directory and branch as the pane's $ctx, $prompt, $model, $dir and
+# $branch tokens for the agent panel, plus $bg when it runs as a
+# background session.
 
 input=$(cat)
 pct=$(printf '%s' "$input" | jq -r '
@@ -24,8 +26,23 @@ if [ "${HERDR_ENV:-}" = 1 ] && [ -n "${HERDR_PANE_ID:-}" ]; then
         prompt=$(tail -c 262144 "$transcript" | grep -F '"lastPrompt"' |
             tail -n 1 | jq -r '.lastPrompt // empty | gsub("\\s+"; " ")')
     fi
+    model=$(printf '%s' "$input" | jq -r '.model.display_name // empty')
+    dir=$(printf '%s' "$input" | jq -r '.workspace.current_dir // .cwd // empty')
+    branch=$(git -C "$dir" branch --show-current 2>/dev/null)
+    case $dir in
+    "$HOME"/*) dir="~${dir#"$HOME"}" ;;
+    esac
+    # A background session reports to the pane that started the daemon,
+    # which may be showing a different session; $bg flags that.
+    if "$(dirname "$0")/in-herdr-pane"; then
+        set -- --clear-token bg
+    else
+        set -- --token bg="bg"
+    fi
     herdr pane report-metadata "$HERDR_PANE_ID" --source claude-statusline \
-        --token ctx="${pct}%" --token prompt="$prompt" >/dev/null 2>&1 &
+        "$@" --token ctx="${pct}%" --token prompt="$prompt" \
+        --token model="$model" \
+        --token dir="$dir" --token branch="$branch" >/dev/null 2>&1
 fi
 
 printf 'ctx %s%%\n' "$pct"
