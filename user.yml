@@ -1,0 +1,13 @@
+- name: laptop
+  hosts:
+    - localhost
+  tasks:
+    # files/home mirrors the paths it installs to
+    - copy:
+        src: home/
+        dest: ~/
+        mode: preserve
+      tags: always
+    - command: systemctl --user daemon-reload
+    - command: systemctl --user enable --now xremap.service
+    - command: systemctl --user enable --now atlassian-keepalive.timer
