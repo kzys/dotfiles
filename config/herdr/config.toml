@@ -1,0 +1,56 @@
+onboarding = false
+
+[theme]
+name = "catppuccin"
+auto_switch = false
+
+[ui]
+# Create tabs right away with generated names, like tmux.
+prompt_new_tab_name = false
+
+# datetime rejects offsets and UTC, so both times come from date(1).
+tab_bar_right = [
+  { type = "zoom" },
+  { type = "command", command = "date +'%a %H:%M %z'", interval_seconds = 10, timeout_seconds = 2 },
+  { type = "command", command = "date -u +%H:%MZ", interval_seconds = 10, timeout_seconds = 2 },
+]
+tab_bar_right_separator = " · "
+
+[ui.sidebar.agents]
+# $ctx and $prompt are reported by bin/claude-statusline.
+rows = [
+  ["state_icon", "machine", "workspace", "tab"],
+  ["agent", "$ctx"],
+  ["$prompt"],
+]
+
+[keys]
+# The default prefix, C-b, is backward-char.
+prefix = "ctrl+z"
+
+# Emacs-style movement in navigate mode.
+navigate_workspace_up = "ctrl+p"
+navigate_workspace_down = "ctrl+n"
+navigate_pane_left = "ctrl+b"
+navigate_pane_right = "ctrl+f"
+
+# prefix+shift+n opens the launcher below instead.
+new_workspace = ""
+
+[[keys.command]]
+key = "prefix+shift+n"
+type = "popup"
+description = "launch in new workspace"
+command = '"$HOME/ws/dotfiles/bin/herdr-launch"'
+width = 40
+height = 12
+
+[[keys.command]]
+key = "prefix+shift+c"
+type = "shell"
+description = "new workspace with claude"
+# exec: the workspace closes with its last pane when claude exits.
+command = '''
+pane=$("$HERDR_BIN_PATH" workspace create --cwd "${HERDR_ACTIVE_PANE_CWD:-$HOME}" --focus | jq -r .result.root_pane.pane_id) &&
+"$HERDR_BIN_PATH" pane run "$pane" 'exec claude'
+'''

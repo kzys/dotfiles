@@ -28,7 +28,7 @@ main() {
     done
 
     # config/ mirrors ~/.config, so each name is both source and destination.
-    local -a config_files=(git/config git/ignore opencode/AGENTS.md opencode/tui.json foot/foot.ini)
+    local -a config_files=(git/config git/ignore opencode/AGENTS.md opencode/tui.json foot/foot.ini herdr/config.toml herdr/launchers.tsv)
     for file in "${config_files[@]}"
     do
         link "$PWD/config/$file" "$HOME/.config/$file"
@@ -36,6 +36,7 @@ main() {
 
     # Claude reads the same house rules under its own name.
     link "$PWD/config/opencode/AGENTS.md" "$HOME/.claude/CLAUDE.md"
+    "$PWD/bin/claude-settings"
 
     # pi config is stored in ~/.pi, so mirror the repo's ./pi directory there.
     link "$PWD/pi" "$HOME/.pi"

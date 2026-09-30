@@ -1,0 +1,31 @@
+#!/bin/sh
+# Claude Code status line: prints context window usage and, inside a
+# Herdr pane, reports it and the last prompt as the pane's $ctx and
+# $prompt tokens for the agent panel.
+
+input=$(cat)
+pct=$(printf '%s' "$input" | jq -r '
+  .context_window as $w
+  | if $w.used_percentage != null then $w.used_percentage
+    elif $w.current_usage != null and ($w.context_window_size // 0) > 0 then
+      ($w.current_usage | (.input_tokens // 0) + (.cache_creation_input_tokens // 0)
+        + (.cache_read_input_tokens // 0)) * 100 / $w.context_window_size
+    else empty end
+  | floor')
+
+[ -n "$pct" ] || exit 0
+
+if [ "${HERDR_ENV:-}" = 1 ] && [ -n "${HERDR_PANE_ID:-}" ]; then
+    # The transcript records each prompt as a "last-prompt" line; the
+    # newest is near the end.
+    transcript=$(printf '%s' "$input" | jq -r '.transcript_path // empty')
+    prompt=
+    if [ -f "$transcript" ]; then
+        prompt=$(tail -c 262144 "$transcript" | grep -F '"lastPrompt"' |
+            tail -n 1 | jq -r '.lastPrompt // empty | gsub("\\s+"; " ")')
+    fi
+    herdr pane report-metadata "$HERDR_PANE_ID" --source claude-statusline \
+        --token ctx="${pct}%" --token prompt="$prompt" >/dev/null 2>&1 &
+fi
+
+printf 'ctx %s%%\n' "$pct"
