@@ -22,7 +22,8 @@ stale=
 for dir in "$projects"/*/; do
     dir=${dir%/}
     [ -f "$dir/NOTES.md" ] || continue
-    [ "$dir/.summary" -nt "$dir/NOTES.md" ] && continue
+    [ -n "$(find "$dir/.summary" -newer "$dir/NOTES.md" 2>/dev/null)" ] &&
+        continue
     stale="$stale $dir"
 done
 if [ -n "$stale" ]; then
@@ -33,15 +34,17 @@ if [ -n "$stale" ]; then
     wait
 fi
 
-# Fields: directory, then what fzf shows. Newest projects first.
+# Fields: directory, then what fzf shows. Directory names start with
+# the date, so reverse order puts the newest projects first.
 selected=$({
     printf 'new\t+ new project\n'
-    ls -dt "$projects"/*/ 2>/dev/null | while read -r dir; do
+    for dir in "$projects"/*/; do
+        [ -d "$dir" ] || continue
         dir=${dir%/}
         summary='(no notes)'
         [ -f "$dir/.summary" ] && summary=$(head -n 1 "$dir/.summary")
         printf '%s\t%s  %s\n' "$dir" "${dir##*/}" "$summary"
-    done
+    done | sort -r
 } | fzf --reverse --delimiter='\t' --with-nth=2.. --prompt='project> ' \
     --preview='[ -f {1}/NOTES.md ] && cat {1}/NOTES.md' --preview-window=down,50% |
     cut -f1)
@@ -53,4 +56,4 @@ fi
 
 pane=$("$herdr" workspace create --cwd "$selected" --focus |
     jq -r .result.root_pane.pane_id)
-"$herdr" pane run "$pane" 'exec "$HOME/ws/dotfiles/bin/claude-ask"' >/dev/null
+"$herdr" pane run "$pane" "exec '$HOME/ws/dotfiles/bin/claude-ask'" >/dev/null
