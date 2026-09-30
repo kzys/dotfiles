@@ -1,0 +1,16 @@
+#!/bin/sh
+# Exit 0 if the calling process runs in a Herdr pane.
+#
+# Background sessions run under the Claude Code daemon's --bg-pty-host.
+# They inherit the HERDR_* variables of the pane that started the daemon
+# but don't run in that pane.
+
+[ "${HERDR_ENV:-}" = 1 ] && [ -n "${HERDR_PANE_ID:-}" ] || exit 1
+
+pid=$PPID
+while [ "${pid:-1}" -gt 1 ]; do
+    case $(ps -o args= -p "$pid") in
+    *--bg-pty-host*) exit 1 ;;
+    esac
+    pid=$(ps -o ppid= -p "$pid" | tr -d ' ')
+done

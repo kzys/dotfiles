@@ -2,7 +2,7 @@ onboarding = false
 
 [theme]
 name = "catppuccin"
-auto_switch = false
+auto_switch = true
 
 [ui]
 # Create tabs right away with generated names, like tmux.
@@ -17,10 +17,12 @@ tab_bar_right = [
 tab_bar_right_separator = " · "
 
 [ui.sidebar.agents]
-# $ctx and $prompt are reported by bin/claude-statusline.
+# $-tokens are reported by bin/claude-statusline.
 rows = [
-  ["state_icon", "machine", "workspace", "tab"],
-  ["agent", "$ctx"],
+  ["state_icon", "machine", "$dir", "tab"],
+  [{ token = "$bg", fg = "#f38ba8", bold = true }, "terminal_title_stripped"],
+  ["$branch"],
+  ["agent", "$model", "$ctx"],
   ["$prompt"],
 ]
 
@@ -54,3 +56,11 @@ command = '''
 pane=$("$HERDR_BIN_PATH" workspace create --cwd "${HERDR_ACTIVE_PANE_CWD:-$HOME}" --focus | jq -r .result.root_pane.pane_id) &&
 "$HERDR_BIN_PATH" pane run "$pane" 'exec claude'
 '''
+
+[[keys.command]]
+key = "prefix+shift+q"
+type = "popup"
+description = "ask agent"
+command = '"$HOME/ws/dotfiles/bin/herdr-ask"'
+width = "80%"
+height = "60%"

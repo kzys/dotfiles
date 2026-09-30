@@ -1,0 +1,28 @@
+#!/bin/sh
+# Pick Claude Code background sessions with fzf and resume each in a new
+# Herdr workspace, so that it runs in a pane Herdr can track. The
+# workspace closes when claude exits.
+#
+# claude --resume either continues a session in place or starts a copy;
+# stop the leftover background copy with "claude stop <id>".
+
+set -eu
+
+herdr=${HERDR_BIN_PATH:-herdr}
+
+# Fields: sessionId, state, name, cwd. fzf shows all but the first.
+selected=$(claude agents --json |
+    jq -r '.[] | select(.kind == "background")
+        | [.sessionId, .state, .name, .cwd] | @tsv' |
+    fzf --multi --reverse --delimiter='\t' --with-nth=2.. \
+        --prompt='adopt> ') || exit 0
+
+printf '%s\n' "$selected" | while IFS='	' read -r id _ name cwd; do
+    if [ ! -d "$cwd" ]; then
+        echo "skipping $name: $cwd is gone" >&2
+        continue
+    fi
+    pane=$("$herdr" workspace create --cwd "$cwd" --label "$name" |
+        jq -r .result.root_pane.pane_id)
+    "$herdr" pane run "$pane" "exec claude --resume $id" >/dev/null
+done

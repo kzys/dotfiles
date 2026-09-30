@@ -1,0 +1,59 @@
+#!/bin/sh
+# Pick a project under ~/project with fzf, or a new one, and start
+# bin/claude-ask there in a new Herdr workspace. Each project is listed
+# with a one-line summary of its NOTES.md, which claude writes once and
+# caches in .summary until NOTES.md changes.
+
+set -eu
+
+herdr=${HERDR_BIN_PATH:-herdr}
+projects=$HOME/project
+mkdir -p "$projects"
+
+summarize() {
+    # No HERDR_ENV, so that claude's hooks leave the popup pane alone.
+    env -u HERDR_ENV claude -p --model haiku --no-session-persistence \
+        'Summarize these project notes in one line of at most 60
+characters. Print only the line.' <"$1/NOTES.md" >"$1/.summary.tmp" &&
+        mv "$1/.summary.tmp" "$1/.summary"
+}
+
+stale=
+for dir in "$projects"/*/; do
+    dir=${dir%/}
+    [ -f "$dir/NOTES.md" ] || continue
+    [ -n "$(find "$dir/.summary" -newer "$dir/NOTES.md" 2>/dev/null)" ] &&
+        continue
+    stale="$stale $dir"
+done
+if [ -n "$stale" ]; then
+    echo "Summarizing notes..."
+    for dir in $stale; do
+        summarize "$dir" &
+    done
+    wait
+fi
+
+# Fields: directory, then what fzf shows. Directory names start with
+# the date, so reverse order puts the newest projects first.
+selected=$({
+    printf 'new\t+ new project\n'
+    for dir in "$projects"/*/; do
+        [ -d "$dir" ] || continue
+        dir=${dir%/}
+        summary='(no notes)'
+        [ -f "$dir/.summary" ] && summary=$(head -n 1 "$dir/.summary")
+        printf '%s\t%s  %s\n' "$dir" "${dir##*/}" "$summary"
+    done | sort -r
+} | fzf --reverse --delimiter='\t' --with-nth=2.. --prompt='project> ' \
+    --preview='[ -f {1}/NOTES.md ] && cat {1}/NOTES.md' --preview-window=down,50% |
+    cut -f1)
+[ -n "$selected" ] || exit 0
+
+if [ "$selected" = new ]; then
+    selected=$(mktemp -d "$projects/$(date +%Y%m%d)-XXXXXX")
+fi
+
+pane=$("$herdr" workspace create --cwd "$selected" --focus |
+    jq -r .result.root_pane.pane_id)
+"$herdr" pane run "$pane" "exec '$HOME/ws/dotfiles/bin/claude-ask'" >/dev/null
