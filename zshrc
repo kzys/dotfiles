@@ -211,10 +211,11 @@ export LC_ALL=$LANG
 # rbenv
 # https://github.com/sstephenson/rbenv#installation
 # https://github.com/sstephenson/ruby-build#installing-as-an-rbenv-plugin-recommended
-if [ -d $HOME/.rbenv ]; then
-    export PATH="$HOME/.rbenv/bin:$PATH"
-    eval "$(rbenv init -)"
-fi
+# Disabled: rbenv init and its rehash took ~185ms of every shell's startup.
+# if [ -d $HOME/.rbenv ]; then
+#     export PATH="$HOME/.rbenv/bin:$PATH"
+#     eval "$(rbenv init -)"
+# fi
 
 # Rust
 if [ -d $HOME/local/lib/rustlib/x86_64-apple-darwin/lib ]; then
