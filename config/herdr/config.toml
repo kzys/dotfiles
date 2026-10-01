@@ -36,29 +36,13 @@ navigate_workspace_down = "ctrl+n"
 navigate_pane_left = "ctrl+b"
 navigate_pane_right = "ctrl+f"
 
-# prefix+shift+n opens the launcher below instead.
+# prefix+shift+n opens the project picker below instead.
 new_workspace = ""
+
+switch_workspace = "prefix+shift+1..9"
 
 [[keys.command]]
 key = "prefix+shift+n"
-type = "popup"
-description = "launch in new workspace"
-command = '"$HOME/ws/dotfiles/bin/herdr-launch"'
-width = 40
-height = 12
-
-[[keys.command]]
-key = "prefix+shift+c"
-type = "shell"
-description = "new workspace with claude"
-# exec: the workspace closes with its last pane when claude exits.
-command = '''
-pane=$("$HERDR_BIN_PATH" workspace create --cwd "${HERDR_ACTIVE_PANE_CWD:-$HOME}" --focus | jq -r .result.root_pane.pane_id) &&
-"$HERDR_BIN_PATH" pane run "$pane" 'exec claude'
-'''
-
-[[keys.command]]
-key = "prefix+shift+q"
 type = "popup"
 description = "ask agent"
 command = '"$HOME/ws/dotfiles/bin/herdr-ask"'
