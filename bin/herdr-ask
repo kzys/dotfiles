@@ -1,7 +1,8 @@
 #!/bin/sh
 # Pick a project under ~/project with fzf, or a new one, and start
 # bin/claude-ask there in a new Herdr workspace. Each project is listed
-# with the title from the front matter of its NOTES.md.
+# with the title from the front matter of its NOTES.md, and its
+# workspace is labeled with the name from there.
 
 set -eu
 
@@ -9,11 +10,13 @@ herdr=${HERDR_BIN_PATH:-herdr}
 projects=$HOME/project
 mkdir -p "$projects"
 
-# Prints the title in the front matter of NOTES.md, if any.
-title() {
-    awk 'NR == 1 && $0 != "---" { exit }
+# Prints field $1 in the front matter of NOTES.md in directory $2, if
+# any.
+field() {
+    [ -f "$2/NOTES.md" ] || return 0
+    awk -v key="$1" 'NR == 1 && $0 != "---" { exit }
         NR > 1 && $0 == "---" { exit }
-        NR > 1 && sub(/^title: */, "") { print; exit }' "$1"
+        NR > 1 && sub("^" key ": *", "") { print; exit }' "$2/NOTES.md"
 }
 
 # Fields: directory, then what fzf shows. Directory names start with
@@ -24,7 +27,7 @@ selected=$({
         [ -d "$dir" ] || continue
         dir=${dir%/}
         summary='(no notes)'
-        [ -f "$dir/NOTES.md" ] && summary=$(title "$dir/NOTES.md")
+        [ -f "$dir/NOTES.md" ] && summary=$(field title "$dir")
         [ -n "$summary" ] || summary='(no title)'
         printf '%s\t%s  %s\n' "$dir" "${dir##*/}" "$summary"
     done | sort -r
@@ -37,6 +40,7 @@ if [ "$selected" = new ]; then
     selected=$(mktemp -d "$projects/$(date +%Y%m%d)-XXXXXX")
 fi
 
-pane=$("$herdr" workspace create --cwd "$selected" --focus |
+name=$(field name "$selected")
+pane=$("$herdr" workspace create --cwd "$selected" ${name:+--label "$name"} --focus |
     jq -r .result.root_pane.pane_id)
 "$herdr" pane run "$pane" "exec '$HOME/ws/dotfiles/bin/claude-ask'" >/dev/null
