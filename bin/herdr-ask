@@ -63,7 +63,7 @@ out=$({
     done | sort -r
 } | fzf --reverse --delimiter='\t' --with-nth=2.. --prompt='project> ' \
     --header='enter: resume latest  ctrl-]: new session  ctrl-\: pick session' \
-    --expect='ctrl-],ctrl-\' \
+    --expect="ctrl-],ctrl-\\" \
     --preview='cd {1} 2>/dev/null && cat README.md NOTES.md AGENT-*.md 2>/dev/null' \
     --preview-window=down,50%) ||
     exit 0
@@ -78,7 +78,7 @@ fi
 cmd="exec '$HOME/ws/dotfiles/bin/claude-ask'"
 case $key in
 ctrl-]) ;;
-'ctrl-\') has_session "$selected" && cmd="$cmd --resume" ;;
+"ctrl-\\") has_session "$selected" && cmd="$cmd --resume" ;;
 *)
     read -r id session status <<EOF
 $(background "$selected")
