@@ -61,3 +61,6 @@
 	smudge = git-lfs smudge -- %f
 [credential "https://github.com"]
 	helper = "!f() { if [ \"$(uname -s)\" = Darwin ]; then /opt/homebrew/bin/gh auth git-credential \"$@\"; else gh auth git-credential \"$@\"; fi; }; f"
+# Use HTTPS with gh's credentials for GitHub, even for git@ URLs.
+[url "https://github.com/"]
+	insteadOf = git@github.com:
