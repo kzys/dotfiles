@@ -22,8 +22,8 @@ rows = [
   ["state_icon", "machine", "$dir", "tab"],
   [{ token = "$bg", fg = "#f38ba8", bold = true }, "terminal_title_stripped"],
   ["$branch"],
-  ["agent", "$model", "$ctx"],
   ["$prompt"],
+  ["state_text", "$ctx"],
 ]
 
 [keys]
