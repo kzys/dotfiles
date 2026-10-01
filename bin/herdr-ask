@@ -1,7 +1,7 @@
 #!/bin/sh
 # Pick a project under ~/project with fzf, or a new one, and start
 # bin/claude-ask there in a new Herdr workspace. Each project is listed
-# with the title from the front matter of its NOTES.md, and its
+# with the title from the front matter of its README.md, and its
 # workspace is labeled with the name from there. Enter resumes the
 # project's latest claude session, if any.
 
@@ -11,13 +11,22 @@ herdr=${HERDR_BIN_PATH:-herdr}
 projects=$HOME/project
 mkdir -p "$projects"
 
-# Prints field $1 in the front matter of NOTES.md in directory $2, if
+# Prints the notes file of directory $1: README.md, or NOTES.md in
+# projects from before README.md.
+notes() {
+    for file in "$1/README.md" "$1/NOTES.md"; do
+        [ -f "$file" ] && { echo "$file"; return; }
+    done
+}
+
+# Prints field $1 in the front matter of the notes of directory $2, if
 # any.
 field() {
-    [ -f "$2/NOTES.md" ] || return 0
+    file=$(notes "$2")
+    [ -n "$file" ] || return 0
     awk -v key="$1" 'NR == 1 && $0 != "---" { exit }
         NR > 1 && $0 == "---" { exit }
-        NR > 1 && sub("^" key ": *", "") { print; exit }' "$2/NOTES.md"
+        NR > 1 && sub("^" key ": *", "") { print; exit }' "$file"
 }
 
 # Succeeds if claude has a session for directory $1. Claude keeps them
@@ -36,14 +45,15 @@ out=$({
         [ -d "$dir" ] || continue
         dir=${dir%/}
         summary='(no notes)'
-        [ -f "$dir/NOTES.md" ] && summary=$(field title "$dir")
+        [ -n "$(notes "$dir")" ] && summary=$(field title "$dir")
         [ -n "$summary" ] || summary='(no title)'
         printf '%s\t%s  %s\n' "$dir" "${dir##*/}" "$summary"
     done | sort -r
 } | fzf --reverse --delimiter='\t' --with-nth=2.. --prompt='project> ' \
     --header='enter: resume latest  ctrl-n: new session  ctrl-r: pick session' \
     --expect=ctrl-n,ctrl-r \
-    --preview='[ -f {1}/NOTES.md ] && cat {1}/NOTES.md' --preview-window=down,50%) ||
+    --preview='cd {1} 2>/dev/null && cat README.md NOTES.md AGENT-*.md 2>/dev/null' \
+    --preview-window=down,50%) ||
     exit 0
 key=$(printf '%s\n' "$out" | sed -n 1p)
 selected=$(printf '%s\n' "$out" | sed -n 2p | cut -f1)
