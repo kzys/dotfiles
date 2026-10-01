@@ -15,4 +15,4 @@ instructions() {
 # Herdr already tracks sessions, so keep them out of the background.
 [ "${HERDR_ENV:-}" != 1 ] || export CLAUDE_CODE_DISABLE_AGENT_VIEW=1
 
-exec claude --append-system-prompt "$(instructions)" "$@"
+exec claude --add-dir "$HOME/ws/dotfiles" --append-system-prompt "$(instructions)" "$@"
