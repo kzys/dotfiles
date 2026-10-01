@@ -50,8 +50,8 @@ out=$({
         printf '%s\t%s  %s\n' "$dir" "${dir##*/}" "$summary"
     done | sort -r
 } | fzf --reverse --delimiter='\t' --with-nth=2.. --prompt='project> ' \
-    --header='enter: resume latest  ctrl-n: new session  ctrl-r: pick session' \
-    --expect=ctrl-n,ctrl-r \
+    --header='enter: resume latest  ctrl-]: new session  ctrl-\: pick session' \
+    --expect='ctrl-],ctrl-\' \
     --preview='cd {1} 2>/dev/null && cat README.md NOTES.md AGENT-*.md 2>/dev/null' \
     --preview-window=down,50%) ||
     exit 0
@@ -65,8 +65,8 @@ fi
 
 args=
 case $key in
-ctrl-n) ;;
-ctrl-r) has_session "$selected" && args=' --resume' ;;
+ctrl-]) ;;
+'ctrl-\') has_session "$selected" && args=' --resume' ;;
 *) has_session "$selected" && args=' --continue' ;;
 esac
 
