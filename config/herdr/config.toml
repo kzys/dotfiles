@@ -34,13 +34,14 @@ navigate_workspace_down = "ctrl+n"
 navigate_pane_left = "ctrl+b"
 navigate_pane_right = "ctrl+f"
 
-# prefix+shift+n opens the project picker below instead.
+# prefix+w opens the project picker below instead of either.
+workspace_picker = ""
 new_workspace = ""
 
 switch_workspace = "prefix+shift+1..9"
 
 [[keys.command]]
-key = "prefix+shift+n"
+key = "prefix+w"
 type = "popup"
 description = "ask agent"
 command = '"$HOME/ws/dotfiles/bin/herdr-ask"'
