@@ -16,7 +16,10 @@ mkdir -p "$projects"
 # projects from before README.md.
 notes() {
     for file in "$1/README.md" "$1/NOTES.md"; do
-        [ -f "$file" ] && { echo "$file"; return; }
+        if [ -f "$file" ]; then
+            echo "$file"
+            return
+        fi
     done
 }
 
