@@ -295,6 +295,13 @@ export LD_LIBRARY_PATH="$HOME/.local/lib:$LD_LIBRARY_PATH"
 # opencode
 export PATH="$HOME/.opencode/bin:$PATH"
 
+# bun
+if [[ -d ~/.bun ]]; then
+    export BUN_INSTALL="$HOME/.bun"
+    export PATH="$BUN_INSTALL/bin:$PATH"
+    [[ -s "$BUN_INSTALL/_bun" ]] && source "$BUN_INSTALL/_bun"
+fi
+
 # Work-specific settings, if this is a work machine.
 if [[ -f ~/ws/dotfiles/work/zshrc ]]; then
     source ~/ws/dotfiles/work/zshrc
