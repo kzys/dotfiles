@@ -1,7 +1,7 @@
 # Safety first
 
 - Don't push to remote branches unless explicitly asked. This includes force-push.
-- After pushing to a PR, watch its checks until they finish and report failures.
+- After pushing to a PR, watch its checks in the background until they finish and report failures.
 
 # House Rules
 

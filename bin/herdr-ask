@@ -2,7 +2,8 @@
 # Pick a project under ~/project with fzf, or a new one, and start
 # bin/claude-ask there in a new Herdr workspace. Each project is listed
 # with the title from the front matter of its README.md, and its
-# workspace is labeled with the name from there. Enter resumes the
+# workspace is labeled with the name from there. Projects open in Herdr
+# are marked, and Enter switches to them. Otherwise Enter resumes the
 # project's latest claude session, if any. A background session is
 # stopped and resumed in the workspace if idle, and attached otherwise.
 
@@ -48,21 +49,33 @@ background() {
             max_by(.startedAt) | values | "\(.id) \(.sessionId) \(.status)"'
 }
 
+# Workspace and directory of each pane open in Herdr.
+open=$("$herdr" pane list | jq -r '.result.panes[] | "\(.workspace_id)\t\(.cwd)"')
+
+# Prints the workspace of a pane open in directory $1 or under it, if
+# any.
+workspace_of() {
+    printf '%s\n' "$open" |
+        awk -F '\t' -v dir="$1" '$2 == dir || index($2, dir "/") == 1 { print $1; exit }'
+}
+
 # Fields: directory, then what fzf shows. Directory names start with
 # the date, so reverse order puts the newest projects first. The first
 # line of the output is the key pressed, empty for Enter.
 out=$({
-    printf 'new\t+ new project\n'
+    printf 'new\t  + new project\n'
     for dir in "$projects"/*/; do
         [ -d "$dir" ] || continue
         dir=${dir%/}
         summary='(no notes)'
         [ -n "$(notes "$dir")" ] && summary=$(field title "$dir")
         [ -n "$summary" ] || summary='(no title)'
-        printf '%s\t%s  %s\n' "$dir" "${dir##*/}" "$summary"
+        mark=' '
+        [ -z "$(workspace_of "$dir")" ] || mark='●'
+        printf '%s\t%s %s  %s\n' "$dir" "$mark" "${dir##*/}" "$summary"
     done | sort -r
 } | fzf --reverse --delimiter='\t' --with-nth=2.. --prompt='project> ' \
-    --header='enter: resume latest  ctrl-]: new session  ctrl-\: pick session' \
+    --header='enter: switch or resume  ctrl-]: new session  ctrl-\: pick session' \
     --expect="ctrl-],ctrl-\\" \
     --preview='cd {1} 2>/dev/null && cat README.md NOTES.md AGENT-*.md 2>/dev/null' \
     --preview-window=down,50%) ||
@@ -75,18 +88,23 @@ if [ "$selected" = new ]; then
     selected=$(mktemp -d "$projects/$(date +%Y%m%d)-XXXXXX")
 fi
 
-cmd="exec '$HOME/ws/dotfiles/bin/claude-ask'"
+cmd="'$HOME/ws/dotfiles/bin/claude-ask'"
 case $key in
 ctrl-]) ;;
 "ctrl-\\") has_session "$selected" && cmd="$cmd --resume" ;;
 *)
+    workspace=$(workspace_of "$selected")
+    if [ -n "$workspace" ]; then
+        "$herdr" workspace focus "$workspace" >/dev/null
+        exit
+    fi
     read -r id session status <<EOF
 $(background "$selected")
 EOF
     if [ "$status" = idle ] && claude stop "$id" >/dev/null; then
         cmd="$cmd --resume $session"
     elif [ -n "$id" ]; then
-        cmd="exec claude attach $id"
+        cmd="claude attach $id"
     elif has_session "$selected"; then
         cmd="$cmd --continue"
     fi
