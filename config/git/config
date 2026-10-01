@@ -48,11 +48,10 @@
 [user]
 	email = kato.kazuyoshi@gmail.com
 	name = Kazuyoshi Kato
-[credential "https://github.com"]
-	helper = 
-	helper = !/usr/bin/gh auth git-credential
 [credential "https://gist.github.com"]
 	helper = 
-	helper = !/usr/bin/gh auth git-credential
+	helper = !gh auth git-credential
 [init]
 	defaultBranch = main
+[credential "https://github.com"]
+	helper = "!f() { if [ \"$(uname -s)\" = Darwin ]; then /opt/homebrew/bin/gh auth git-credential \"$@\"; else gh auth git-credential \"$@\"; fi; }; f"
