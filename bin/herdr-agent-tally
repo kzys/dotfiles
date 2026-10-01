@@ -1,0 +1,15 @@
+#!/bin/sh
+# Prints how many Herdr agents are blocked and working, for the tab bar.
+# The marks alternate every second, like busywork's, so a change catches
+# the eye.
+
+set -eu
+
+"${HERDR_BIN_PATH:-herdr}" agent list |
+    jq -r --argjson frame "$(($(date +%s) % 2))" '
+        [.result.agents[].agent_status] as $states |
+        [["blocked", ["👋", "🖐"]], ["working", ["🚶", "🏃"]]] |
+        map(.[0] as $state | .[1][$frame] as $mark |
+            ($states | map(select(. == $state)) | length) as $n |
+            select($n > 0) | "\($mark)\($n)") |
+        join(" ")'

@@ -8,11 +8,9 @@ auto_switch = true
 # Create tabs right away with generated names, like tmux.
 prompt_new_tab_name = false
 
-# datetime rejects offsets and UTC, so both times come from date(1).
 tab_bar_right = [
   { type = "zoom" },
-  { type = "command", command = "date +'%a %H:%M %z'", interval_seconds = 10, timeout_seconds = 2 },
-  { type = "command", command = "date -u +%H:%MZ", interval_seconds = 10, timeout_seconds = 2 },
+  { type = "command", command = '"$HOME/ws/dotfiles/bin/herdr-agent-tally"', interval_seconds = 1, timeout_seconds = 2 },
 ]
 tab_bar_right_separator = " · "
 
