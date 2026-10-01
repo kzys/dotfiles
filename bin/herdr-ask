@@ -3,7 +3,8 @@
 # bin/claude-ask there in a new Herdr workspace. Each project is listed
 # with the title from the front matter of its README.md, and its
 # workspace is labeled with the name from there. Enter resumes the
-# project's latest claude session, if any.
+# project's latest claude session, if any. A background session is
+# stopped and resumed in the workspace if idle, and attached otherwise.
 
 set -eu
 
@@ -36,6 +37,14 @@ has_session() {
     [ -f "$1" ]
 }
 
+# Prints the ID, session ID, and status of the latest background claude
+# session started in directory $1, if any.
+background() {
+    claude agents --json --cwd "$1" 2>/dev/null |
+        jq -r --arg cwd "$1" '[.[] | select(.kind == "background" and .cwd == $cwd)] |
+            max_by(.startedAt) | values | "\(.id) \(.sessionId) \(.status)"'
+}
+
 # Fields: directory, then what fzf shows. Directory names start with
 # the date, so reverse order puts the newest projects first. The first
 # line of the output is the key pressed, empty for Enter.
@@ -63,14 +72,25 @@ if [ "$selected" = new ]; then
     selected=$(mktemp -d "$projects/$(date +%Y%m%d)-XXXXXX")
 fi
 
-args=
+cmd="exec '$HOME/ws/dotfiles/bin/claude-ask'"
 case $key in
 ctrl-]) ;;
-'ctrl-\') has_session "$selected" && args=' --resume' ;;
-*) has_session "$selected" && args=' --continue' ;;
+'ctrl-\') has_session "$selected" && cmd="$cmd --resume" ;;
+*)
+    read -r id session status <<EOF
+$(background "$selected")
+EOF
+    if [ "$status" = idle ] && claude stop "$id" >/dev/null; then
+        cmd="$cmd --resume $session"
+    elif [ -n "$id" ]; then
+        cmd="exec claude attach $id"
+    elif has_session "$selected"; then
+        cmd="$cmd --continue"
+    fi
+    ;;
 esac
 
 name=$(field name "$selected")
 pane=$("$herdr" workspace create --cwd "$selected" ${name:+--label "$name"} --focus |
     jq -r .result.root_pane.pane_id)
-"$herdr" pane run "$pane" "exec '$HOME/ws/dotfiles/bin/claude-ask'$args" >/dev/null
+"$herdr" pane run "$pane" "$cmd" >/dev/null
