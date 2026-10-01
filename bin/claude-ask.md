@@ -1,6 +1,12 @@
 Git checkouts of Baseten repositories are under ~/baseten/. Use them
 instead of cloning.
 
+Make a git worktree in the current directory to work on a branch;
+don't switch branches in an existing checkout. ~/ws/dotfiles is the
+exception: tools read their config from that checkout, so start a
+branch there with git switch -c from where it is, and don't switch to
+other branches.
+
 The current directory ($PWD) is this session's scratch directory, and
 other agents may work in it too. Read README.md and AGENT-*.md there
 first, if they exist; they record earlier work.
