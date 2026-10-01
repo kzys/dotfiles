@@ -2,7 +2,8 @@
 # Pick a project under ~/project with fzf, or a new one, and start
 # bin/claude-ask there in a new Herdr workspace. Each project is listed
 # with the title from the front matter of its NOTES.md, and its
-# workspace is labeled with the name from there.
+# workspace is labeled with the name from there. Enter resumes the
+# project's latest claude session, if any.
 
 set -eu
 
@@ -19,9 +20,17 @@ field() {
         NR > 1 && sub("^" key ": *", "") { print; exit }' "$2/NOTES.md"
 }
 
+# Succeeds if claude has a session for directory $1. Claude keeps them
+# under ~/.claude/projects, in a directory named after the path.
+has_session() {
+    set -- "$HOME/.claude/projects/$(printf '%s' "$1" | sed 's/[^a-zA-Z0-9]/-/g')"/*.jsonl
+    [ -f "$1" ]
+}
+
 # Fields: directory, then what fzf shows. Directory names start with
-# the date, so reverse order puts the newest projects first.
-selected=$({
+# the date, so reverse order puts the newest projects first. The first
+# line of the output is the key pressed, empty for Enter.
+out=$({
     printf 'new\t+ new project\n'
     for dir in "$projects"/*/; do
         [ -d "$dir" ] || continue
@@ -32,15 +41,26 @@ selected=$({
         printf '%s\t%s  %s\n' "$dir" "${dir##*/}" "$summary"
     done | sort -r
 } | fzf --reverse --delimiter='\t' --with-nth=2.. --prompt='project> ' \
-    --preview='[ -f {1}/NOTES.md ] && cat {1}/NOTES.md' --preview-window=down,50% |
-    cut -f1)
+    --header='enter: resume latest  ctrl-n: new session  ctrl-r: pick session' \
+    --expect=ctrl-n,ctrl-r \
+    --preview='[ -f {1}/NOTES.md ] && cat {1}/NOTES.md' --preview-window=down,50%) ||
+    exit 0
+key=$(printf '%s\n' "$out" | sed -n 1p)
+selected=$(printf '%s\n' "$out" | sed -n 2p | cut -f1)
 [ -n "$selected" ] || exit 0
 
 if [ "$selected" = new ]; then
     selected=$(mktemp -d "$projects/$(date +%Y%m%d)-XXXXXX")
 fi
 
+args=
+case $key in
+ctrl-n) ;;
+ctrl-r) has_session "$selected" && args=' --resume' ;;
+*) has_session "$selected" && args=' --continue' ;;
+esac
+
 name=$(field name "$selected")
 pane=$("$herdr" workspace create --cwd "$selected" ${name:+--label "$name"} --focus |
     jq -r .result.root_pane.pane_id)
-"$herdr" pane run "$pane" "exec '$HOME/ws/dotfiles/bin/claude-ask'" >/dev/null
+"$herdr" pane run "$pane" "exec '$HOME/ws/dotfiles/bin/claude-ask'$args" >/dev/null
