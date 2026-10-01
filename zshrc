@@ -282,6 +282,9 @@ export PATH="$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH";
 export PATH="$HOME/.local/bin:$PATH"
 export LD_LIBRARY_PATH="$HOME/.local/lib:$LD_LIBRARY_PATH"
 
+# opencode
+export PATH="$HOME/.opencode/bin:$PATH"
+
 # Work-specific settings, if this is a work machine.
 if [[ -f ~/ws/dotfiles/work/zshrc ]]; then
     source ~/ws/dotfiles/work/zshrc
