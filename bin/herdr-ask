@@ -88,7 +88,7 @@ if [ "$selected" = new ]; then
     selected=$(mktemp -d "$projects/$(date +%Y%m%d)-XXXXXX")
 fi
 
-cmd="exec '$HOME/ws/dotfiles/bin/claude-ask'"
+cmd="'$HOME/ws/dotfiles/bin/claude-ask'"
 case $key in
 ctrl-]) ;;
 "ctrl-\\") has_session "$selected" && cmd="$cmd --resume" ;;
@@ -104,7 +104,7 @@ EOF
     if [ "$status" = idle ] && claude stop "$id" >/dev/null; then
         cmd="$cmd --resume $session"
     elif [ -n "$id" ]; then
-        cmd="exec claude attach $id"
+        cmd="claude attach $id"
     elif has_session "$selected"; then
         cmd="$cmd --continue"
     fi
