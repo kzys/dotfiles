@@ -1,6 +1,0 @@
-# label	command (read by bin/herdr-launch)
-shell	
-claude	claude
-claude opus	claude --model opus
-opencode	opencode
-pi	pino
