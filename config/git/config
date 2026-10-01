@@ -20,6 +20,7 @@
 	b = for-each-ref --sort=-committerdate --format='%(committerdate:short) %(objectname:short) %(refname:short)' refs/heads/
 	co = checkout
 	dag = log --graph --format='format:%C(yellow)%h%C(reset) %C(blue)\"%an\" <%ae>%C(reset) %C(magenta)%cr%C(reset)%C(auto)%d%C(reset)%n%s' --date-order
+	srcdiff = "!f(){ b=\"${1:-origin/main}\"; shift 2>/dev/null; \\\n  git diff \"$b\"... --name-only | git check-attr --stdin linguist-generated \\\n  | grep \": unspecified$\" | sed \"s/: linguist-generated: unspecified$//\" \\\n  | xargs -r git diff \"$b\"... \"$@\" --; }; f"
 
 [include]
     path = ~/src/dotfiles-private/gitconfig
