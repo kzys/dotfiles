@@ -30,5 +30,5 @@
 
 ## Attribution
 
-- Start GitHub comments with `:robot: THIS IS AI SPEAKING :robot:`.
+- Start GitHub comments with `:robot: THIS IS AI SPEAKING :robot:`, but not PR descriptions.
 - End commits with a trailer naming the model that wrote them: `Co-Authored-By: <model> <email>` if the harness gives you an email, else `Assisted-by: <model>` with no email. Don't copy the trailer from older commits; they may be by a different model.
