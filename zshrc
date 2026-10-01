@@ -34,9 +34,13 @@ go_sdk=$(ls -r ~/sdk | sort | tail -1)
 # http://www.clear-code.com/blog/2011/9/5.html
 typeset -U path
 path=(
+    # My own scripts
+    ~/ws/sandbox/bin(N)
     ~/ws/dotfiles/bin(N)
-    ~/local/bin(N)
     ~/bin(N)
+
+    # ./configure --prefix=$HOME/local
+    ~/local/bin(N)
 
     ~/Library/Python/2.7/bin(N)
 
