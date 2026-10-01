@@ -24,6 +24,14 @@ rows = [
   ["state_text", "$ctx"],
 ]
 
+[ui.sidebar.spaces]
+# $title is reported by bin/herdr-report-title.
+rows = [
+  ["state_icon", "workspace"],
+  [{ token = "$title", dim = true }],
+  ["branch", "git_status"],
+]
+
 [keys]
 # The default prefix, C-b, is backward-char.
 prefix = "ctrl+z"

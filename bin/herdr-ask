@@ -96,6 +96,7 @@ ctrl-]) ;;
     workspace=$(workspace_of "$selected")
     if [ -n "$workspace" ]; then
         "$herdr" workspace focus "$workspace" >/dev/null
+        "$(dirname "$0")/herdr-report-title" "$workspace" "$selected" || true
         exit
     fi
     read -r id session status <<EOF
@@ -112,6 +113,8 @@ EOF
 esac
 
 name=$(field name "$selected")
-pane=$("$herdr" workspace create --cwd "$selected" ${name:+--label "$name"} --focus |
-    jq -r .result.root_pane.pane_id)
+created=$("$herdr" workspace create --cwd "$selected" ${name:+--label "$name"} --focus)
+pane=$(printf '%s' "$created" | jq -r .result.root_pane.pane_id)
+"$(dirname "$0")/herdr-report-title" \
+    "$(printf '%s' "$created" | jq -r .result.workspace.workspace_id)" "$selected" || true
 "$herdr" pane run "$pane" "$cmd" >/dev/null

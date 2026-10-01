@@ -1,5 +1,6 @@
 #!/bin/sh
-# Rename the Herdr workspace of the calling pane. Does nothing in a
+# Rename the Herdr workspace of the calling pane, and report the title
+# in ./README.md for the Spaces panel. Does nothing in a
 # background session, whose HERDR_* variables name another pane.
 
 set -eu
@@ -9,4 +10,5 @@ if ! "$(dirname "$0")/in-herdr-pane"; then
     echo "herdr-name-workspace: not in a Herdr pane; skipping" >&2
     exit 0
 fi
-exec "${HERDR_BIN_PATH:-herdr}" workspace rename "$HERDR_WORKSPACE_ID" "$@"
+"${HERDR_BIN_PATH:-herdr}" workspace rename "$HERDR_WORKSPACE_ID" "$@"
+"$(dirname "$0")/herdr-report-title" "$HERDR_WORKSPACE_ID" . || true
