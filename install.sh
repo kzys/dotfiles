@@ -21,7 +21,7 @@ link() {
 }
 
 main() {
-    local -a files=(zshrc emacs.d tmux.conf bashrc)
+    local -a files=(zshrc zshenv emacs.d tmux.conf bashrc)
     for file in "${files[@]}"
     do
         link "$PWD/$file" "$HOME/.$file"
