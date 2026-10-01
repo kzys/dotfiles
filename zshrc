@@ -28,7 +28,9 @@ export FZF_DEFAULT_OPTS='--color=light'
 # Go
 # https://go.dev/doc/manage-install#installing-multiple installs Go under ~/sdk.
 # Pick the latest from the directory.
-go_sdk=$(ls -r ~/sdk | sort | tail -1)
+if [[ -d ~/sdk ]]; then
+    go_sdk=$(ls -r ~/sdk | sort | tail -1)
+fi
 
 # Path
 # http://www.clear-code.com/blog/2011/9/5.html
