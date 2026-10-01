@@ -39,6 +39,8 @@ navigate_pane_right = "ctrl+f"
 # prefix+shift+n opens the project picker below instead.
 new_workspace = ""
 
+switch_workspace = "prefix+shift+1..9"
+
 [[keys.command]]
 key = "prefix+shift+n"
 type = "popup"
