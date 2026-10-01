@@ -166,7 +166,8 @@ precmd () {
     set-title "$(print -n -P '%~')"
 }
 
-if test -n $SSH_AGENT_PID; then
+# Needed? Seems I don't use ssh-agent much nowadys...
+if [[ -n $SSH_AGENT_PID && -e ~/secrets/id_ed25519 ]]; then
   (ssh-add -L | grep kato.kazuyoshi@gmail.com > /dev/null) || ssh-add ~/secrets/id_ed25519
 fi
 
