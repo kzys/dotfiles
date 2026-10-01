@@ -180,6 +180,8 @@ fi
 # Android
 if [ -d $HOME/Library/Android/sdk ]; then
     ANDROID_HOME=$HOME/Library/Android/sdk
+elif [ -d $HOME/Android/Sdk ]; then
+    ANDROID_HOME=$HOME/Android/Sdk
 elif [ -d $HOME/src/adt-bundle-linux-x86_64-20140702 ]; then
     ANDROID_HOME=$HOME/src/adt-bundle-linux-x86_64-20140702/sdk
 elif [ -d $HOME/src/adt-bundle-mac-x86_64-20140702 ]; then
@@ -191,6 +193,7 @@ if [ ! -z "$ANDROID_HOME" ]; then
 
     PATH=$ANDROID_HOME/tools:$PATH              # android, emulator, ...
     PATH=$ANDROID_HOME/platform-tools:$PATH     # adb, fastboot, ...
+    PATH=$ANDROID_HOME/emulator:$PATH           # emulator
 
     # aapt, aidl, ...
     for build_tool_path in $ANDROID_HOME/build-tools/*
