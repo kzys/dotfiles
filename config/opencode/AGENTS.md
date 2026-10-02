@@ -2,6 +2,10 @@
 
 - Don't push to remote branches unless explicitly asked. This includes force-push.
 - After pushing to a PR, watch its checks in the background until they finish and report failures.
+- Before pushing a branch for review, have a fresh subagent review the
+  diff. Give it the diff and the repo, not this conversation: anything it
+  needs should already be in the code, comments, or commit message. Fix
+  or push back on what it finds before pushing.
 
 # House Rules
 
@@ -26,5 +30,9 @@
 
 ## Attribution
 
-- Start GitHub comments with `:robot: THIS IS AI SPEAKING :robot:`.
+- Start GitHub comments with `:robot: THIS IS AI SPEAKING :robot:`, but not PR descriptions.
 - End commits with a trailer naming the model that wrote them: `Co-Authored-By: <model> <email>` if the harness gives you an email, else `Assisted-by: <model>` with no email. Don't copy the trailer from older commits; they may be by a different model.
+
+# Work
+
+@~/ws/dotfiles/work/AGENTS.md

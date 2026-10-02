@@ -1,0 +1,14 @@
+#!/bin/sh
+# Report the title from the front matter of README.md in directory $2
+# as the $title token of Herdr workspace $1, for the Spaces panel.
+
+set -eu
+
+[ $# -eq 2 ] || { echo "usage: herdr-report-title <workspace> <dir>" >&2; exit 2; }
+[ -f "$2/README.md" ] || exit 0
+title=$(awk 'NR == 1 && $0 != "---" { exit }
+    NR > 1 && $0 == "---" { exit }
+    NR > 1 && sub("^title: *", "") { print; exit }' "$2/README.md")
+[ -n "$title" ] || exit 0
+"${HERDR_BIN_PATH:-herdr}" workspace report-metadata "$1" --source readme-title \
+    --token title="$title" >/dev/null
