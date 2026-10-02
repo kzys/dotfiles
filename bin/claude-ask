@@ -15,4 +15,8 @@ instructions() {
 # Herdr already tracks sessions, so keep them out of the background.
 [ "${HERDR_ENV:-}" != 1 ] || export CLAUDE_CODE_DISABLE_AGENT_VIEW=1
 
+# Run claude's commands in bash, not the login shell, whose quirks trip
+# it up.
+export CLAUDE_CODE_SHELL=/bin/bash
+
 exec claude --add-dir "$HOME/ws/dotfiles" --append-system-prompt "$(instructions)" "$@"
