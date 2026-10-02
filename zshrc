@@ -76,6 +76,7 @@ else
     alias ls='ls -wF'
 fi
 alias tmuxa='tmux attach || tmux'
+alias hp=herdr-project
 
 # History
 HISTFILE=~/.zsh/history
