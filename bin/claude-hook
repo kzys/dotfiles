@@ -1,0 +1,31 @@
+#!/bin/sh
+# Claude Code hook for every event, which it reads from the input.
+#
+# SessionStart: reports the session to the Herdr pane so that Herdr
+# resumes it after a restart.
+
+input=$(cat)
+dir=$(dirname "$0")
+
+session_start() {
+    "$dir/in-herdr-pane" || return 0
+
+    # Subagents have an agent_id; only the main session owns the pane.
+    [ -z "$(printf '%s' "$input" | jq -r '.agent_id // empty')" ] || return 0
+
+    sid=$(printf '%s' "$input" | jq -r '.session_id // empty')
+    [ -n "$sid" ] || return 0
+    transcript=$(printf '%s' "$input" | jq -r '.transcript_path // empty')
+    src=$(printf '%s' "$input" | jq -r '.source // empty')
+
+    set -- --agent-session-id "$sid"
+    [ -z "$transcript" ] || set -- "$@" --agent-session-path "$transcript"
+    [ -z "$src" ] || set -- "$@" --session-start-source "$src"
+    herdr pane report-agent-session "$HERDR_PANE_ID" --source herdr:claude \
+        --agent claude --seq "$(perl -MTime::HiRes=time -e 'printf "%d000", time * 1e6')" "$@" >/dev/null 2>&1
+}
+
+case $(printf '%s' "$input" | jq -r '.hook_event_name // empty') in
+SessionStart) session_start ;;
+esac
+exit 0

@@ -1,0 +1,44 @@
+#!/bin/sh
+# Prints field <key> from the front matter of the notes in directory
+# <dir>: README.md, or NOTES.md in projects from before README.md. Exits
+# 1 if there are no notes.
+#
+# With --report <workspace>, reports the title instead as the $title
+# token of that Herdr workspace, for the Spaces panel.
+
+set -eu
+
+usage() {
+    echo "usage: herdr-front-matter <dir> <key>" >&2
+    echo "       herdr-front-matter --report <workspace> <dir>" >&2
+    exit 2
+}
+
+workspace=
+if [ "${1:-}" = --report ]; then
+    [ $# -eq 3 ] || usage
+    workspace=$2
+    set -- "$3" title
+fi
+[ $# -eq 2 ] || usage
+
+file=
+for f in "$1/README.md" "$1/NOTES.md"; do
+    if [ -f "$f" ]; then
+        file=$f
+        break
+    fi
+done
+[ -n "$file" ] || exit 1
+
+value=$(awk -v key="$2" 'NR == 1 && $0 != "---" { exit }
+    NR > 1 && $0 == "---" { exit }
+    NR > 1 && sub("^" key ": *", "") { print; exit }' "$file")
+[ -n "$value" ] || exit 0
+
+if [ -z "$workspace" ]; then
+    printf '%s\n' "$value"
+else
+    "${HERDR_BIN_PATH:-herdr}" workspace report-metadata "$workspace" \
+        --source readme-title --token title="$value" >/dev/null
+fi
