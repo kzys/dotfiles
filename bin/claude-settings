@@ -14,16 +14,23 @@ import sys
 SETTINGS = pathlib.Path.home() / '.claude' / 'settings.json'
 STATUSLINE = pathlib.Path(__file__).resolve().parent / 'claude-statusline'
 
+# The status line shows countdowns, so rerun it while the session is
+# idle too.
+REFRESH_SECONDS = 60
+
 
 def update(settings, command):
-    """settings with the status line running command. Raises ValueError
-    rather than replace a status line set to something else."""
+    """settings with the status line running command and rerun
+    periodically. Raises ValueError rather than replace a status line set
+    to something else."""
     have = settings.get('statusLine')
     if have is not None and os.path.expanduser(have.get('command', '')) != command:
         raise ValueError(f'statusLine already runs {have.get("command")!r}')
-    if have is not None:
+    if have is None:
+        have = {'type': 'command', 'command': command}
+    if 'refreshInterval' in have:
         return settings
-    return {**settings, 'statusLine': {'type': 'command', 'command': command}}
+    return {**settings, 'statusLine': {**have, 'refreshInterval': REFRESH_SECONDS}}
 
 
 def main():

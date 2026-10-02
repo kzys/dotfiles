@@ -1,9 +1,10 @@
 #!/bin/sh
-# Claude Code status line: prints context window usage and, inside a
-# Herdr pane, reports it, the last prompt, the model, and the working
-# directory and branch as the pane's $ctx, $prompt, $model, $dir and
-# $branch tokens for the agent panel, plus $bg when it runs as a
-# background session.
+# Claude Code status line: prints context window usage, the model,
+# effort, how long the prompt cache stays warm, and rate limit usage.
+# Inside a Herdr pane it also reports context window usage, the last
+# prompt, the model, and the working directory and branch as the pane's
+# $ctx, $prompt, $model, $dir and $branch tokens for the agent panel,
+# plus $bg when it runs as a background session.
 
 input=$(cat)
 pct=$(printf '%s' "$input" | jq -r '
@@ -45,4 +46,24 @@ if [ "${HERDR_ENV:-}" = 1 ] && [ -n "${HERDR_PANE_ID:-}" ]; then
         --token dir="$dir" --token branch="$branch" >/dev/null 2>&1
 fi
 
-printf 'ctx %s%%\n' "$pct"
+# Kept within 80 columns. A part whose fields are missing or malformed
+# is left out.
+printf '%s' "$input" | jq -r --arg pct "$pct" '
+  def part(f): first(f | strings)? // empty;
+  def size: if . >= 1000000 then "\(. / 1000000)M" else "\(. / 1000 | floor)k" end;
+  def clock: strflocaltime("%H:%M");
+  . as $in
+  | [
+      part("\($pct)% of \(.context_window.context_window_size | numbers | size) ctx")
+        // "\($pct)% ctx",
+      part(.model.display_name | strings
+        | . + (part($in.effort.level | strings | " (\(.))") // "")),
+      part(.prompt_cache | objects
+        | if .warm == true
+          then "cache \((.expires_at | numbers) - now | . / 60 | floor)m"
+          else "cache cold" end),
+      part(.rate_limits.five_hour | objects
+        | "5h \(.used_percentage | numbers | floor)% (\(.resets_at | numbers | clock))"),
+      part(.rate_limits.seven_day | objects
+        | "7d \(.used_percentage | numbers | floor)%")
+    ] | join(" · ")'
