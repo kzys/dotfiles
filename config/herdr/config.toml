@@ -40,6 +40,9 @@ navigate_workspace_down = "ctrl+n"
 navigate_pane_left = "ctrl+b"
 navigate_pane_right = "ctrl+f"
 
+# prefix+c opens new tabs where the agent is working instead.
+new_tab = ""
+
 # prefix+w opens the project picker below instead of either.
 workspace_picker = ""
 new_workspace = ""
@@ -53,3 +56,17 @@ description = "ask agent"
 command = '"$HOME/ws/dotfiles/bin/herdr-project-picker"'
 width = "80%"
 height = "60%"
+
+[[keys.command]]
+key = "prefix+c"
+type = "shell"
+description = "new tab where the agent is working"
+# $cwd is reported by bin/claude-statusline; claude's own directory
+# stays where it started. It is used only while claude runs in the pane,
+# since it outlives claude, and only if the directory still exists.
+command = '''
+dir=$("$HERDR_BIN_PATH" pane get "$HERDR_ACTIVE_PANE_ID" |
+    jq -r '.result.pane | select(.agent == "claude") | .tokens.cwd // empty')
+[ -d "$dir" ] || dir=
+"$HERDR_BIN_PATH" tab create --workspace "$HERDR_ACTIVE_WORKSPACE_ID" --cwd "${dir:-$HERDR_ACTIVE_PANE_CWD}" --focus
+'''
