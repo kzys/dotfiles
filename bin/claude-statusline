@@ -4,7 +4,8 @@
 # Inside a Herdr pane it also reports context window usage, the last
 # prompt, the model, and the working directory and branch as the pane's
 # $ctx, $prompt, $model, $dir and $branch tokens for the agent panel,
-# plus $bg when it runs as a background session.
+# plus $bg when it runs as a background session, and the full working
+# directory as $cwd for opening new tabs there.
 
 input=$(cat)
 pct=$(printf '%s' "$input" | jq -r '
@@ -29,14 +30,16 @@ if [ "${HERDR_ENV:-}" = 1 ] && [ -n "${HERDR_PANE_ID:-}" ]; then
     fi
     model=$(printf '%s' "$input" | jq -r '.model.display_name // empty')
     dir=$(printf '%s' "$input" | jq -r '.workspace.current_dir // .cwd // empty')
+    cwd=$dir
     branch=$(git -C "$dir" branch --show-current 2>/dev/null)
     case $dir in
     "$HOME"/*) dir="~${dir#"$HOME"}" ;;
     esac
     # A background session reports to the pane that started the daemon,
-    # which may be showing a different session; $bg flags that.
+    # which may be showing a different session; $bg flags that, and it
+    # leaves $cwd, where new tabs open, to the pane's own session.
     if "$(dirname "$0")/in-herdr-pane"; then
-        set -- --clear-token bg
+        set -- --clear-token bg --token cwd="$cwd"
     else
         set -- --token bg="bg"
     fi
