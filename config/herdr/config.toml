@@ -1,7 +1,7 @@
 onboarding = false
 
 [theme]
-name = "catppuccin"
+name = "one-dark"
 auto_switch = true
 
 [ui]
@@ -18,7 +18,7 @@ tab_bar_right_separator = " · "
 # $-tokens are reported by bin/claude-statusline.
 rows = [
   ["state_text", { token = "workspace", bold = true }, "machine", "tab", "$ctx"],
-  [{ token = "$bg", fg = "#f38ba8", bold = true }, "terminal_title_stripped", "$branch"],
+  [{ token = "$bg", bold = true }, "terminal_title_stripped", "$branch"],
   [{ token = "$prompt", dim = true }],
 ]
 
