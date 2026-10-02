@@ -1,4 +1,8 @@
 #! /bin/bash
+# GitHub Codespaces runs this script when it sets up a codespace with
+# this repository as its dotfiles, so keep all setup here rather than in
+# the Makefile.
+# https://docs.github.com/en/codespaces/setting-your-user-preferences/personalizing-github-codespaces-for-your-account#dotfiles
 set -euo pipefail
 IFS=$'\n\t'
 

@@ -1,6 +1,6 @@
 # .PHONY because the test directory would otherwise count as this target
 # already being up to date.
-.PHONY: test
+.PHONY: install test
 
 # ./test, not test: given a bare name unittest falls back to importing the
 # module of that name, finds the standard library's test package and passes
@@ -8,3 +8,6 @@
 test:
 	python3 -m unittest discover -s ./test -v
 	uv run --with pytest python -m pytest busywork -v
+
+install:
+	./install.sh
