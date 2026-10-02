@@ -6,10 +6,10 @@ set -eu
 
 start=$(date '+%Y-%m-%d %H:%M %Z')
 
-# Prints the instructions in claude-ask.md, filling in this session's
+# Prints the instructions in herdr-project.md, filling in this session's
 # directory and start time.
 instructions() {
-    sed -e "s|\$PWD|$PWD|g" -e "s|\$start|$start|g" "$(dirname "$0")/claude-ask.md"
+    sed -e "s|\$PWD|$PWD|g" -e "s|\$start|$start|g" "$(dirname "$0")/herdr-project.md"
 }
 
 # Herdr already tracks sessions, so keep them out of the background.

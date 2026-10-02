@@ -50,6 +50,6 @@ switch_workspace = "prefix+shift+1..9"
 key = "prefix+w"
 type = "popup"
 description = "ask agent"
-command = '"$HOME/ws/dotfiles/bin/herdr-ask"'
+command = '"$HOME/ws/dotfiles/bin/herdr-project-picker"'
 width = "80%"
 height = "60%"

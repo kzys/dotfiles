@@ -1,6 +1,6 @@
 #!/bin/sh
 # Pick a project under ~/project with fzf, or a new one, and start
-# bin/claude-ask there in a new Herdr workspace. Each project is listed
+# bin/herdr-project there in a new Herdr workspace. Each project is listed
 # with the title from the front matter of its README.md, and its
 # workspace is labeled with the name from there. Projects open in Herdr
 # are marked, and Enter switches to them. Otherwise Enter resumes the
@@ -70,7 +70,7 @@ if [ "$selected" = new ]; then
     selected=$(mktemp -d "$projects/$(date +%Y%m%d)-XXXXXX")
 fi
 
-cmd="'$HOME/ws/dotfiles/bin/claude-ask'"
+cmd="'$HOME/ws/dotfiles/bin/herdr-project'"
 case $key in
 ctrl-]) ;;
 "ctrl-\\") has_session "$selected" && cmd="$cmd --resume" ;;
