@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Point Claude Code's status line at bin/claude-statusline and its
-hooks at bin/claude-hook.
+hooks at bin/claude-hook, and drop entries for deleted directories from
+~/.claude.json.
 
 ~/.claude/settings.json also holds settings Claude Code writes itself, so
 it can't be a symlink into this repository like the other config files.
@@ -13,6 +14,7 @@ import pathlib
 import sys
 
 SETTINGS = pathlib.Path.home() / '.claude' / 'settings.json'
+STATE = pathlib.Path.home() / '.claude.json'
 STATUSLINE = pathlib.Path(__file__).resolve().parent / 'bin' / 'claude-statusline'
 HOOK = pathlib.Path(__file__).resolve().parent / 'bin' / 'claude-hook'
 
@@ -72,24 +74,84 @@ def add_hooks(settings, command):
     return {**settings, 'hooks': hooks}
 
 
-def main():
+def gone(path):
+    """Whether directory path was deleted. A missing path whose nearest
+    existing ancestor is empty may be under an unmounted mount point, and
+    one that can't be checked may still be there, so neither counts."""
     try:
-        with open(SETTINGS, encoding='utf-8') as f:
-            settings = json.load(f)
+        os.lstat(path)
+        return False
     except FileNotFoundError:
-        settings = {}
+        pass
+    except OSError:
+        return False
+    parent = os.path.dirname(path)
+    while True:
+        try:
+            return bool(os.listdir(parent))
+        except FileNotFoundError:
+            parent = os.path.dirname(parent)
+        except OSError:
+            return False
 
+
+def prune_projects(state, homes, gone=gone):
+    """state without the projects under any of homes whose directories
+    are gone. Projects elsewhere may be on a drive that is only
+    unmounted."""
+    if not isinstance(state, dict) or not isinstance(state.get('projects'), dict):
+        return state
+    projects = state['projects']
+    kept = {path: project for path, project in projects.items()
+            if not path.startswith(tuple(f'{h}/' for h in homes)) or not gone(path)}
+    if len(kept) == len(projects):
+        return state
+    return {**state, 'projects': kept}
+
+
+def load(path):
+    try:
+        with open(path, encoding='utf-8') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+
+
+def save(path, data):
+    """Writes data to path, or the file it links to, through a temporary
+    file, so that a reader never sees it half written."""
+    path = pathlib.Path(os.path.realpath(path))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + '.tmp')
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+        f.write('\n')
+    if path.exists():
+        os.chmod(tmp, path.stat().st_mode)
+    os.replace(tmp, path)
+
+
+def main():
+    settings = load(SETTINGS)
     try:
         updated = add_hooks(update(settings, str(STATUSLINE)), str(HOOK))
     except ValueError as e:
         sys.exit(f'{SETTINGS}: {e}')
-    if updated == settings:
-        return
+    if updated != settings:
+        save(SETTINGS, updated)
 
-    SETTINGS.parent.mkdir(parents=True, exist_ok=True)
-    with open(SETTINGS, 'w', encoding='utf-8') as f:
-        json.dump(updated, f, indent=2, ensure_ascii=False)
-        f.write('\n')
+    # Claude Code rewrites this file while it runs, so read it as late
+    # and write it as soon as possible. Pruning is only cleanup, so a
+    # file it can't read is skipped rather than stopping the install.
+    try:
+        state = load(STATE)
+    except (OSError, ValueError) as e:
+        print(f'{STATE}: not pruned: {e}', file=sys.stderr)
+        return
+    home = str(pathlib.Path.home()).rstrip('/')
+    pruned = prune_projects(state, {home, os.path.realpath(home)})
+    if pruned is not state:
+        save(STATE, pruned)
 
 
 if __name__ == '__main__':

@@ -1,6 +1,7 @@
 import importlib.machinery
 import importlib.util
 import pathlib
+import tempfile
 import unittest
 
 INSTALL_CLAUDE = pathlib.Path(__file__).resolve().parent.parent / 'install-claude.py'
@@ -93,3 +94,49 @@ class TestAddHooks(unittest.TestCase):
     def test_leaves_an_installed_hook_as_it_is(self):
         settings = {'hooks': {'SessionStart': [{'matcher': 'startup', 'hooks': [{**HOOK, 'timeout': 5}]}]}}
         self.assertIs(install_claude.add_hooks(settings, '/x/claude-hook'), settings)
+
+
+class TestPruneProjects(unittest.TestCase):
+    def test_drops_deleted_directories_under_home(self):
+        state = {'projects': {'/h/a': {'x': 1}, '/h/gone': {}}, 'other': 1}
+        self.assertEqual(
+            install_claude.prune_projects(state, {'/h'}, gone=lambda p: p == '/h/gone'),
+            {'projects': {'/h/a': {'x': 1}}, 'other': 1})
+
+    def test_matches_any_of_the_homes(self):
+        state = {'projects': {'/var/home/u/gone': {}}}
+        self.assertEqual(
+            install_claude.prune_projects(state, {'/home/u', '/var/home/u'}, gone=lambda p: True),
+            {'projects': {}})
+
+    def test_keeps_directories_outside_home(self):
+        state = {'projects': {'/media/drive': {}}}
+        self.assertIs(
+            install_claude.prune_projects(state, {'/h'}, gone=lambda p: True), state)
+
+    def test_keeps_home_itself(self):
+        state = {'projects': {'/h': {}}}
+        self.assertIs(
+            install_claude.prune_projects(state, {'/h'}, gone=lambda p: True), state)
+
+    def test_leaves_state_without_projects_alone(self):
+        self.assertEqual(install_claude.prune_projects({}, {'/h'}), {})
+        self.assertEqual(install_claude.prune_projects([], {'/h'}), [])
+
+
+class TestGone(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.dir = pathlib.Path(tmp.name)
+
+    def test_existing_directory(self):
+        self.assertFalse(install_claude.gone(str(self.dir)))
+
+    def test_missing_directory_beside_others(self):
+        (self.dir / 'other').mkdir()
+        self.assertTrue(install_claude.gone(str(self.dir / 'deleted')))
+
+    def test_missing_directory_under_an_empty_one(self):
+        (self.dir / 'mnt').mkdir()
+        self.assertFalse(install_claude.gone(str(self.dir / 'mnt' / 'project')))
