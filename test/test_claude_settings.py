@@ -17,7 +17,7 @@ def load(path):
 
 claude_settings = load(CLAUDE_SETTINGS)
 
-LINE = {'type': 'command', 'command': '/x/claude-statusline'}
+LINE = {'type': 'command', 'command': '/x/claude-statusline', 'refreshInterval': 60}
 
 
 class TestUpdate(unittest.TestCase):
@@ -31,9 +31,19 @@ class TestUpdate(unittest.TestCase):
         self.assertEqual(
             claude_settings.update(settings, '/x/claude-statusline'), settings)
 
+    def test_adds_a_refresh_interval_to_the_same_status_line(self):
+        settings = {'statusLine': {'type': 'command', 'command': '/x/claude-statusline'}}
+        self.assertEqual(
+            claude_settings.update(settings, '/x/claude-statusline'), {'statusLine': LINE})
+
+    def test_keeps_a_refresh_interval_set_by_hand(self):
+        settings = {'statusLine': {**LINE, 'refreshInterval': 5}}
+        self.assertEqual(
+            claude_settings.update(settings, '/x/claude-statusline'), settings)
+
     def test_takes_a_tilde_path_as_the_same_status_line(self):
         home = pathlib.Path.home()
-        settings = {'statusLine': {'type': 'command', 'command': '~/x/claude-statusline'}}
+        settings = {'statusLine': {**LINE, 'command': '~/x/claude-statusline'}}
         self.assertEqual(
             claude_settings.update(settings, f'{home}/x/claude-statusline'), settings)
 
