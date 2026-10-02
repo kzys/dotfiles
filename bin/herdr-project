@@ -1,9 +1,16 @@
 #!/bin/sh
 # Start claude in a scratch directory under ~/project with instructions
 # for finding checkouts, keeping notes, and naming the Herdr workspace.
+# In Herdr, the "## Remaining" section of the agent's notes shows in a
+# pane above it.
+#
+# herdr-project --remaining <pane> runs in that pane: it reprints the
+# section of the agent in Herdr pane <pane>, whose notes file is named
+# by the role token the agent reports, until the pane is gone.
 
 set -eu
 
+herdr=${HERDR_BIN_PATH:-herdr}
 start=$(date '+%Y-%m-%d %H:%M %Z')
 
 # Prints the instructions in herdr-project.md, filling in this session's
@@ -12,8 +19,61 @@ instructions() {
     sed -e "s|\$PWD|$PWD|g" -e "s|\$start|$start|g" "$(dirname "$0")/herdr-project.md"
 }
 
+# Prints the "## Remaining" section of the agent in Herdr pane $1 every
+# few seconds until the pane is gone. A failed read shows as a message
+# rather than ending the loop, since that would close the pane.
+follow_remaining() {
+    set +e
+    while info=$("$herdr" pane get "$1" 2>/dev/null); do
+        role=$(printf '%s' "$info" | jq -r '.result.pane.tokens.role // empty' 2>/dev/null)
+        file=AGENT-$role.md
+        if [ -z "$role" ]; then
+            out="Waiting for the agent to report its role."
+        elif [ ! -f "$file" ]; then
+            out="No $file yet."
+        else
+            out=$(awk -v role="$role" '/^## / { f = ($0 == "## Remaining") }
+                f && $0 == "## Remaining" { print "## Remaining: " role; next }
+                f' "$file" 2>/dev/null)
+            [ -n "$out" ] || out="No \"## Remaining\" section in $file yet."
+        fi
+        # Wrap to the pane's width and cut to its height, with no final
+        # newline, so that the top stays in view.
+        rows=$(tput lines 2>/dev/null || echo 24)
+        cols=$(tput cols 2>/dev/null || echo 80)
+        printf '\033[H\033[2J%s' "$(printf '%s\n' "$out" | fold -s -w "$cols" | head -n "$rows")"
+        sleep 5
+    done
+}
+
+# Opens a pane above this one following this agent's "## Remaining"
+# section, if this pane has its tab to itself.
+remaining_pane() {
+    panes=$("$herdr" pane list --workspace "$HERDR_WORKSPACE_ID" |
+        jq --arg tab "$HERDR_TAB_ID" '[.result.panes[] | select(.tab_id == $tab)] | length')
+    [ "$panes" = 1 ] || return 0
+    pane=$("$herdr" pane split --current --direction down --ratio 0.35 \
+        --cwd "$PWD" --no-focus | jq -r '.result.pane.pane_id // empty')
+    [ -n "$pane" ] || return 0
+    if ! "$herdr" pane run "$pane" "exec '$0' --remaining $HERDR_PANE_ID" >/dev/null; then
+        "$herdr" pane close "$pane" >/dev/null
+        return 0
+    fi
+    "$herdr" pane swap --source-pane "$pane" --target-pane "$HERDR_PANE_ID" >/dev/null
+    "$herdr" pane focus --direction down --pane "$pane" >/dev/null
+}
+
+if [ "${1:-}" = --remaining ]; then
+    [ $# -eq 2 ] || { echo "usage: herdr-project --remaining <pane>" >&2; exit 2; }
+    follow_remaining "$2"
+    exit
+fi
+
 # Herdr already tracks sessions, so keep them out of the background.
-[ "${HERDR_ENV:-}" != 1 ] || export CLAUDE_CODE_DISABLE_AGENT_VIEW=1
+if [ "${HERDR_ENV:-}" = 1 ]; then
+    export CLAUDE_CODE_DISABLE_AGENT_VIEW=1
+    remaining_pane || true
+fi
 
 # Run claude's commands in bash, not the login shell, whose quirks trip
 # it up.
