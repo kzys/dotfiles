@@ -13,8 +13,8 @@ import pathlib
 import sys
 
 SETTINGS = pathlib.Path.home() / '.claude' / 'settings.json'
-STATUSLINE = pathlib.Path(__file__).resolve().parent / 'claude-statusline'
-HOOK = pathlib.Path(__file__).resolve().parent / 'claude-hook'
+STATUSLINE = pathlib.Path(__file__).resolve().parent / 'bin' / 'claude-statusline'
+HOOK = pathlib.Path(__file__).resolve().parent / 'bin' / 'claude-hook'
 
 # Events claude-hook handles.
 HOOK_EVENTS = ['SessionStart']

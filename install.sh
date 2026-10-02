@@ -36,7 +36,7 @@ main() {
 
     # Claude reads the same house rules under its own name.
     link "$PWD/config/opencode/AGENTS.md" "$HOME/.claude/CLAUDE.md"
-    "$PWD/bin/claude-install"
+    "$PWD/install-claude.py"
 
     # pi config is stored in ~/.pi, so mirror the repo's ./pi directory there.
     link "$PWD/pi" "$HOME/.pi"
