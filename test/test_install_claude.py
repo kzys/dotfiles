@@ -1,9 +1,10 @@
 import importlib.machinery
 import importlib.util
 import pathlib
+import tempfile
 import unittest
 
-CLAUDE_INSTALL = pathlib.Path(__file__).resolve().parent.parent / 'bin' / 'claude-install'
+INSTALL_CLAUDE = pathlib.Path(__file__).resolve().parent.parent / 'install-claude.py'
 
 
 def load(path):
@@ -15,7 +16,7 @@ def load(path):
     return module
 
 
-claude_install = load(CLAUDE_INSTALL)
+install_claude = load(INSTALL_CLAUDE)
 
 LINE = {'type': 'command', 'command': '/x/claude-statusline', 'refreshInterval': 60}
 
@@ -23,34 +24,34 @@ LINE = {'type': 'command', 'command': '/x/claude-statusline', 'refreshInterval':
 class TestUpdate(unittest.TestCase):
     def test_adds_the_status_line_and_keeps_the_rest(self):
         self.assertEqual(
-            claude_install.update({'theme': 'auto'}, '/x/claude-statusline'),
+            install_claude.update({'theme': 'auto'}, '/x/claude-statusline'),
             {'theme': 'auto', 'statusLine': LINE})
 
     def test_leaves_the_same_status_line_as_it_is(self):
         settings = {'statusLine': {**LINE, 'padding': 1}}
         self.assertEqual(
-            claude_install.update(settings, '/x/claude-statusline'), settings)
+            install_claude.update(settings, '/x/claude-statusline'), settings)
 
     def test_adds_a_refresh_interval_to_the_same_status_line(self):
         settings = {'statusLine': {'type': 'command', 'command': '/x/claude-statusline'}}
         self.assertEqual(
-            claude_install.update(settings, '/x/claude-statusline'), {'statusLine': LINE})
+            install_claude.update(settings, '/x/claude-statusline'), {'statusLine': LINE})
 
     def test_keeps_a_refresh_interval_set_by_hand(self):
         settings = {'statusLine': {**LINE, 'refreshInterval': 5}}
         self.assertEqual(
-            claude_install.update(settings, '/x/claude-statusline'), settings)
+            install_claude.update(settings, '/x/claude-statusline'), settings)
 
     def test_takes_a_tilde_path_as_the_same_status_line(self):
         home = pathlib.Path.home()
         settings = {'statusLine': {**LINE, 'command': '~/x/claude-statusline'}}
         self.assertEqual(
-            claude_install.update(settings, f'{home}/x/claude-statusline'), settings)
+            install_claude.update(settings, f'{home}/x/claude-statusline'), settings)
 
     def test_refuses_to_replace_another_status_line(self):
         settings = {'statusLine': {'type': 'command', 'command': 'other'}}
         with self.assertRaises(ValueError):
-            claude_install.update(settings, '/x/claude-statusline')
+            install_claude.update(settings, '/x/claude-statusline')
 
 
 HERDR = {'type': 'command', 'command': "bash '/h/.claude/hooks/herdr-agent-state.sh' session"}
@@ -60,36 +61,82 @@ HOOK = {'type': 'command', 'command': '/x/claude-hook'}
 class TestAddHooks(unittest.TestCase):
     def test_adds_the_hook_and_keeps_the_rest(self):
         self.assertEqual(
-            claude_install.add_hooks({'theme': 'auto'}, '/x/claude-hook'),
+            install_claude.add_hooks({'theme': 'auto'}, '/x/claude-hook'),
             {'theme': 'auto', 'hooks': {'SessionStart': [{'hooks': [HOOK]}]}})
 
     def test_replaces_herdrs_hook(self):
         settings = {'hooks': {'SessionStart': [{'matcher': 'startup', 'hooks': [HERDR]}]}}
         self.assertEqual(
-            claude_install.add_hooks(settings, '/x/claude-hook'),
+            install_claude.add_hooks(settings, '/x/claude-hook'),
             {'hooks': {'SessionStart': [{'hooks': [HOOK]}]}})
 
     def test_keeps_other_hooks_in_a_group_with_herdrs(self):
         mine = {'type': 'command', 'command': 'mine'}
         settings = {'hooks': {'SessionStart': [{'matcher': 'startup', 'hooks': [HERDR, mine]}]}}
         self.assertEqual(
-            claude_install.add_hooks(settings, '/x/claude-hook'),
+            install_claude.add_hooks(settings, '/x/claude-hook'),
             {'hooks': {'SessionStart': [{'matcher': 'startup', 'hooks': [mine]}, {'hooks': [HOOK]}]}})
 
     def test_replaces_the_old_hook_name(self):
         old = {'type': 'command', 'command': '/x/claude-herdr-session'}
         settings = {'hooks': {'SessionStart': [{'hooks': [old]}]}}
         self.assertEqual(
-            claude_install.add_hooks(settings, '/x/claude-hook'),
+            install_claude.add_hooks(settings, '/x/claude-hook'),
             {'hooks': {'SessionStart': [{'hooks': [HOOK]}]}})
 
     def test_keeps_other_hooks(self):
         other = {'hooks': [{'type': 'command', 'command': 'other'}]}
         settings = {'hooks': {'SessionStart': [other], 'Stop': [other]}}
         self.assertEqual(
-            claude_install.add_hooks(settings, '/x/claude-hook'),
+            install_claude.add_hooks(settings, '/x/claude-hook'),
             {'hooks': {'SessionStart': [other, {'hooks': [HOOK]}], 'Stop': [other]}})
 
     def test_leaves_an_installed_hook_as_it_is(self):
         settings = {'hooks': {'SessionStart': [{'matcher': 'startup', 'hooks': [{**HOOK, 'timeout': 5}]}]}}
-        self.assertIs(claude_install.add_hooks(settings, '/x/claude-hook'), settings)
+        self.assertIs(install_claude.add_hooks(settings, '/x/claude-hook'), settings)
+
+
+class TestPruneProjects(unittest.TestCase):
+    def test_drops_deleted_directories_under_home(self):
+        state = {'projects': {'/h/a': {'x': 1}, '/h/gone': {}}, 'other': 1}
+        self.assertEqual(
+            install_claude.prune_projects(state, {'/h'}, gone=lambda p: p == '/h/gone'),
+            {'projects': {'/h/a': {'x': 1}}, 'other': 1})
+
+    def test_matches_any_of_the_homes(self):
+        state = {'projects': {'/var/home/u/gone': {}}}
+        self.assertEqual(
+            install_claude.prune_projects(state, {'/home/u', '/var/home/u'}, gone=lambda p: True),
+            {'projects': {}})
+
+    def test_keeps_directories_outside_home(self):
+        state = {'projects': {'/media/drive': {}}}
+        self.assertIs(
+            install_claude.prune_projects(state, {'/h'}, gone=lambda p: True), state)
+
+    def test_keeps_home_itself(self):
+        state = {'projects': {'/h': {}}}
+        self.assertIs(
+            install_claude.prune_projects(state, {'/h'}, gone=lambda p: True), state)
+
+    def test_leaves_state_without_projects_alone(self):
+        self.assertEqual(install_claude.prune_projects({}, {'/h'}), {})
+        self.assertEqual(install_claude.prune_projects([], {'/h'}), [])
+
+
+class TestGone(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.dir = pathlib.Path(tmp.name)
+
+    def test_existing_directory(self):
+        self.assertFalse(install_claude.gone(str(self.dir)))
+
+    def test_missing_directory_beside_others(self):
+        (self.dir / 'other').mkdir()
+        self.assertTrue(install_claude.gone(str(self.dir / 'deleted')))
+
+    def test_missing_directory_under_an_empty_one(self):
+        (self.dir / 'mnt').mkdir()
+        self.assertFalse(install_claude.gone(str(self.dir / 'mnt' / 'project')))
