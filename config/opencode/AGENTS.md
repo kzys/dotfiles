@@ -2,10 +2,11 @@
 
 - Don't push to remote branches unless explicitly asked. This includes force-push.
 - After pushing to a PR, watch its checks in the background until they finish and report failures.
-- Before pushing a branch for review, have a fresh subagent review the
-  diff. Give it the diff and the repo, not this conversation: anything it
-  needs should already be in the code, comments, or commit message. Fix
-  or push back on what it finds before pushing.
+- Before pushing a branch for review, have the `reviewer` subagent (or
+  a fresh one, where there is no `reviewer`) review the diff. Give it the
+  diff and the repo, not this conversation: anything it needs should
+  already be in the code, comments, or commit message. Fix or push back
+  on what it finds before pushing.
 
 # House Rules
 
