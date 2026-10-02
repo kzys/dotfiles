@@ -30,6 +30,14 @@ Write only to your own file. When resuming another agent's work, keep
 using its file. The session started at $start; check the time with
 date and update your notes about every hour, and before you finish.
 
+Start your notes with a "## Remaining" section listing what's left to
+do or decide, and keep it current; a pane shows it to the user. Put
+the log of what you have done under "## Log" after it. Once you know
+your role, report it so that the pane shows your section, at the start
+of every session, including resumed ones, since a resumed session runs
+in a new pane:
+herdr pane report-metadata "$HERDR_PANE_ID" --source agent-notes --token role=<role>
+
 About 5 minutes after the session started, once the task is clear,
 write README.md if needed and rename the Herdr workspace to its name,
 once:
