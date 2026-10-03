@@ -45,11 +45,11 @@ main() {
     # pi config is stored in ~/.pi, so mirror the repo's ./pi directory there.
     link "$PWD/pi" "$HOME/.pi"
 
-    # skills/ mirrors ~/.claude/skills, one directory per skill.
-    local -a skills=(kwsk)
-    for skill in "${skills[@]}"
+    # claude/ mirrors ~/.claude. Link the entries inside each directory, not
+    # the directories, so ~/.claude/skills can still hold skills from elsewhere.
+    git ls-files claude | cut -d/ -f2-3 | sort -u | while IFS= read -r file
     do
-        link "$PWD/skills/$skill" "$HOME/.claude/skills/$skill"
+        link "$PWD/claude/$file" "$HOME/.claude/$file"
     done
 
     if [[ -n "${CODESPACES:-}" ]]; then
