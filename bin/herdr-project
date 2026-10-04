@@ -1,82 +1,147 @@
-#!/bin/sh
-# Start claude in a scratch directory under ~/project with instructions
-# for finding checkouts, keeping notes, and naming the Herdr workspace.
-# In Herdr, the "## Remaining" section of the agent's notes shows in a
-# pane above it.
-#
-# herdr-project --remaining <pane> runs in that pane: it reprints the
-# section of the agent in Herdr pane <pane>, whose notes file is named
-# by the role token the agent reports, until the pane is gone.
+#!/usr/bin/env python3
+"""Start claude in a scratch directory under ~/project with instructions
+for finding checkouts, keeping notes, and naming the Herdr workspace.
+In Herdr, the "## Remaining" section of the agent's notes shows in a
+pane above it.
 
-set -eu
+herdr-project --remaining <pane> runs in that pane: it reprints the
+section of the agent in Herdr pane <pane>, whose notes file is named
+by the role token the agent reports, until the pane is gone.
+"""
 
-herdr=${HERDR_BIN_PATH:-herdr}
-start=$(date '+%Y-%m-%d %H:%M %Z')
+import json
+import os
+import shutil
+import subprocess
+import sys
+import textwrap
+import time
+from datetime import datetime
+from pathlib import Path
 
-# Prints the instructions in herdr-project.md, filling in this session's
-# directory and start time.
-instructions() {
-    sed -e "s|\$PWD|$PWD|g" -e "s|\$start|$start|g" "$(dirname "$0")/herdr-project.md"
-}
+HERDR = os.environ.get("HERDR_BIN_PATH", "herdr")
+SELF = Path(__file__).resolve()
 
-# Prints the "## Remaining" section of the agent in Herdr pane $1 every
-# few seconds until the pane is gone. A failed read shows as a message
-# rather than ending the loop, since that would close the pane.
-follow_remaining() {
-    set +e
-    while info=$("$herdr" pane get "$1" 2>/dev/null); do
-        role=$(printf '%s' "$info" | jq -r '.result.pane.tokens.role // empty' 2>/dev/null)
-        file=AGENT-$role.md
-        if [ -z "$role" ]; then
-            out="Waiting for the agent to report its role."
-        elif [ ! -f "$file" ]; then
-            out="No $file yet."
-        else
-            out=$(awk -v role="$role" '/^## / { f = ($0 == "## Remaining") }
-                f && $0 == "## Remaining" { print "## Remaining: " role; next }
-                f' "$file" 2>/dev/null)
-            [ -n "$out" ] || out="No \"## Remaining\" section in $file yet."
-        fi
+
+def herdr(*args):
+    """Runs herdr with args and returns its parsed JSON output, or None
+    if it fails or prints something else."""
+    try:
+        proc = subprocess.run(
+            [HERDR, *args], capture_output=True, text=True, check=True
+        )
+        return json.loads(proc.stdout) if proc.stdout.strip() else {}
+    except (OSError, subprocess.CalledProcessError, ValueError):
+        return None
+
+
+def instructions():
+    """Returns the instructions in herdr-project.md, filling in this
+    session's directory and start time."""
+    start = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M %Z")
+    text = (SELF.parent / "herdr-project.md").read_text()
+    return text.replace("$PWD", os.getcwd()).replace("$start", start)
+
+
+def remaining_section(role):
+    """Returns the "## Remaining" section of AGENT-<role>.md, or a
+    message saying why there is none."""
+    if not role:
+        return "Waiting for the agent to report its role."
+    path = Path(f"AGENT-{role}.md")
+    try:
+        lines = path.read_text().splitlines()
+    except OSError:
+        return f"No {path} yet."
+    out = []
+    in_section = False
+    for line in lines:
+        if line.startswith("## "):
+            in_section = line == "## Remaining"
+            if in_section:
+                out.append(f"## Remaining: {role}")
+                continue
+        if in_section:
+            out.append(line)
+    return "\n".join(out) or f'No "## Remaining" section in {path} yet.'
+
+
+def follow_remaining(pane):
+    """Prints the "## Remaining" section of the agent in Herdr pane
+    every few seconds until the pane is gone. A failed read shows as a
+    message rather than ending the loop, since that would close the
+    pane."""
+    while (info := herdr("pane", "get", pane)) is not None:
+        try:
+            role = info["result"]["pane"]["tokens"].get("role") or ""
+            out = remaining_section(role)
+        except (KeyError, TypeError, AttributeError) as e:
+            out = f"Cannot read the agent's role: {e!r}"
         # Wrap to the pane's width and cut to its height, with no final
         # newline, so that the top stays in view.
-        rows=$(tput lines 2>/dev/null || echo 24)
-        cols=$(tput cols 2>/dev/null || echo 80)
-        printf '\033[H\033[2J%s' "$(printf '%s\n' "$out" | fold -s -w "$cols" | head -n "$rows")"
-        sleep 5
-    done
-}
+        cols, rows = shutil.get_terminal_size((80, 24))
+        wrapped = []
+        for line in out.splitlines() or [""]:
+            wrapped += textwrap.wrap(
+                line, cols, drop_whitespace=False, replace_whitespace=False
+            ) or [""]
+        sys.stdout.write("\033[H\033[2J" + "\n".join(wrapped[:rows]))
+        sys.stdout.flush()
+        time.sleep(5)
 
-# Opens a pane above this one following this agent's "## Remaining"
-# section, if this pane has its tab to itself.
-remaining_pane() {
-    panes=$("$herdr" pane list --workspace "$HERDR_WORKSPACE_ID" |
-        jq --arg tab "$HERDR_TAB_ID" '[.result.panes[] | select(.tab_id == $tab)] | length')
-    [ "$panes" = 1 ] || return 0
-    pane=$("$herdr" pane split --current --direction down --ratio 0.35 \
-        --cwd "$PWD" --no-focus | jq -r '.result.pane.pane_id // empty')
-    [ -n "$pane" ] || return 0
-    if ! "$herdr" pane run "$pane" "exec '$0' --remaining $HERDR_PANE_ID" >/dev/null; then
-        "$herdr" pane close "$pane" >/dev/null
+
+def remaining_pane():
+    """Opens a pane above this one following this agent's "## Remaining"
+    section, if this pane has its tab to itself."""
+    env = os.environ
+    panes = herdr("pane", "list", "--workspace", env["HERDR_WORKSPACE_ID"])
+    tab = env["HERDR_TAB_ID"]
+    if sum(p["tab_id"] == tab for p in panes["result"]["panes"]) != 1:
+        return
+    split = herdr(
+        "pane", "split", "--current", "--direction", "down", "--ratio", "0.35",
+        "--cwd", os.getcwd(), "--no-focus",
+    )
+    pane = ((split or {}).get("result", {}).get("pane", {})).get("pane_id")
+    if not pane:
+        return
+    command = f"exec '{SELF}' --remaining {env['HERDR_PANE_ID']}"
+    if herdr("pane", "run", pane, command) is None:
+        herdr("pane", "close", pane)
+        return
+    herdr("pane", "swap", "--source-pane", pane,
+          "--target-pane", env["HERDR_PANE_ID"])
+    herdr("pane", "focus", "--direction", "down", "--pane", pane)
+
+
+def main(argv):
+    if argv[:1] == ["--remaining"]:
+        if len(argv) != 2:
+            print("usage: herdr-project --remaining <pane>", file=sys.stderr)
+            return 2
+        try:
+            follow_remaining(argv[1])
+        except KeyboardInterrupt:
+            pass
         return 0
-    fi
-    "$herdr" pane swap --source-pane "$pane" --target-pane "$HERDR_PANE_ID" >/dev/null
-    "$herdr" pane focus --direction down --pane "$pane" >/dev/null
-}
 
-if [ "${1:-}" = --remaining ]; then
-    [ $# -eq 2 ] || { echo "usage: herdr-project --remaining <pane>" >&2; exit 2; }
-    follow_remaining "$2"
-    exit
-fi
+    # Herdr already tracks sessions, so keep them out of the background.
+    if os.environ.get("HERDR_ENV") == "1":
+        os.environ["CLAUDE_CODE_DISABLE_AGENT_VIEW"] = "1"
+        try:
+            remaining_pane()
+        except (KeyError, TypeError):
+            pass
 
-# Herdr already tracks sessions, so keep them out of the background.
-if [ "${HERDR_ENV:-}" = 1 ]; then
-    export CLAUDE_CODE_DISABLE_AGENT_VIEW=1
-    remaining_pane || true
-fi
+    # Run claude's commands in bash, not the login shell, whose quirks
+    # trip it up.
+    os.environ["CLAUDE_CODE_SHELL"] = "/bin/bash"
 
-# Run claude's commands in bash, not the login shell, whose quirks trip
-# it up.
-export CLAUDE_CODE_SHELL=/bin/bash
+    os.execvp("claude", [
+        "claude", "--add-dir", str(Path.home() / "ws/dotfiles"),
+        "--append-system-prompt", instructions(), *argv,
+    ])
 
-exec claude --add-dir "$HOME/ws/dotfiles" --append-system-prompt "$(instructions)" "$@"
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
