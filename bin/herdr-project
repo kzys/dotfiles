@@ -25,14 +25,17 @@ SELF = Path(__file__).resolve()
 
 def herdr(*args):
     """Runs herdr with args and returns its parsed JSON output, or None
-    if it fails or prints something else."""
+    if it fails. Output that isn't JSON counts as {}."""
     try:
         proc = subprocess.run(
             [HERDR, *args], capture_output=True, text=True, check=True
         )
-        return json.loads(proc.stdout) if proc.stdout.strip() else {}
-    except (OSError, subprocess.CalledProcessError, ValueError):
+    except (OSError, subprocess.CalledProcessError):
         return None
+    try:
+        return json.loads(proc.stdout) if proc.stdout.strip() else {}
+    except ValueError:
+        return {}
 
 
 def instructions():
