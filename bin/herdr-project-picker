@@ -39,11 +39,15 @@ esac"""
 
 
 def herdr(*args):
-    """Runs herdr with args and returns its parsed JSON output."""
+    """Runs herdr with args and returns its parsed JSON output. Output
+    that isn't JSON counts as {}."""
     out = subprocess.run(
         [HERDR, *args], capture_output=True, text=True, check=True
     ).stdout
-    return json.loads(out)
+    try:
+        return json.loads(out)
+    except ValueError:
+        return {}
 
 
 def front_matter(directory, key):
@@ -104,16 +108,16 @@ def context(directory, sid):
 def background(sid):
     """Returns the ID and status of claude session sid if it runs in
     the background, else None."""
-    proc = subprocess.run(
-        ["claude", "agents", "--json"], capture_output=True, text=True
-    )
     try:
+        proc = subprocess.run(
+            ["claude", "agents", "--json"], capture_output=True, text=True
+        )
         agents = json.loads(proc.stdout)
-    except ValueError:
-        return None
-    for a in agents:
-        if a.get("kind") == "background" and a.get("sessionId") == sid:
-            return a["id"], a.get("status")
+        for a in agents:
+            if a.get("kind") == "background" and a.get("sessionId") == sid:
+                return a["id"], a.get("status")
+    except (OSError, ValueError, AttributeError, TypeError, KeyError):
+        pass
     return None
 
 
@@ -123,7 +127,10 @@ def choices(panes):
     order puts the newest projects first."""
     running = {p["session"] for p in panes if p["session"]}
     lines = ["new\t\t\t+ new project"]
-    for d in sorted((d for d in PROJECTS.iterdir() if d.is_dir()), reverse=True):
+    for d in sorted(
+        (d for d in PROJECTS.iterdir() if d.is_dir() and d.name[0] != "."),
+        reverse=True,
+    ):
         summary = front_matter(d, "title")
         if summary is None:
             summary = "(no notes)"
