@@ -1,11 +1,14 @@
 #!/bin/sh
-# Pick a project under ~/project with fzf, or a new one, and start
-# bin/herdr-project there in a new Herdr workspace. Each project is listed
-# with the title from the front matter of its README.md, and its
-# workspace is labeled with the name from there. Projects open in Herdr
-# are marked, and Enter switches to them. Otherwise Enter resumes the
-# project's latest claude session, if any. A background session is
-# stopped and resumed in the workspace if idle, and attached otherwise.
+# Pick a project under ~/project, one of its claude sessions, or a new
+# project with fzf. Each project is listed with the title from the front
+# matter of its README.md, followed by its sessions, newest first, with
+# their titles. Sessions running in Herdr are marked.
+#
+# Enter on a running session switches to its pane. On any other session
+# it resumes that session, and on a project it starts a new one, in a new
+# tab of the project's workspace, or in a new workspace labeled with the
+# name from the front matter. A session running in the background is
+# stopped and resumed if idle, and attached otherwise.
 
 set -eu
 
@@ -14,23 +17,10 @@ projects=$HOME/project
 mkdir -p "$projects"
 front_matter=$(dirname "$0")/herdr-front-matter
 
-# Succeeds if claude has a session for directory $1. Claude keeps them
-# under ~/.claude/projects, in a directory named after the path.
-has_session() {
-    set -- "$HOME/.claude/projects/$(printf '%s' "$1" | sed 's/[^a-zA-Z0-9]/-/g')"/*.jsonl
-    [ -f "$1" ]
-}
-
-# Prints the ID, session ID, and status of the latest background claude
-# session started in directory $1, if any.
-background() {
-    claude agents --json --cwd "$1" 2>/dev/null |
-        jq -r --arg cwd "$1" '[.[] | select(.kind == "background" and .cwd == $cwd)] |
-            max_by(.startedAt) | values | "\(.id) \(.sessionId) \(.status)"'
-}
-
-# Workspace and directory of each pane open in Herdr.
-open=$("$herdr" pane list | jq -r '.result.panes[] | "\(.workspace_id)\t\(.cwd)"')
+# Fields of each pane open in Herdr: workspace, directory, pane, and the
+# claude session running in it, if any.
+open=$("$herdr" pane list |
+    jq -r '.result.panes[] | "\(.workspace_id)\t\(.cwd)\t\(.pane_id)\t\(.agent_session.value // "")"')
 
 # Prints the workspace of a pane open in directory $1 or under it, if
 # any.
@@ -39,64 +29,108 @@ workspace_of() {
         awk -F '\t' -v dir="$1" '$2 == dir || index($2, dir "/") == 1 { print $1; exit }'
 }
 
-# Fields: directory, then what fzf shows. Directory names start with
-# the date, so reverse order puts the newest projects first. The first
-# line of the output is the key pressed, empty for Enter.
+# Prints the pane running claude session $1, if any.
+pane_of() {
+    printf '%s\n' "$open" | awk -F '\t' -v sid="$1" '$4 == sid { print $3; exit }'
+}
+
+# Prints the transcripts of the claude sessions in directory $1, newest
+# first. Claude keeps them under ~/.claude/projects, in a directory
+# named after the path.
+sessions() {
+    ls -t "$HOME/.claude/projects/$(printf '%s' "$1" | sed 's/[^a-zA-Z0-9]/-/g')"/*.jsonl 2>/dev/null || true
+}
+
+# Prints the title of the session in transcript $1: the one it was
+# renamed to, the one claude generated, or else its first prompt.
+title() {
+    for type in custom-title ai-title; do
+        line=$(tac "$1" | grep -m 1 -F "\"type\":\"$type\"" || true)
+        if [ -n "$line" ]; then
+            printf '%s' "$line" | jq -r '.customTitle // .aiTitle // empty'
+            return
+        fi
+    done
+    prompt=$(grep -m 1 -F '"lastPrompt"' "$1" | jq -r '.lastPrompt // empty' 2>/dev/null || true)
+    printf '%s\n' "${prompt:-(untitled)}" | tr -s '[:space:]' ' ' | sed 's/ $//' | cut -c1-60
+}
+
+# Prints the ID and status of claude session $1 if it runs in the
+# background.
+background() {
+    claude agents --json 2>/dev/null |
+        jq -r --arg sid "$1" '.[] | select(.kind == "background" and .sessionId == $sid)
+            | "\(.id) \(.status)"' | head -n 1
+}
+
+# Fields: kind, directory, session, then what fzf shows. Directory names
+# start with the date, so reverse order puts the newest projects first.
 out=$({
-    printf 'new\t  + new project\n'
+    printf 'new\t\t\t+ new project\n'
     for dir in "$projects"/*/; do
-        [ -d "$dir" ] || continue
-        dir=${dir%/}
+        [ -d "$dir" ] && printf '%s\n' "${dir%/}"
+    done | sort -r | while read -r dir; do
         if summary=$("$front_matter" "$dir" title); then
             [ -n "$summary" ] || summary='(no title)'
         else
             summary='(no notes)'
         fi
-        mark=' '
-        [ -z "$(workspace_of "$dir")" ] || mark='●'
-        printf '%s\t%s %s  %s\n' "$dir" "$mark" "${dir##*/}" "$summary"
-    done | sort -r
-} | fzf --reverse --delimiter='\t' --with-nth=2.. --prompt='project> ' \
-    --header='enter: switch or resume  ctrl-]: new session  ctrl-\: pick session' \
-    --expect="ctrl-],ctrl-\\" \
-    --preview='cd {1} 2>/dev/null && cat README.md NOTES.md AGENT-*.md 2>/dev/null' \
+        printf 'project\t%s\t\t%s  %s\n' "$dir" "${dir##*/}" "$summary"
+        sessions "$dir" | while read -r transcript; do
+            sid=$(basename "$transcript" .jsonl)
+            mark=' '
+            [ -z "$(pane_of "$sid")" ] || mark='●'
+            printf 'session\t%s\t%s\t  %s %s  %s\n' "$dir" "$sid" "$mark" \
+                "$(date -r "$transcript" '+%m-%d %H:%M')" "$(title "$transcript")"
+        done
+    done
+} | fzf --reverse --delimiter='\t' --with-nth=4.. --prompt='project> ' \
+    --header='enter: open a session, or start one in a project' \
+    --bind 'focus:transform-header(case {1} in
+        new) echo "enter: start a new session in a new project" ;;
+        project) echo "enter: start a new session in this project" ;;
+        *) case {4} in
+            *●*) echo "enter: switch to this running session" ;;
+            *) echo "enter: resume this session" ;;
+        esac ;;
+    esac)' \
+    --preview='cd {2} 2>/dev/null && cat README.md NOTES.md AGENT-*.md 2>/dev/null' \
     --preview-window=down,50%) ||
     exit 0
-key=$(printf '%s\n' "$out" | sed -n 1p)
-selected=$(printf '%s\n' "$out" | sed -n 2p | cut -f1)
-[ -n "$selected" ] || exit 0
+kind=$(printf '%s' "$out" | cut -f1)
+dir=$(printf '%s' "$out" | cut -f2)
+sid=$(printf '%s' "$out" | cut -f3)
 
-if [ "$selected" = new ]; then
-    selected=$(mktemp -d "$projects/$(date +%Y%m%d)-XXXXXX")
+if [ "$kind" = new ]; then
+    dir=$(mktemp -d "$projects/$(date +%Y%m%d)-XXXXXX")
 fi
 
 cmd="'$HOME/ws/dotfiles/bin/herdr-project'"
-case $key in
-ctrl-]) ;;
-"ctrl-\\") has_session "$selected" && cmd="$cmd --resume" ;;
-*)
-    workspace=$(workspace_of "$selected")
-    if [ -n "$workspace" ]; then
-        "$herdr" workspace focus "$workspace" >/dev/null
-        "$front_matter" --report "$workspace" "$selected" || true
+if [ -n "$sid" ]; then
+    pane=$(pane_of "$sid")
+    if [ -n "$pane" ]; then
+        "$herdr" agent focus "$pane" >/dev/null
         exit
     fi
-    read -r id session status <<EOF
-$(background "$selected")
+    read -r id status <<EOF
+$(background "$sid")
 EOF
     if [ "$status" = idle ] && claude stop "$id" >/dev/null; then
-        cmd="$cmd --resume $session"
+        cmd="$cmd --resume $sid"
     elif [ -n "$id" ]; then
         cmd="claude attach $id"
-    elif has_session "$selected"; then
-        cmd="$cmd --continue"
+    else
+        cmd="$cmd --resume $sid"
     fi
-    ;;
-esac
+fi
 
-name=$("$front_matter" "$selected" name || true)
-created=$("$herdr" workspace create --cwd "$selected" ${name:+--label "$name"} --focus)
-pane=$(printf '%s' "$created" | jq -r .result.root_pane.pane_id)
-"$front_matter" --report \
-    "$(printf '%s' "$created" | jq -r .result.workspace.workspace_id)" "$selected" || true
-"$herdr" pane run "$pane" "$cmd" >/dev/null
+workspace=$(workspace_of "$dir")
+if [ -n "$workspace" ]; then
+    created=$("$herdr" tab create --workspace "$workspace" --cwd "$dir" --focus)
+else
+    name=$("$front_matter" "$dir" name || true)
+    created=$("$herdr" workspace create --cwd "$dir" ${name:+--label "$name"} --focus)
+    workspace=$(printf '%s' "$created" | jq -r .result.workspace.workspace_id)
+fi
+"$front_matter" --report "$workspace" "$dir" || true
+"$herdr" pane run "$(printf '%s' "$created" | jq -r .result.root_pane.pane_id)" "$cmd" >/dev/null
