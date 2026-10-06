@@ -1,136 +1,211 @@
-#!/bin/sh
-# Pick a project under ~/project, one of its claude sessions, or a new
-# project with fzf. Each project is listed with the title from the front
-# matter of its README.md, followed by its sessions, newest first, with
-# their titles. Sessions running in Herdr are marked.
-#
-# Enter on a running session switches to its pane. On any other session
-# it resumes that session, and on a project it starts a new one, in a new
-# tab of the project's workspace, or in a new workspace labeled with the
-# name from the front matter. A session running in the background is
-# stopped and resumed if idle, and attached otherwise.
+#!/usr/bin/env python3
+"""Pick a project under ~/project, one of its claude sessions, or a new
+project with fzf. Each project is listed with the title from the front
+matter of its README.md, followed by its sessions, newest first, with
+their titles. Sessions running in Herdr are marked.
 
-set -eu
+Enter on a running session switches to its pane. On any other session
+it resumes that session, and on a project it starts a new one, in a new
+tab of the project's workspace, or in a new workspace labeled with the
+name from the front matter. A session running in the background is
+stopped and resumed if idle, and attached otherwise.
+"""
 
-herdr=${HERDR_BIN_PATH:-herdr}
-projects=$HOME/project
-mkdir -p "$projects"
-front_matter=$(dirname "$0")/herdr-front-matter
+import json
+import os
+import re
+import shlex
+import subprocess
+import sys
+import tempfile
+from datetime import datetime
+from pathlib import Path
 
-# Fields of each pane open in Herdr: workspace, directory, pane, and the
-# claude session running in it, if any.
-open=$("$herdr" pane list |
-    jq -r '.result.panes[] | "\(.workspace_id)\t\(.cwd)\t\(.pane_id)\t\(.agent_session.value // "")"')
+HERDR = os.environ.get("HERDR_BIN_PATH", "herdr")
+BIN = Path(__file__).resolve().parent
+PROJECTS = Path.home() / "project"
+FRONT_MATTER = BIN / "herdr-front-matter"
 
-# Prints the workspace of a pane open in directory $1 or under it, if
-# any.
-workspace_of() {
-    printf '%s\n' "$open" |
-        awk -F '\t' -v dir="$1" '$2 == dir || index($2, dir "/") == 1 { print $1; exit }'
-}
+# What fzf shows in its header for the highlighted row, whose fields
+# are {1} kind and {4} display text.
+HEADER = """case {1} in
+    new) echo "enter: start a new session in a new project" ;;
+    project) echo "enter: start a new session in this project" ;;
+    *) case {4} in
+        *●*) echo "enter: switch to this running session" ;;
+        *) echo "enter: resume this session" ;;
+    esac ;;
+esac"""
 
-# Prints the pane running claude session $1, if any.
-pane_of() {
-    printf '%s\n' "$open" | awk -F '\t' -v sid="$1" '$4 == sid { print $3; exit }'
-}
 
-# Prints the transcripts of the claude sessions in directory $1, newest
-# first. Claude keeps them under ~/.claude/projects, in a directory
-# named after the path.
-sessions() {
-    ls -t "$HOME/.claude/projects/$(printf '%s' "$1" | sed 's/[^a-zA-Z0-9]/-/g')"/*.jsonl 2>/dev/null || true
-}
+def herdr(*args):
+    """Runs herdr with args and returns its parsed JSON output."""
+    out = subprocess.run(
+        [HERDR, *args], capture_output=True, text=True, check=True
+    ).stdout
+    return json.loads(out)
 
-# Prints the title of the session in transcript $1: the one it was
-# renamed to, the one claude generated, or else its first prompt.
-title() {
-    for type in custom-title ai-title; do
-        line=$(grep -F "\"type\":\"$type\"" "$1" | tail -n 1 || true)
-        if [ -n "$line" ]; then
-            printf '%s' "$line" | jq -r '.customTitle // .aiTitle // empty'
-            return
-        fi
-    done
-    prompt=$(grep -m 1 -F '"lastPrompt"' "$1" | jq -r '.lastPrompt // empty' 2>/dev/null || true)
-    printf '%s\n' "${prompt:-(untitled)}" | tr -s '[:space:]' ' ' | sed 's/ $//' | cut -c1-60
-}
 
-# Prints the ID and status of claude session $1 if it runs in the
-# background.
-background() {
-    claude agents --json 2>/dev/null |
-        jq -r --arg sid "$1" '.[] | select(.kind == "background" and .sessionId == $sid)
-            | "\(.id) \(.status)"' | head -n 1
-}
+def front_matter(directory, key):
+    """Returns field key from the front matter of the notes in directory,
+    or None if there are no notes."""
+    proc = subprocess.run(
+        [FRONT_MATTER, str(directory), key], capture_output=True, text=True
+    )
+    return proc.stdout.strip() if proc.returncode == 0 else None
 
-# Fields: kind, directory, session, then what fzf shows. Directory names
-# start with the date, so reverse order puts the newest projects first.
-out=$({
-    printf 'new\t\t\t+ new project\n'
-    for dir in "$projects"/*/; do
-        [ -d "$dir" ] && printf '%s\n' "${dir%/}"
-    done | sort -r | while read -r dir; do
-        if summary=$("$front_matter" "$dir" title); then
-            [ -n "$summary" ] || summary='(no title)'
-        else
-            summary='(no notes)'
-        fi
-        printf 'project\t%s\t\t%s  %s\n' "$dir" "${dir##*/}" "$summary"
-        sessions "$dir" | while read -r transcript; do
-            sid=$(basename "$transcript" .jsonl)
-            mark=' '
-            [ -z "$(pane_of "$sid")" ] || mark='●'
-            printf 'session\t%s\t%s\t  %s %s  %s\n' "$dir" "$sid" "$mark" \
-                "$(date -r "$transcript" '+%m-%d %H:%M')" "$(title "$transcript")"
-        done
-    done
-} | fzf --reverse --delimiter='\t' --with-nth=4.. --prompt='project> ' \
-    --header='enter: open a session, or start one in a project' \
-    --bind 'focus:transform-header(case {1} in
-        new) echo "enter: start a new session in a new project" ;;
-        project) echo "enter: start a new session in this project" ;;
-        *) case {4} in
-            *●*) echo "enter: switch to this running session" ;;
-            *) echo "enter: resume this session" ;;
-        esac ;;
-    esac)' \
-    --preview='cd {2} 2>/dev/null && cat README.md NOTES.md AGENT-*.md 2>/dev/null' \
-    --preview-window=down,50%) ||
-    exit 0
-kind=$(printf '%s' "$out" | cut -f1)
-dir=$(printf '%s' "$out" | cut -f2)
-sid=$(printf '%s' "$out" | cut -f3)
 
-if [ "$kind" = new ]; then
-    dir=$(mktemp -d "$projects/$(date +%Y%m%d)-XXXXXX")
-fi
+def sessions(directory):
+    """Returns the transcripts of the claude sessions in directory,
+    newest first. Claude keeps them under ~/.claude/projects, in a
+    directory named after the path."""
+    named = re.sub("[^a-zA-Z0-9]", "-", str(directory))
+    transcripts = (Path.home() / ".claude/projects" / named).glob("*.jsonl")
+    return sorted(transcripts, key=lambda p: p.stat().st_mtime, reverse=True)
 
-cmd="'$HOME/ws/dotfiles/bin/herdr-project'"
-if [ -n "$sid" ]; then
-    pane=$(pane_of "$sid")
-    if [ -n "$pane" ]; then
-        "$herdr" agent focus "$pane" >/dev/null
-        exit
-    fi
-    read -r id status <<EOF
-$(background "$sid")
-EOF
-    if [ "$status" = idle ] && claude stop "$id" >/dev/null; then
-        cmd="$cmd --resume $sid"
-    elif [ -n "$id" ]; then
-        cmd="claude attach $id"
-    else
-        cmd="$cmd --resume $sid"
-    fi
-fi
 
-workspace=$(workspace_of "$dir")
-if [ -n "$workspace" ]; then
-    created=$("$herdr" tab create --workspace "$workspace" --cwd "$dir" --focus)
-else
-    name=$("$front_matter" "$dir" name || true)
-    created=$("$herdr" workspace create --cwd "$dir" ${name:+--label "$name"} --focus)
-    workspace=$(printf '%s' "$created" | jq -r .result.workspace.workspace_id)
-fi
-"$front_matter" --report "$workspace" "$dir" || true
-"$herdr" pane run "$(printf '%s' "$created" | jq -r .result.root_pane.pane_id)" "$cmd" >/dev/null
+def title(transcript):
+    """Returns the title of the session in transcript: the one it was
+    renamed to, the one claude generated, or else its first prompt."""
+    data = transcript.read_bytes()
+
+    def field(marker, key, find):
+        """Returns key from the first or last line containing marker."""
+        i = find(marker)
+        if i < 0:
+            return None
+        start = data.rfind(b"\n", 0, i) + 1
+        end = data.find(b"\n", i)
+        try:
+            return json.loads(data[start : end if end >= 0 else None]).get(key)
+        except ValueError:
+            return None
+
+    for marker, key in (
+        (b'"type":"custom-title"', "customTitle"),
+        (b'"type":"ai-title"', "aiTitle"),
+    ):
+        if value := field(marker, key, data.rfind):
+            return value
+    prompt = field(b'"lastPrompt"', "lastPrompt", data.find) or ""
+    return " ".join(str(prompt).split())[:60] or "(untitled)"
+
+
+def background(sid):
+    """Returns the ID and status of claude session sid if it runs in
+    the background, else None."""
+    proc = subprocess.run(
+        ["claude", "agents", "--json"], capture_output=True, text=True
+    )
+    try:
+        agents = json.loads(proc.stdout)
+    except ValueError:
+        return None
+    for a in agents:
+        if a.get("kind") == "background" and a.get("sessionId") == sid:
+            return a["id"], a.get("status")
+    return None
+
+
+def choices(panes):
+    """Returns the lines for fzf. Fields: kind, directory, session, then
+    what fzf shows. Directory names start with the date, so reverse
+    order puts the newest projects first."""
+    running = {p["session"] for p in panes if p["session"]}
+    lines = ["new\t\t\t+ new project"]
+    for d in sorted((d for d in PROJECTS.iterdir() if d.is_dir()), reverse=True):
+        summary = front_matter(d, "title")
+        if summary is None:
+            summary = "(no notes)"
+        elif not summary:
+            summary = "(no title)"
+        lines.append(f"project\t{d}\t\t{d.name}  {summary}")
+        for t in sessions(d):
+            mark = "●" if t.stem in running else " "
+            when = datetime.fromtimestamp(t.stat().st_mtime).strftime("%m-%d %H:%M")
+            lines.append(f"session\t{d}\t{t.stem}\t  {mark} {when}  {title(t)}")
+    return lines
+
+
+def pick(lines):
+    """Returns the fields of the line the user picks with fzf, or None."""
+    proc = subprocess.run(
+        [
+            "fzf", "--reverse", "--delimiter=\t", "--with-nth=4..",
+            "--prompt=project> ",
+            "--header=enter: open a session, or start one in a project",
+            f"--bind=focus:transform-header({HEADER})",
+            "--preview=cd {2} 2>/dev/null && cat README.md NOTES.md AGENT-*.md 2>/dev/null",
+            "--preview-window=down,50%",
+        ],
+        input="\n".join(lines),
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    if proc.returncode != 0:
+        return None
+    return proc.stdout.rstrip("\n").split("\t")
+
+
+def main():
+    PROJECTS.mkdir(exist_ok=True)
+    panes = [
+        {
+            "workspace": p["workspace_id"],
+            "cwd": p["cwd"],
+            "pane": p["pane_id"],
+            "session": (p.get("agent_session") or {}).get("value") or "",
+        }
+        for p in herdr("pane", "list")["result"]["panes"]
+    ]
+
+    picked = pick(choices(panes))
+    if picked is None:
+        return
+    kind, directory, sid = picked[:3]
+    if kind == "new":
+        directory = tempfile.mkdtemp(
+            prefix=datetime.now().strftime("%Y%m%d-"), dir=PROJECTS
+        )
+
+    cmd = shlex.quote(str(BIN / "herdr-project"))
+    if sid:
+        for p in panes:
+            if p["session"] == sid:
+                herdr("agent", "focus", p["pane"])
+                return
+        bg = background(sid)
+        if bg and bg[1] == "idle" and subprocess.run(
+            ["claude", "stop", bg[0]], stdout=subprocess.DEVNULL
+        ).returncode == 0:
+            cmd += f" --resume {sid}"
+        elif bg:
+            cmd = f"claude attach {bg[0]}"
+        else:
+            cmd += f" --resume {sid}"
+
+    workspace = next(
+        (
+            p["workspace"]
+            for p in panes
+            if p["cwd"] == directory or p["cwd"].startswith(directory + "/")
+        ),
+        None,
+    )
+    if workspace:
+        created = herdr(
+            "tab", "create", "--workspace", workspace, "--cwd", directory, "--focus"
+        )
+    else:
+        name = front_matter(directory, "name")
+        label = ["--label", name] if name else []
+        created = herdr(
+            "workspace", "create", "--cwd", directory, *label, "--focus"
+        )
+        workspace = created["result"]["workspace"]["workspace_id"]
+    subprocess.run([FRONT_MATTER, "--report", workspace, directory])
+    herdr("pane", "run", created["result"]["root_pane"]["pane_id"], cmd)
+
+
+if __name__ == "__main__":
+    main()
