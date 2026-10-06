@@ -91,6 +91,16 @@ def title(transcript):
     return " ".join(str(prompt).split())[:60] or "(untitled)"
 
 
+def context(directory, sid):
+    """Returns the context window usage of session sid, as the
+    statusline left it in directory, or "" if it didn't."""
+    try:
+        used = json.loads((directory / f"claude-{sid}.json").read_text())
+        return f"{int(used['used_percentage'])}%"
+    except (OSError, ValueError, KeyError, TypeError):
+        return ""
+
+
 def background(sid):
     """Returns the ID and status of claude session sid if it runs in
     the background, else None."""
@@ -123,7 +133,9 @@ def choices(panes):
         for t in sessions(d):
             mark = "●" if t.stem in running else " "
             when = datetime.fromtimestamp(t.stat().st_mtime).strftime("%m-%d %H:%M")
-            lines.append(f"session\t{d}\t{t.stem}\t  {mark} {when}  {title(t)}")
+            lines.append(
+                f"session\t{d}\t{t.stem}\t  {mark} {when} {context(d, t.stem):>4}  {title(t)}"
+            )
     return lines
 
 
