@@ -6,6 +6,9 @@
 # $ctx, $prompt, $model, $dir and $branch tokens for the agent panel,
 # plus $bg when it runs as a background session, and the full working
 # directory as $cwd for opening new tabs there.
+#
+# It also leaves the context window usage in the session's project
+# directory, in claude-<session>.json, for the project picker.
 
 input=$(cat)
 pct=$(printf '%s' "$input" | jq -r '
@@ -18,6 +21,18 @@ pct=$(printf '%s' "$input" | jq -r '
   | floor')
 
 [ -n "$pct" ] || exit 0
+
+{
+    read -r session
+    read -r project
+} <<END
+$(printf '%s' "$input" | jq -r '.session_id // empty, (.workspace.project_dir // .cwd // empty)')
+END
+if [ -n "$session" ] && [ -d "$project" ]; then
+    printf '%s' "$input" | jq -c '{used_percentage: .context_window.used_percentage,
+        context_window_size: .context_window.context_window_size}' \
+        >"$project/claude-$session.json"
+fi
 
 if [ "${HERDR_ENV:-}" = 1 ] && [ -n "${HERDR_PANE_ID:-}" ]; then
     # The transcript records each prompt as a "last-prompt" line; the
