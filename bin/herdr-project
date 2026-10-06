@@ -11,7 +11,9 @@ by the role token the agent reports, until the pane is gone.
 
 import json
 import os
+import select
 import shutil
+import socket
 import subprocess
 import sys
 import textwrap
@@ -69,11 +71,51 @@ def remaining_section(role):
     return "\n".join(out) or f'No "## Remaining" section in {path} yet.'
 
 
+class PaneWatch:
+    """Learns from Herdr's socket when a pane closes, without polling.
+    Without the socket it can only sleep, and the caller polls."""
+
+    def __init__(self, pane):
+        self.pane = pane
+        self.buf = b""
+        try:
+            self.sock = socket.socket(socket.AF_UNIX)
+            self.sock.connect(os.environ["HERDR_SOCKET_PATH"])
+            request = {"id": "1", "method": "events.subscribe",
+                       "params": {"subscriptions": [{"type": "pane.closed"}]}}
+            self.sock.sendall(json.dumps(request).encode() + b"\n")
+        except (OSError, KeyError):
+            self.sock = None
+
+    def closed(self, timeout):
+        """Waits up to timeout seconds and returns whether the pane
+        closed meanwhile."""
+        if self.sock is None:
+            time.sleep(timeout)
+            return False
+        deadline = time.monotonic() + timeout
+        while (left := deadline - time.monotonic()) > 0:
+            if not select.select([self.sock], [], [], left)[0]:
+                break
+            data = self.sock.recv(65536)
+            if not data:  # Herdr is gone.
+                return True
+            *lines, self.buf = (self.buf + data).split(b"\n")
+            for line in lines:
+                try:
+                    if json.loads(line).get("data", {}).get("pane_id") == self.pane:
+                        return True
+                except (ValueError, AttributeError):
+                    pass
+        return False
+
+
 def follow_remaining(pane):
     """Prints the "## Remaining" section of the agent in Herdr pane
-    every few seconds until the pane is gone. A failed read shows as a
-    message rather than ending the loop, since that would close the
-    pane."""
+    until the pane is gone, refreshing every few seconds. A failed read
+    shows as a message rather than ending the loop, since that would
+    close the pane."""
+    watch = PaneWatch(pane)
     while (info := herdr("pane", "get", pane)) is not None:
         try:
             role = info["result"]["pane"]["tokens"].get("role") or ""
@@ -90,7 +132,8 @@ def follow_remaining(pane):
             ) or [""]
         sys.stdout.write("\033[H\033[2J" + "\n".join(wrapped[:rows]))
         sys.stdout.flush()
-        time.sleep(5)
+        if watch.closed(5):
+            return
 
 
 def remaining_pane():
