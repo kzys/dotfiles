@@ -45,7 +45,7 @@ sessions() {
 # renamed to, the one claude generated, or else its first prompt.
 title() {
     for type in custom-title ai-title; do
-        line=$(tac "$1" | grep -m 1 -F "\"type\":\"$type\"" || true)
+        line=$(grep -F "\"type\":\"$type\"" "$1" | tail -n 1 || true)
         if [ -n "$line" ]; then
             printf '%s' "$line" | jq -r '.customTitle // .aiTitle // empty'
             return
