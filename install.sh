@@ -41,6 +41,9 @@ main() {
     # Claude reads the same house rules under its own name.
     link "$PWD/config/opencode/AGENTS.md" "$HOME/.claude/CLAUDE.md"
     "$PWD/install-claude.py"
+    if command -v herdr >/dev/null && command -v codex >/dev/null; then
+        "$PWD/install-codex.py"
+    fi
 
     # pi config is stored in ~/.pi, so mirror the repo's ./pi directory there.
     link "$PWD/pi" "$HOME/.pi"

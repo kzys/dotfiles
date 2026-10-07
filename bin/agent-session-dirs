@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+"""List or pick directories from the agent selected by HERDR_AGENT."""
+
+import os
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+from herdr_agent import agent, codex_sessions
+
+
+def main():
+    if agent() == 'claude':
+        command = str(Path(__file__).resolve().with_name('claude-session-dirs'))
+        os.execv(command, [command, *sys.argv[1:]])
+    seen = set()
+    rows = []
+    for s in codex_sessions():
+        if s['cwd'] in seen:
+            continue
+        seen.add(s['cwd'])
+        title = ' '.join((s.get('name') or s.get('title') or '').split())
+        timestamp = datetime.fromtimestamp(s['updated_at'], timezone.utc).isoformat()
+        rows.append(f"{s['cwd']}\t{s.get('git_branch') or ''}\t{timestamp}\t{title}")
+    if '--pick' in sys.argv[1:]:
+        result = subprocess.run(['fzf', '--height=~7', '--no-sort', '--delimiter=\t'],
+                                input='\n'.join(rows), capture_output=True, text=True)
+        if result.returncode:
+            return result.returncode
+        print(result.stdout.split('\t')[0])
+    else:
+        print('\n'.join(rows))
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

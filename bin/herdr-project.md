@@ -27,7 +27,7 @@ move its contents to README.md and AGENT-main.md, then delete it.
 Keep your own notes in AGENT-<role>.md with what you have done so far,
 where <role> is a short name for your part, such as main or reviewer.
 Write only to your own file. When resuming another agent's work, keep
-using its file, but only if that agent has stopped: if another claude
+using its file, but only if that agent has stopped: if another agent
 pane in `herdr pane list` is in this directory, it is still working, so
 pick a role of your own. The session started at $start; check the time
 with date and update your notes about every hour, and before you finish.

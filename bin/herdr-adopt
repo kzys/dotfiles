@@ -1,29 +1,46 @@
-#!/bin/sh
-# Pick Claude Code background sessions, including finished ones, with
-# fzf and resume each in a new Herdr workspace, so that it runs in a
-# pane Herdr can track. The workspace closes when claude exits.
-#
-# claude --resume either continues a session in place or starts a copy;
-# stop the leftover background copy with "claude stop <id>".
+#!/usr/bin/env python3
+"""Adopt Claude background sessions or saved Codex sessions into Herdr."""
 
-set -eu
+import json
+import os
+import shlex
+import subprocess
+from pathlib import Path
 
-herdr=${HERDR_BIN_PATH:-herdr}
+from herdr_agent import agent, codex_sessions
 
-# Fields: sessionId, state, name, cwd, newest first. fzf shows all but
-# the first.
-selected=$(claude agents --json --all |
-    jq -r 'map(select(.kind == "background")) | sort_by(-.startedAt) | .[]
-        | [.sessionId, .state, .name, .cwd] | @tsv' |
-    fzf --multi --reverse --delimiter='\t' --with-nth=2.. \
-        --prompt='adopt> ') || exit 0
 
-printf '%s\n' "$selected" | while IFS='	' read -r id _ name cwd; do
-    if [ ! -d "$cwd" ]; then
-        echo "skipping $name: $cwd is gone" >&2
-        continue
-    fi
-    pane=$("$herdr" workspace create --cwd "$cwd" --label "$name" |
-        jq -r .result.root_pane.pane_id)
-    "$herdr" pane run "$pane" "exec claude --resume $id" >/dev/null
-done
+def main():
+    selected = agent()
+    if selected == 'claude':
+        command = str(Path(__file__).resolve().with_name('claude-adopt'))
+        os.execv(command, [command])
+    herdr = os.environ.get('HERDR_BIN_PATH', 'herdr')
+    sessions = codex_sessions()
+    lines = [f"{s['id']}\t{' '.join((s.get('name') or s.get('title') or '(untitled)').split())}\t{s['cwd']}"
+             for s in sessions]
+    picked = subprocess.run(['fzf', '--multi', '--reverse', '--delimiter=\t',
+                             '--with-nth=2..', '--prompt=adopt> '],
+                            input='\n'.join(lines), capture_output=True, text=True)
+    if picked.returncode:
+        return
+    panes = json.loads(subprocess.check_output([herdr, 'pane', 'list']))['result']['panes']
+    for line in picked.stdout.splitlines():
+        sid, title, cwd = line.split('\t', 2)
+        running = next((p for p in panes if p.get('agent') == 'codex' and
+                        (p.get('agent_session') or {}).get('value') == sid), None)
+        if running:
+            subprocess.run([herdr, 'agent', 'focus', running['pane_id']], check=True)
+            continue
+        if not Path(cwd).is_dir():
+            continue
+        created = json.loads(subprocess.check_output(
+            [herdr, 'workspace', 'create', '--cwd', cwd, '--label', title]))
+        pane = created['result']['root_pane']['pane_id']
+        launcher = shlex.quote(str(Path(__file__).resolve().with_name('herdr-project')))
+        subprocess.run([herdr, 'pane', 'run', pane,
+                        f'HERDR_AGENT=codex {launcher} --resume {shlex.quote(sid)}'], check=True)
+
+
+if __name__ == '__main__':
+    main()

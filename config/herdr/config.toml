@@ -15,7 +15,7 @@ tab_bar_right = [
 tab_bar_right_separator = " · "
 
 [ui.sidebar.agents]
-# $-tokens are reported by bin/claude-statusline.
+# $-tokens are reported by bin/claude-statusline and bin/codex-hook.
 rows = [
   ["state_text", { token = "workspace", bold = true }, "machine", "tab", "$ctx"],
   [{ token = "$bg", bold = true }, "terminal_title_stripped", "$branch"],
@@ -61,12 +61,11 @@ height = "60%"
 key = "prefix+c"
 type = "shell"
 description = "new tab where the agent is working"
-# $cwd is reported by bin/claude-statusline; claude's own directory
-# stays where it started. It is used only while claude runs in the pane,
-# since it outlives claude, and only if the directory still exists.
+# $cwd is reported by the agent integration. Use it while an agent runs
+# in the pane, and only if the directory still exists.
 command = '''
 dir=$("$HERDR_BIN_PATH" pane get "$HERDR_ACTIVE_PANE_ID" |
-    jq -r '.result.pane | select(.agent == "claude") | .tokens.cwd // empty')
+    jq -r '.result.pane | select(.agent == "claude" or .agent == "codex") | .tokens.cwd // empty')
 [ -d "$dir" ] || dir=
 "$HERDR_BIN_PATH" tab create --workspace "$HERDR_ACTIVE_WORKSPACE_ID" --cwd "${dir:-$HERDR_ACTIVE_PANE_CWD}" --focus
 '''

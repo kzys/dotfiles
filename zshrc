@@ -76,6 +76,8 @@ else
     alias ls='ls -wF'
 fi
 alias tmuxa='tmux attach || tmux'
+# Set to codex to switch the Herdr launcher and session helpers.
+export HERDR_AGENT=${HERDR_AGENT:-claude}
 alias hp=herdr-project
 
 # History
@@ -271,10 +273,10 @@ function cdw {
     fi
 }
 
-# cd into a directory a past Claude Code session ran in, picked with fzf.
+# cd into a directory a past agent session ran in, picked with fzf.
 function cdc {
     local dir
-    dir=$(claude-session-dirs --pick) && cd "$dir"
+    dir=$(agent-session-dirs --pick) && cd "$dir"
 }
 
 if [ -f ~/.zsh/init-work.sh ]; then
