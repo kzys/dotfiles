@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pick a project under ~/project, one of its claude sessions, or a new
+"""Pick a project under ~/project, one of its agent sessions, or a new
 project with fzf. Each project is listed with the title from the front
 matter of its README.md, followed by its sessions, newest first, with
 their titles. Sessions running in Herdr are marked.
@@ -21,8 +21,12 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
+from herdr_agent import agent, codex_context, codex_sessions
+
 HERDR = os.environ.get("HERDR_BIN_PATH", "herdr")
 BIN = Path(__file__).resolve().parent
+AGENT = agent()
+CODEX_SESSIONS = codex_sessions() if AGENT == "codex" else []
 PROJECTS = Path.home() / "project"
 FRONT_MATTER = BIN / "herdr-front-matter"
 
@@ -63,6 +67,8 @@ def sessions(directory):
     """Returns the transcripts of the claude sessions in directory,
     newest first. Claude keeps them under ~/.claude/projects, in a
     directory named after the path."""
+    if AGENT == "codex":
+        return [s for s in CODEX_SESSIONS if s["cwd"] == str(directory)]
     named = re.sub("[^a-zA-Z0-9]", "-", str(directory))
     transcripts = (Path.home() / ".claude/projects" / named).glob("*.jsonl")
     return sorted(transcripts, key=lambda p: p.stat().st_mtime, reverse=True)
@@ -71,6 +77,9 @@ def sessions(directory):
 def title(transcript):
     """Returns the title of the session in transcript: the one it was
     renamed to, the one claude generated, or else its first prompt."""
+    if AGENT == "codex":
+        return " ".join((transcript.get("name") or transcript.get("title") or
+                         transcript.get("first_user_message") or "(untitled)").split())[:60]
     data = transcript.read_bytes()
 
     def field(marker, key, find):
@@ -99,7 +108,7 @@ def context(directory, sid):
     """Returns the context window usage of session sid, as the
     statusline left it in directory, or "" if it didn't."""
     try:
-        used = json.loads((directory / f"claude-{sid}.json").read_text())
+        used = json.loads((directory / f"{AGENT}-{sid}.json").read_text())
         return f"{int(used['used_percentage'])}%"
     except (OSError, ValueError, KeyError, TypeError):
         return ""
@@ -108,6 +117,8 @@ def context(directory, sid):
 def background(sid):
     """Returns the ID and status of claude session sid if it runs in
     the background, else None."""
+    if AGENT == "codex":
+        return None
     try:
         proc = subprocess.run(
             ["claude", "agents", "--json"], capture_output=True, text=True
@@ -125,7 +136,8 @@ def choices(panes):
     """Returns the lines for fzf. Fields: kind, directory, session, then
     what fzf shows. Directory names start with the date, so reverse
     order puts the newest projects first."""
-    running = {p["session"] for p in panes if p["session"]}
+    running = {p["session"] for p in panes
+               if p["session"] and p["agent"] == AGENT}
     lines = ["new\t\t\t+ new project"]
     for d in sorted(
         (d for d in PROJECTS.iterdir() if d.is_dir() and d.name[0] != "."),
@@ -138,10 +150,16 @@ def choices(panes):
             summary = "(no title)"
         lines.append(f"project\t{d}\t\t{d.name}  {summary}")
         for t in sessions(d):
-            mark = "●" if t.stem in running else " "
-            when = datetime.fromtimestamp(t.stat().st_mtime).strftime("%m-%d %H:%M")
+            sid = t["id"] if AGENT == "codex" else t.stem
+            updated = t["updated_at"] if AGENT == "codex" else t.stat().st_mtime
+            mark = "●" if sid in running else " "
+            when = datetime.fromtimestamp(updated).strftime("%m-%d %H:%M")
+            ctx = context(d, sid)
+            if AGENT == "codex" and not ctx:
+                pct = codex_context(t["rollout_path"])
+                ctx = f"{pct}%" if pct is not None else ""
             lines.append(
-                f"session\t{d}\t{t.stem}\t  {mark} {when} {context(d, t.stem):>4}  {title(t)}"
+                f"session\t{d}\t{sid}\t  {mark} {when} {ctx:>4}  {title(t)}"
             )
     return lines
 
@@ -170,6 +188,7 @@ def main():
     PROJECTS.mkdir(exist_ok=True)
     panes = [
         {
+            "agent": p.get("agent"),
             "workspace": p["workspace_id"],
             "cwd": p["cwd"],
             "pane": p["pane_id"],
@@ -187,21 +206,21 @@ def main():
             prefix=datetime.now().strftime("%Y%m%d-"), dir=PROJECTS
         )
 
-    cmd = shlex.quote(str(BIN / "herdr-project"))
+    cmd = f"HERDR_AGENT={AGENT} " + shlex.quote(str(BIN / "herdr-project"))
     if sid:
         for p in panes:
-            if p["session"] == sid:
+            if p["agent"] == AGENT and p["session"] == sid:
                 herdr("agent", "focus", p["pane"])
                 return
         bg = background(sid)
         if bg and bg[1] == "idle" and subprocess.run(
             ["claude", "stop", bg[0]], stdout=subprocess.DEVNULL
         ).returncode == 0:
-            cmd += f" --resume {sid}"
+            cmd += f" --resume {shlex.quote(sid)}"
         elif bg:
-            cmd = f"claude attach {bg[0]}"
+            cmd = f"claude attach {shlex.quote(bg[0])}"
         else:
-            cmd += f" --resume {sid}"
+            cmd += f" --resume {shlex.quote(sid)}"
 
     workspace = next(
         (

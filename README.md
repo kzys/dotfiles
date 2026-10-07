@@ -33,3 +33,29 @@ systemctl --user list-timers atlassian-keepalive.timer
 
 On servers/headless machines, run `loginctl enable-linger $USER` so the user timer
 fires without an active login session.
+
+## Herdr agent selection
+
+Set one variable before starting Herdr (or export it in your shell config):
+
+```sh
+export HERDR_AGENT=codex   # claude is the default
+herdr
+```
+
+This selects the agent for `hp`, the prefix+w project picker, `herdr-adopt`,
+and `cdc`. New panes keep the picker's selection. Existing sessions keep their
+agent; the picker lists sessions for the selected agent. Restart the Herdr server after
+changing the variable so its popups inherit the new value.
+
+Run `./install-codex.py` once to install Herdr's Codex session integration and
+sidebar metadata hooks; `install.sh` also does this when both CLIs are available.
+In Codex, use `/hooks` to review and trust the installed hooks. Hooks report the
+session identity, prompt, directory, branch, model, and context usage when available.
+The picker reads Codex's local session database (including paginated sessions),
+with a rollout fallback for older installations. Codex context percentages are
+available for legacy rollouts; newer paginated history may leave that field blank.
+`herdr-adopt` selects saved Codex sessions to resume, or Claude background sessions.
+
+Both agents receive the same project notes instructions and house rules. Claude
+keeps its existing settings; Codex uses its configured model and approval policy.

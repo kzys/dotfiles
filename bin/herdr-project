@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Start claude in a scratch directory under ~/project with instructions
+"""Start the selected agent in a scratch directory under ~/project with instructions
 for finding checkouts, keeping notes, and naming the Herdr workspace.
 In Herdr, the "## Remaining" section of the agent's notes shows in a
 pane above it.
@@ -20,6 +20,8 @@ import textwrap
 import time
 from datetime import datetime
 from pathlib import Path
+
+from herdr_agent import agent
 
 HERDR = os.environ.get("HERDR_BIN_PATH", "herdr")
 SELF = Path(__file__).resolve()
@@ -175,13 +177,27 @@ def main(argv):
             pass
         return 0
 
+    selected = agent()
+
     # Herdr already tracks sessions, so keep them out of the background.
     if os.environ.get("HERDR_ENV") == "1":
-        os.environ["CLAUDE_CODE_DISABLE_AGENT_VIEW"] = "1"
+        if selected == "claude":
+            os.environ["CLAUDE_CODE_DISABLE_AGENT_VIEW"] = "1"
         try:
             remaining_pane()
         except (KeyError, TypeError):
             pass
+
+    if selected == "codex":
+        # --resume is the picker's common spelling; Codex uses a subcommand.
+        if argv[:1] == ["--resume"]:
+            argv = ["resume", *argv[1:]]
+        rules = (SELF.parent.parent / "config/opencode/AGENTS.md").read_text()
+        os.execvp("codex", [
+            "codex", "--add-dir", str(SELF.parent.parent),
+            "-c", "developer_instructions=" + json.dumps(rules + "\n\n" + instructions()),
+            *argv,
+        ])
 
     # Run claude's commands in bash, not the login shell, whose quirks
     # trip it up.
