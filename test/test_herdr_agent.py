@@ -13,6 +13,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'bin'))
 import herdr_agent
+
 import install_codex
 
 
@@ -90,9 +91,11 @@ class TestAgent:
         launcher = load('herdr_project_codex', ROOT / 'bin/herdr-project')
         # execvp never returns in real use.
         for arguments, tail in [([], []), (['--resume', 'id'], ['resume', 'id'])]:
-            with patch.object(launcher.os, 'execvp', side_effect=SystemExit) as execute:
-                with pytest.raises(SystemExit):
-                    launcher.main(arguments)
+            with (
+                patch.object(launcher.os, 'execvp', side_effect=SystemExit) as execute,
+                pytest.raises(SystemExit),
+            ):
+                launcher.main(arguments)
             command, args = execute.call_args.args
             assert command == 'codex'
             instructions = json.loads(args[args.index('-c') + 1].split('=', 1)[1])

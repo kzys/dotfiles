@@ -80,7 +80,7 @@ needs_ruby = pytest.mark.skipif(not RUBY, reason='ruby is not installed')
 class TestSources:
     @staticmethod
     def parses(*command):
-        got = subprocess.run(command, capture_output=True, text=True)
+        got = subprocess.run(command, capture_output=True, text=True, check=False)
         assert got.returncode == 0, got.stdout + got.stderr
 
     @pytest.mark.parametrize('name', sorted(set(EXTENSIONS.values())))

@@ -1,8 +1,10 @@
 import datetime
 import importlib.machinery
 import importlib.util
+import itertools
 import pathlib
 import re
+
 import pytest
 
 WEEK = pathlib.Path(__file__).resolve().parent.parent / 'bin' / 'week'
@@ -96,7 +98,7 @@ class TestMonthLabels:
         while day < date(2028, 1, 1):
             for count in range(1, 6):
                 labels = self.labels(day, count)
-                for (text, col), (_, following) in zip(labels, labels[1:]):
+                for (text, col), (_, following) in itertools.pairwise(labels):
                     assert col + len(text) < following, f'{day} -{count}: {labels}'
             day += datetime.timedelta(days=1)
 

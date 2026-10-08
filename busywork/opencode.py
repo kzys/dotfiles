@@ -6,7 +6,7 @@ import os
 import subprocess
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from session import Session, Transcript
 from source import Source
@@ -93,7 +93,7 @@ class OpenCode(Source):
         except (OSError, subprocess.SubprocessError):
             return None
         for word in out.split():
-            if word.startswith("http://") or word.startswith("https://"):
+            if word.startswith(("http://", "https://")):
                 return word.rstrip("/")
         return None
 
@@ -155,7 +155,7 @@ class OpenCode(Source):
         updated = (s.get("time") or {}).get("updated")
         if updated:
             t.last = datetime.fromtimestamp(
-                updated / 1000, timezone.utc).isoformat()
+                updated / 1000, UTC).isoformat()
         return Session(
             id=s["id"],
             name=s.get("title") or s.get("slug") or "",

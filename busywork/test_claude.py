@@ -3,10 +3,10 @@ import os
 import stat
 
 import pytest
+from session import Session, Transcript
 
 import claude
 from claude import Claude
-from session import Session, Transcript
 
 
 def fake_claude(tmp_path, sessions):
