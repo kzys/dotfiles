@@ -8,7 +8,8 @@ import ast
 import re
 import shutil
 import subprocess
-import unittest
+
+import pytest
 
 EXTENSIONS = {
     'py': 'python',
@@ -76,36 +77,35 @@ def by_language():
 
 FILES = by_language()
 
+needs_ruby = pytest.mark.skipif(not RUBY, reason='ruby is not installed')
 
-class TestSources(unittest.TestCase):
-    def parses(self, *command):
+
+class TestSources:
+    @staticmethod
+    def parses(*command):
         got = subprocess.run(command, capture_output=True, text=True)
-        self.assertEqual(got.returncode, 0, got.stdout + got.stderr)
+        assert got.returncode == 0, got.stdout + got.stderr
 
-    def test_finds_something_to_check(self):
+    @pytest.mark.parametrize('name', sorted(set(EXTENSIONS.values())))
+    def test_finds_something_to_check(self, name):
         """A classifier that matched nothing would leave every check vacant."""
-        for name in EXTENSIONS.values():
-            with self.subTest(name=name):
-                self.assertTrue(FILES.get(name))
+        assert FILES.get(name)
 
-    def test_python_parses(self):
-        for path in FILES['python']:
-            with self.subTest(path=path):
-                with open(path, encoding='utf-8') as f:
-                    ast.parse(f.read(), path)
+    @pytest.mark.parametrize('path', FILES.get('python', []))
+    def test_python_parses(self, path):
+        with open(path, encoding='utf-8') as f:
+            ast.parse(f.read(), path)
 
-    @unittest.skipUnless(RUBY, 'ruby is not installed')
-    def test_ruby_parses(self):
-        for path in FILES['ruby']:
-            with self.subTest(path=path):
-                self.parses('ruby', '-c', path)
+    @needs_ruby
+    @pytest.mark.parametrize('path', FILES.get('ruby', []))
+    def test_ruby_parses(self, path):
+        self.parses('ruby', '-c', path)
 
-    @unittest.skipUnless(RUBY, 'ruby is not installed')
-    def test_yaml_parses(self):
-        for path in FILES['yaml']:
-            with self.subTest(path=path):
-                self.parses('ruby', '-ryaml', '-e', YAML_PARSE, path)
+    @needs_ruby
+    @pytest.mark.parametrize('path', FILES.get('yaml', []))
+    def test_yaml_parses(self, path):
+        self.parses('ruby', '-ryaml', '-e', YAML_PARSE, path)
 
-    @unittest.skipUnless(SHELLCHECK, 'shellcheck is not installed')
+    @pytest.mark.skipif(not SHELLCHECK, reason='shellcheck is not installed')
     def test_shell_scripts_are_clean(self):
         self.parses('shellcheck', *FILES['shell'])

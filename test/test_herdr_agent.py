@@ -4,11 +4,11 @@ import json
 import os
 import sqlite3
 import sys
-import tempfile
-import unittest
 from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
+
+import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'bin'))
@@ -24,14 +24,12 @@ def load(name, path):
     return module
 
 
-class AgentTests(unittest.TestCase):
-    def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.home = Path(tmp.name)
-        env = patch.dict(os.environ, {'CODEX_HOME': str(self.home)}, clear=True)
-        env.start()
-        self.addCleanup(env.stop)
+class TestAgent:
+    @pytest.fixture(autouse=True)
+    def home(self, tmp_path):
+        self.home = tmp_path
+        with patch.dict(os.environ, {'CODEX_HOME': str(self.home)}, clear=True):
+            yield
 
     def database(self):
         with closing(sqlite3.connect(self.home / 'state_5.sqlite')) as db:
@@ -46,16 +44,16 @@ class AgentTests(unittest.TestCase):
             db.commit()
 
     def test_selection(self):
-        self.assertEqual(herdr_agent.agent(), 'claude')
+        assert herdr_agent.agent() == 'claude'
         os.environ['HERDR_PROJECT_AGENT'] = 'codex'
-        self.assertEqual(herdr_agent.agent(), 'codex')
+        assert herdr_agent.agent() == 'codex'
         os.environ['HERDR_PROJECT_AGENT'] = 'typo'
-        with self.assertRaisesRegex(SystemExit, 'claude or codex'):
+        with pytest.raises(SystemExit, match='claude or codex'):
             herdr_agent.agent()
 
     def test_database_sessions_include_missing_paginated_rollouts(self):
         self.database()
-        self.assertEqual([s['id'] for s in herdr_agent.codex_sessions()], ['new', 'old'])
+        assert [s['id'] for s in herdr_agent.codex_sessions()] == ['new', 'old']
 
     def test_legacy_fallback(self):
         sessions = self.home / 'sessions/2026/10/07'
@@ -65,7 +63,7 @@ class AgentTests(unittest.TestCase):
                 'id': 'id', 'cwd': '/project', 'source': 'cli'}}) + '\n')
         (sessions / 'broken.jsonl').write_text('broken')
         found = herdr_agent.codex_sessions()
-        self.assertEqual([(s['id'], s['cwd']) for s in found], [('id', '/project')])
+        assert [(s['id'], s['cwd']) for s in found] == [('id', '/project')]
 
     def test_context_uses_current_usage_and_latest_event(self):
         path = self.home / 'rollout.jsonl'
@@ -74,18 +72,18 @@ class AgentTests(unittest.TestCase):
             'total_token_usage': {'total_tokens': 9000},
             'last_token_usage': {'total_tokens': n}}}} for n in (100, 400)]
         path.write_text('\n'.join(map(json.dumps, records)) + '\npartial')
-        self.assertEqual(herdr_agent.codex_context(path), 40)
-        self.assertIsNone(herdr_agent.codex_context(self.home / 'absent'))
+        assert herdr_agent.codex_context(path) == 40
+        assert herdr_agent.codex_context(self.home / 'absent') is None
 
     def test_claude_launcher_preserved(self):
         launcher = load('herdr_project_claude', ROOT / 'bin/herdr-project')
         with patch.object(launcher.os, 'execvp') as execute:
             launcher.main(['--resume', 'id'])
         command, args = execute.call_args.args
-        self.assertEqual(command, 'claude')
-        self.assertIn('--append-system-prompt', args)
-        self.assertEqual(args[-2:], ['--resume', 'id'])
-        self.assertEqual(os.environ['CLAUDE_CODE_SHELL'], '/bin/bash')
+        assert command == 'claude'
+        assert '--append-system-prompt' in args
+        assert args[-2:] == ['--resume', 'id']
+        assert os.environ['CLAUDE_CODE_SHELL'] == '/bin/bash'
 
     def test_codex_launcher_new_and_resume(self):
         os.environ['HERDR_PROJECT_AGENT'] = 'codex'
@@ -93,24 +91,24 @@ class AgentTests(unittest.TestCase):
         # execvp never returns in real use.
         for arguments, tail in [([], []), (['--resume', 'id'], ['resume', 'id'])]:
             with patch.object(launcher.os, 'execvp', side_effect=SystemExit) as execute:
-                with self.assertRaises(SystemExit):
+                with pytest.raises(SystemExit):
                     launcher.main(arguments)
             command, args = execute.call_args.args
-            self.assertEqual(command, 'codex')
+            assert command == 'codex'
             instructions = json.loads(args[args.index('-c') + 1].split('=', 1)[1])
-            self.assertIn('## Remaining', instructions)
-            self.assertIn('herdr-name-workspace', instructions)
+            assert '## Remaining' in instructions
+            assert 'herdr-name-workspace' in instructions
             if tail:
-                self.assertEqual(args[-2:], tail)
+                assert args[-2:] == tail
 
     def test_picker_codex_session_and_title(self):
         self.database()
         os.environ['HERDR_PROJECT_AGENT'] = 'codex'
         picker = load('herdr_picker_codex', ROOT / 'bin/herdr-project-picker')
-        self.assertEqual([s['id'] for s in picker.sessions(Path('/project'))], ['new', 'old'])
-        self.assertEqual(picker.title(picker.sessions(Path('/project'))[0]), 'New title')
+        assert [s['id'] for s in picker.sessions(Path('/project'))] == ['new', 'old']
+        assert picker.title(picker.sessions(Path('/project'))[0]) == 'New title'
         with patch.object(picker.subprocess, 'run') as run:
-            self.assertIsNone(picker.background('new'))
+            assert picker.background('new') is None
             run.assert_not_called()
 
     def test_picker_reuses_workspace_with_shell_pane(self):
@@ -130,8 +128,8 @@ class AgentTests(unittest.TestCase):
              patch.object(picker, 'pick', return_value=['project', str(self.home), '']), \
              patch.object(picker.subprocess, 'run'):
             picker.main()
-        self.assertTrue(any(c[:2] == ('tab', 'create') for c in calls))
-        self.assertTrue(calls[-1][-1].startswith('HERDR_PROJECT_AGENT=codex '))
+        assert any(c[:2] == ('tab', 'create') for c in calls)
+        assert calls[-1][-1].startswith('HERDR_PROJECT_AGENT=codex ')
 
     def test_picker_focuses_running_session(self):
         os.environ['HERDR_PROJECT_AGENT'] = 'codex'
@@ -155,8 +153,8 @@ class AgentTests(unittest.TestCase):
             run.return_value.stdout = 'main\n'
             hook.main()
         args = run.call_args.args[0]
-        self.assertIn('branch=main', args)
-        self.assertFalse(any(a.startswith('prompt=') for a in args))
+        assert 'branch=main' in args
+        assert not any(a.startswith('prompt=') for a in args)
         os.environ['CODEX_THREAD_ID'] = 'parent'
         with patch.object(hook.sys, 'stdin', StringIO(json.dumps(data))), \
              patch.object(hook.subprocess, 'run') as run:
@@ -167,11 +165,7 @@ class AgentTests(unittest.TestCase):
         existing = {'other': True, 'hooks': {'Stop': [
             {'matcher': 'x', 'hooks': [{'type': 'command', 'command': 'other'}]}]}}
         updated = install_codex.add_hooks(existing, '/hook')
-        self.assertEqual(updated, install_codex.add_hooks(updated, '/hook'))
-        self.assertTrue(updated['other'])
-        self.assertEqual(updated['hooks']['Stop'][0], existing['hooks']['Stop'][0])
-        self.assertEqual(existing['hooks'].keys(), {'Stop'})
-
-
-if __name__ == '__main__':
-    unittest.main()
+        assert updated == install_codex.add_hooks(updated, '/hook')
+        assert updated['other']
+        assert updated['hooks']['Stop'][0] == existing['hooks']['Stop'][0]
+        assert existing['hooks'].keys() == {'Stop'}
