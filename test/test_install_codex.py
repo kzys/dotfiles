@@ -2,7 +2,6 @@ import tomllib
 
 import pytest
 
-
 import install_codex
 
 PREFERENCES = install_codex.CONFIG.read_text()

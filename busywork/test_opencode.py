@@ -1,7 +1,6 @@
 import urllib.error
 
 import pytest
-
 from opencode import OpenCode
 from session import Transcript
 

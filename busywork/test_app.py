@@ -3,7 +3,6 @@ import importlib.util
 import pathlib
 
 import pytest
-
 from session import Session, Transcript
 
 

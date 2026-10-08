@@ -17,10 +17,11 @@ Required env vars:
   ATLASSIAN_API_TOKEN — API token from https://id.atlassian.com/manage-profile/security/api-tokens
 """
 
+import logging
 import os
 import sys
-import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 import requests
 from requests.adapters import HTTPAdapter
 from requests.auth import HTTPBasicAuth
@@ -81,7 +82,7 @@ def main():
     base = f"https://{domain}.atlassian.net"
     session = make_session(email, token)
 
-    log.info("Visiting Atlassian Cloud (%s) at %s", domain, datetime.now(timezone.utc).isoformat())
+    log.info("Visiting Atlassian Cloud (%s) at %s", domain, datetime.now(UTC).isoformat())
 
     results = [visit(session, base, service, label, path, params)
                for service, label, path, params in ACTIVITIES]
