@@ -48,7 +48,7 @@ and `cdc`. New panes keep the picker's selection. Existing sessions keep their
 agent; the picker lists sessions for the selected agent. Restart the Herdr server after
 changing the variable so its popups inherit the new value.
 
-Run `./install-codex.py` once to install Herdr's Codex session integration and
+Run `./install-codex.py` (Python 3.11+) once to install Herdr's Codex session integration and
 sidebar metadata hooks; `install.sh` also does this when both CLIs are available.
 In Codex, use `/hooks` to review and trust the installed hooks. Hooks report the
 session identity, prompt, directory, branch, model, and context usage when available.
@@ -59,3 +59,9 @@ available for legacy rollouts; newer paginated history may leave that field blan
 
 Both agents receive the same project notes instructions and house rules. Claude
 keeps its existing settings; Codex uses its configured model and approval policy.
+
+`codex/config.toml` holds reusable Codex preferences. The installer merges them
+into `~/.codex/config.toml` (or `$CODEX_HOME/config.toml`), preserving app settings
+and local state. Run `./install-codex.py --config-only` to apply just preferences.
+Auto-review handles approval requests with a reviewer agent; workspace writes
+stay sandboxed. Restart Codex to load the preferences.

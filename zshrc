@@ -76,8 +76,8 @@ else
     alias ls='ls -wF'
 fi
 alias tmuxa='tmux attach || tmux'
-# Set to codex to switch the Herdr launcher and session helpers.
-export HERDR_AGENT=${HERDR_AGENT:-claude}
+# Default to Codex while preserving the selected agent in new panes.
+export HERDR_AGENT=${HERDR_AGENT:-codex}
 alias hp=herdr-project
 
 # History
