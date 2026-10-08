@@ -194,7 +194,10 @@ def main(argv):
             argv = ["resume", *argv[1:]]
         rules = (SELF.parent.parent / "config/opencode/AGENTS.md").read_text()
         os.execvp("codex", [
-            "codex", "--add-dir", str(SELF.parent.parent),
+            # Scratch projects may be untrusted, where Codex defaults to
+            # read-only permissions and rejects additional writable roots.
+            "codex", "--sandbox", "workspace-write",
+            "--add-dir", str(SELF.parent.parent),
             "-c", "developer_instructions=" + json.dumps(rules + "\n\n" + instructions()),
             *argv,
         ])

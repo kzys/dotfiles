@@ -13,6 +13,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'bin'))
 import herdr_agent
+import install_codex
 
 
 def load(name, path):
@@ -163,11 +164,10 @@ class AgentTests(unittest.TestCase):
         run.assert_not_called()
 
     def test_install_hooks_is_idempotent_and_preserves_other_hooks(self):
-        installer = load('install_codex', ROOT / 'install-codex.py')
         existing = {'other': True, 'hooks': {'Stop': [
             {'matcher': 'x', 'hooks': [{'type': 'command', 'command': 'other'}]}]}}
-        updated = installer.add_hooks(existing, '/hook')
-        self.assertEqual(updated, installer.add_hooks(updated, '/hook'))
+        updated = install_codex.add_hooks(existing, '/hook')
+        self.assertEqual(updated, install_codex.add_hooks(updated, '/hook'))
         self.assertTrue(updated['other'])
         self.assertEqual(updated['hooks']['Stop'][0], existing['hooks']['Stop'][0])
         self.assertEqual(existing['hooks'].keys(), {'Stop'})
