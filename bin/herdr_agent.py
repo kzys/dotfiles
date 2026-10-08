@@ -8,9 +8,9 @@ from pathlib import Path
 
 
 def agent():
-    value = os.environ.get('HERDR_AGENT', 'claude')
+    value = os.environ.get('HERDR_PROJECT_AGENT', 'claude')
     if value not in ('claude', 'codex'):
-        raise SystemExit('HERDR_AGENT must be claude or codex')
+        raise SystemExit('HERDR_PROJECT_AGENT must be claude or codex')
     return value
 
 
