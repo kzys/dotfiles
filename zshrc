@@ -76,8 +76,8 @@ else
     alias ls='ls -wF'
 fi
 alias tmuxa='tmux attach || tmux'
-# Default to Codex while preserving the selected agent in new panes.
-export HERDR_AGENT=${HERDR_AGENT:-codex}
+# Default to Claude while preserving the selected agent in new panes.
+export HERDR_AGENT=${HERDR_AGENT:-claude}
 alias hp=herdr-project
 
 # History
