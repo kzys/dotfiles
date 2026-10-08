@@ -2,12 +2,8 @@
 # already being up to date.
 .PHONY: install test
 
-# ./test, not test: given a bare name unittest falls back to importing the
-# module of that name, finds the standard library's test package and passes
-# having run that instead.
 test:
-	python3 -m unittest discover -s ./test -v
-	uv run --with pytest python -m pytest busywork -v
+	uv run --with pytest python -m pytest test busywork -v
 
 install:
 	./install.sh
