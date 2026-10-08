@@ -47,9 +47,9 @@ class AgentTests(unittest.TestCase):
 
     def test_selection(self):
         self.assertEqual(herdr_agent.agent(), 'claude')
-        os.environ['HERDR_AGENT'] = 'codex'
+        os.environ['HERDR_PROJECT_AGENT'] = 'codex'
         self.assertEqual(herdr_agent.agent(), 'codex')
-        os.environ['HERDR_AGENT'] = 'typo'
+        os.environ['HERDR_PROJECT_AGENT'] = 'typo'
         with self.assertRaisesRegex(SystemExit, 'claude or codex'):
             herdr_agent.agent()
 
@@ -88,7 +88,7 @@ class AgentTests(unittest.TestCase):
         self.assertEqual(os.environ['CLAUDE_CODE_SHELL'], '/bin/bash')
 
     def test_codex_launcher_new_and_resume(self):
-        os.environ['HERDR_AGENT'] = 'codex'
+        os.environ['HERDR_PROJECT_AGENT'] = 'codex'
         launcher = load('herdr_project_codex', ROOT / 'bin/herdr-project')
         # execvp never returns in real use.
         for arguments, tail in [([], []), (['--resume', 'id'], ['resume', 'id'])]:
@@ -105,7 +105,7 @@ class AgentTests(unittest.TestCase):
 
     def test_picker_codex_session_and_title(self):
         self.database()
-        os.environ['HERDR_AGENT'] = 'codex'
+        os.environ['HERDR_PROJECT_AGENT'] = 'codex'
         picker = load('herdr_picker_codex', ROOT / 'bin/herdr-project-picker')
         self.assertEqual([s['id'] for s in picker.sessions(Path('/project'))], ['new', 'old'])
         self.assertEqual(picker.title(picker.sessions(Path('/project'))[0]), 'New title')
@@ -114,7 +114,7 @@ class AgentTests(unittest.TestCase):
             run.assert_not_called()
 
     def test_picker_reuses_workspace_with_shell_pane(self):
-        os.environ['HERDR_AGENT'] = 'codex'
+        os.environ['HERDR_PROJECT_AGENT'] = 'codex'
         picker = load('herdr_picker_shell', ROOT / 'bin/herdr-project-picker')
         picker.PROJECTS = self.home
         calls = []
@@ -131,10 +131,10 @@ class AgentTests(unittest.TestCase):
              patch.object(picker.subprocess, 'run'):
             picker.main()
         self.assertTrue(any(c[:2] == ('tab', 'create') for c in calls))
-        self.assertTrue(calls[-1][-1].startswith('HERDR_AGENT=codex '))
+        self.assertTrue(calls[-1][-1].startswith('HERDR_PROJECT_AGENT=codex '))
 
     def test_picker_focuses_running_session(self):
-        os.environ['HERDR_AGENT'] = 'codex'
+        os.environ['HERDR_PROJECT_AGENT'] = 'codex'
         picker = load('herdr_picker_focus', ROOT / 'bin/herdr-project-picker')
         picker.PROJECTS = self.home
         panes = {'result': {'panes': [{'workspace_id': 'w', 'cwd': str(self.home),

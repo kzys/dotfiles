@@ -39,7 +39,7 @@ fires without an active login session.
 Set one variable before starting Herdr (or export it in your shell config):
 
 ```sh
-export HERDR_AGENT=codex   # claude is the default
+export HERDR_PROJECT_AGENT=codex   # claude is the default
 herdr
 ```
 

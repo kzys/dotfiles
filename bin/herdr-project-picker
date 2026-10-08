@@ -206,7 +206,7 @@ def main():
             prefix=datetime.now().strftime("%Y%m%d-"), dir=PROJECTS
         )
 
-    cmd = f"HERDR_AGENT={AGENT} " + shlex.quote(str(BIN / "herdr-project"))
+    cmd = f"HERDR_PROJECT_AGENT={AGENT} " + shlex.quote(str(BIN / "herdr-project"))
     if sid:
         for p in panes:
             if p["agent"] == AGENT and p["session"] == sid:

@@ -39,7 +39,7 @@ def main():
         pane = created['result']['root_pane']['pane_id']
         launcher = shlex.quote(str(Path(__file__).resolve().with_name('herdr-project')))
         subprocess.run([herdr, 'pane', 'run', pane,
-                        f'HERDR_AGENT=codex {launcher} --resume {shlex.quote(sid)}'], check=True)
+                        f'HERDR_PROJECT_AGENT=codex {launcher} --resume {shlex.quote(sid)}'], check=True)
 
 
 if __name__ == '__main__':
