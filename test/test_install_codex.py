@@ -1,14 +1,10 @@
-import importlib.util
-from pathlib import Path
 import tomllib
 
 import pytest
 
 
-spec = importlib.util.spec_from_file_location(
-    'install_codex', Path(__file__).resolve().parent.parent / 'install-codex.py')
-install_codex = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(install_codex)
+import install_codex
+
 PREFERENCES = install_codex.CONFIG.read_text()
 
 
