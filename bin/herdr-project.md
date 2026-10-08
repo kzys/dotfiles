@@ -21,8 +21,7 @@ name: <name>
 ---
 
 Write README.md if it doesn't exist; otherwise change it only when the
-task itself changes. If NOTES.md exists, it is from an older layout:
-move its contents to README.md and AGENT-main.md, then delete it.
+task itself changes.
 
 Keep your own notes in AGENT-<role>.md with what you have done so far,
 where <role> is a short name for your part, such as main or reviewer.

@@ -172,7 +172,7 @@ def pick(lines):
             "--prompt=project> ",
             "--header=enter: open a session, or start one in a project",
             f"--bind=focus:transform-header({HEADER})",
-            "--preview=cd {2} 2>/dev/null && cat README.md NOTES.md AGENT-*.md 2>/dev/null",
+            "--preview=cd {2} 2>/dev/null && cat README.md AGENT-*.md 2>/dev/null",
             "--preview-window=down,50%",
         ],
         input="\n".join(lines),

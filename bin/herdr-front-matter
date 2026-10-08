@@ -1,7 +1,6 @@
 #!/bin/sh
 # Prints field <key> from the front matter of the notes in directory
-# <dir>: README.md, or NOTES.md in projects from before README.md. Exits
-# 1 if there are no notes.
+# <dir>: README.md. Exits 1 if there are no notes.
 #
 # With --report <workspace>, reports the title instead as the $title
 # token of that Herdr workspace, for the Spaces panel.
@@ -22,14 +21,8 @@ if [ "${1:-}" = --report ]; then
 fi
 [ $# -eq 2 ] || usage
 
-file=
-for f in "$1/README.md" "$1/NOTES.md"; do
-    if [ -f "$f" ]; then
-        file=$f
-        break
-    fi
-done
-[ -n "$file" ] || exit 1
+file=$1/README.md
+[ -f "$file" ] || exit 1
 
 value=$(awk -v key="$2" 'NR == 1 && $0 != "---" { exit }
     NR > 1 && $0 == "---" { exit }
