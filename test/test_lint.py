@@ -1,7 +1,7 @@
 """Check that every tracked file we have an interpreter for at least parses.
 
 Nothing here runs the files, and nothing outside this repository is needed
-beyond the interpreters themselves.
+beyond the interpreters themselves and PyYAML.
 """
 
 import ast
@@ -10,6 +10,7 @@ import shutil
 import subprocess
 
 import pytest
+import yaml
 
 EXTENSIONS = {
     'py': 'python',
@@ -22,10 +23,6 @@ EXTENSIONS = {
 # Only a real path, so that zshrc and its "#! sh" stay out: shellcheck has no
 # zsh support.
 SHELL_SHEBANG = re.compile(r'#! ?/(usr/)?bin/(env )?(ba)?sh$')
-
-# Ruby's YAML rather than PyYAML, which would mean a pip install; ruby is here
-# for the .rb files anyway.
-YAML_PARSE = 'YAML.load_stream(File.read(ARGV[0]))'
 
 RUBY = shutil.which('ruby')
 SHELLCHECK = shutil.which('shellcheck')
@@ -101,10 +98,10 @@ class TestSources:
     def test_ruby_parses(self, path):
         self.parses('ruby', '-c', path)
 
-    @needs_ruby
     @pytest.mark.parametrize('path', FILES.get('yaml', []))
     def test_yaml_parses(self, path):
-        self.parses('ruby', '-ryaml', '-e', YAML_PARSE, path)
+        with open(path, encoding='utf-8') as f:
+            list(yaml.safe_load_all(f))
 
     @pytest.mark.skipif(not SHELLCHECK, reason='shellcheck is not installed')
     def test_shell_scripts_are_clean(self):

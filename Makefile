@@ -3,7 +3,7 @@
 .PHONY: install test
 
 test:
-	uv run --with pytest python -m pytest test busywork -v
+	uv run --with pytest --with pyyaml python -m pytest test busywork -v
 
 install:
 	./install.sh
