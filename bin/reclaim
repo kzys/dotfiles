@@ -1,0 +1,103 @@
+#!/bin/sh
+# Free disk space by removing build output and caches that are rebuilt
+# or re-downloaded on demand: Cargo target directories (those holding a
+# CACHEDIR.TAG) under the given directories, if any, package-manager
+# and tool caches, Lima's download cache, and Docker images, containers
+# and build cache not used by a container. Docker volumes and Lima
+# instances are kept. With -n, print what would be removed instead.
+#
+# usage: reclaim [-n] [dir...]
+
+set -eu
+
+dry=
+if [ "${1:-}" = -n ]; then
+    dry=1
+    shift
+fi
+for a; do
+    case $a in
+    -*) echo "usage: reclaim [-n] [dir...]" >&2; exit 2 ;;
+    esac
+done
+
+if [ $# -gt 0 ] && { pgrep -x cargo || pgrep -x rustc; } >/dev/null; then
+    echo "reclaim: cargo is running; not removing target directories" >&2
+    skip_targets=1
+fi
+
+run() {
+    if [ -n "$dry" ]; then
+        echo "would run: $*"
+    else
+        "$@" || echo "reclaim: failed: $*" >&2
+    fi
+}
+
+remove() {
+    [ -e "$1" ] || return 0
+    du -sh "$1" 2>/dev/null || true
+    [ -n "$dry" ] || rm -rf "$1" || echo "reclaim: failed: rm -rf $1" >&2
+}
+
+df -h "$HOME" | tail -1
+
+if [ $# -gt 0 ] && [ -z "${skip_targets:-}" ]; then
+    find "$@" \( -name .git -o -name node_modules \) -prune -o \
+        -type d -name target -exec test -f {}/CACHEDIR.TAG \; -print -prune 2>/dev/null |
+        while IFS= read -r d; do remove "$d"; done
+fi
+
+for d in goimports Cypress; do
+    remove "$HOME/Library/Caches/$d"
+done
+
+command -v uv >/dev/null && run uv cache clean -q
+command -v brew >/dev/null && run brew cleanup -s -q
+command -v go >/dev/null && run go clean -modcache
+command -v npm >/dev/null && run npm cache clean --force
+command -v pnpm >/dev/null && run pnpm store prune
+command -v limactl >/dev/null && run limactl prune
+# Only touch Docker Desktop, whatever DOCKER_HOST or the current
+# context says.
+docker() {
+    command docker --context desktop-linux "$@"
+}
+
+# docker info hangs while Docker Desktop is stopped.
+docker_up() {
+    command -v docker >/dev/null || return 1
+    docker info >/dev/null 2>&1 &
+    pid=$!
+    (sleep 5; kill "$pid") >/dev/null 2>&1 &
+    timer=$!
+    wait "$pid" && up=0 || up=1
+    { kill "$timer" && wait "$timer"; } 2>/dev/null || true
+    return "$up"
+}
+
+# Docker Desktop's VM disk is often the biggest single item, so offer
+# to start it rather than skip.
+if ! docker_up && [ -z "$dry" ] && [ -t 0 ] &&
+    [ "$(uname)" = Darwin ] && [ -d /Applications/Docker.app ]; then
+    printf 'reclaim: Docker is not running. Start it to prune? [y/N] '
+    read -r answer || answer=
+    case $answer in
+    [yY]*)
+        open -a Docker
+        i=0
+        until docker_up || [ $i -ge 24 ]; do
+            sleep 5
+            i=$((i + 1))
+        done
+        ;;
+    esac
+fi
+
+if docker_up; then
+    run docker system prune -af
+else
+    echo "reclaim: docker is not running; skipping" >&2
+fi
+
+df -h "$HOME" | tail -1
