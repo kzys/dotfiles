@@ -73,7 +73,7 @@ docker_up() {
     timer=$!
     wait "$pid" && up=0 || up=1
     { kill "$timer" && wait "$timer"; } 2>/dev/null || true
-    return $up
+    return "$up"
 }
 
 # Docker Desktop's VM disk is often the biggest single item, so offer
