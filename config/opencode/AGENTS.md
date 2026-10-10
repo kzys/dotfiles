@@ -16,6 +16,8 @@
   https://tbaggery.com/2008/04/19/a-note-about-git-commit-messages.html
 - Don't name specific callers in code comments. Callers change.
 - Don't mention automated CI tests in PR descriptions.
+- In Go, don't panic if you can return an error. Unreachable cases can
+  become reachable.
 
 ## Responses
 
@@ -24,12 +26,22 @@
 - Verify before you report. Run the tests or a quick command when that
   settles a question.
 
-## Go
+## Code style
+
+Follow what the surrounding code already does, including in a new file
+added next to existing ones (a new test file uses the package's test
+framework). Where there is nothing to follow, use these rules.
+
+### Go
 
 - Write doc comments in this style:
   https://go.dev/doc/comment
-- Use t.Context() in new tests.
-- Don't panic if you can return an error. Unreachable cases can become reachable.
+- Use testify and t.Context() in tests.
+
+### Python
+
+- Use pytest for tests.
+- Write methods, not `@property`.
 
 ## Attribution
 
