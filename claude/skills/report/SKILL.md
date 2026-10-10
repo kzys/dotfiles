@@ -80,7 +80,8 @@ tells the reader. If the answer is "nothing", leave it out.
   a layout that works at phone width and in dark mode.
 - Pick the hero from the subject itself (for a repository, its file tree)
   rather than a big number or a gradient.
-- Give each section heading a stable `id` so it can be linked.
+- Give every heading a stable `id` and a visible permalink next to it, so
+  readers can copy a link to any section.
 - Look at the result, using a screenshot if you can, and fix what's wrong
   before calling it done.
 
