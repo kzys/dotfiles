@@ -95,13 +95,11 @@ tells the reader. If the answer is "nothing", leave it out.
   rather than a big number or a gradient. A hero is optional: leave it out
   when nothing in the subject reads at a glance.
 - A diagram must make sense on its own before the reader reaches the text
-  below it. Say above it what it shows, draw the connections (arrows
-  between steps), and explain every name in it, either earlier on the page
-  or in the diagram itself.
-- Pick the diagram type from what it shows. For messages exchanged between
-  components (requests, replies, handshakes), draw a sequence diagram: one
-  lifeline per component, one arrow per message, top to bottom in time
-  order. Use a row of boxes only for a pipeline where data moves one way.
+  below it. Say above it what it shows, draw connections as arrows, and
+  explain every name in it, earlier on the page or in the diagram. Draw
+  messages between components (requests, replies, handshakes) as a
+  sequence diagram, top to bottom in time order; use a row of boxes only
+  for a pipeline where data moves one way.
 - Give every heading a stable `id` and a visible permalink next to it, so
   readers can copy a link to any section.
 
