@@ -17,6 +17,8 @@ where it goes: publish it however the request or another skill says.
 - Verify against what is actually installed (`--version`, the package
   manager, man pages) rather than memory of how a tool behaves.
 - Tie each claim to a source: `path:line`, a commit, or command output.
+  That includes dates ("last changed in 2022" links the commit) and how
+  someone else's tool behaves (link the doc or README line).
   Quote real excerpts instead of paraphrasing code, and pin them to a
   released tag, the installed version, or the exact commit you read, not a
   moving branch.
@@ -29,6 +31,10 @@ where it goes: publish it however the request or another skill says.
   `git ls-remote --exit-code <remote> refs/tags/<tag>`, and a commit with
   `git branch -r --contains <sha>` after a `git fetch`. Otherwise leave the
   reference as plain text and say it isn't on the remote.
+- Quote figures only from text you read in full. A fetch tool that
+  summarizes pages can change numbers; fetch the raw page instead.
+- Commands you give the reader must run as written. Write out every step
+  as a command, not as a comment describing it, and say which ones you ran.
 - For findings, order by how much they matter, and give each one a concrete
   fix.
 - Leave out what you didn't read rather than guessing, and say that you
@@ -75,15 +81,29 @@ tells the reader. If the answer is "nothing", leave it out.
 - Color only where it encodes something, and explain the code once if it
   isn't obvious (for example, one rule color for strengths and another for
   fixes).
+- Status labels come from a small fixed set, one label per color, each
+  explained once in a legend. A label and its color must agree: "No" in
+  the "unknown" color reads as a failure.
+- Let tables and diagrams be wider than the text column (up to about
+  64rem, centered) so their columns have room. The measure limit is for
+  prose.
 - Monospace only for real paths, commands and code.
 - One or two typefaces, a readable measure (under about 75 characters), and
-  a layout that works at phone width and in dark mode.
+  a layout that works in dark mode. Design for desktop screens; don't spend
+  effort on phone widths.
 - Pick the hero from the subject itself (for a repository, its file tree)
-  rather than a big number or a gradient.
+  rather than a big number or a gradient. A hero is optional: leave it out
+  when nothing in the subject reads at a glance.
+- A diagram must make sense on its own before the reader reaches the text
+  below it. Say above it what it shows, draw the connections (arrows
+  between steps), and explain every name in it, either earlier on the page
+  or in the diagram itself.
+- Pick the diagram type from what it shows. For messages exchanged between
+  components (requests, replies, handshakes), draw a sequence diagram: one
+  lifeline per component, one arrow per message, top to bottom in time
+  order. Use a row of boxes only for a pipeline where data moves one way.
 - Give every heading a stable `id` and a visible permalink next to it, so
   readers can copy a link to any section.
-- Look at the result, using a screenshot if you can, and fix what's wrong
-  before calling it done.
 
 ## Revisions
 
