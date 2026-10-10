@@ -27,6 +27,9 @@ ATLASSIAN_EMAIL=you@example.com
 ATLASSIAN_API_TOKEN=...          # from https://id.atlassian.com/manage-profile/security/api-tokens
 ```
 
+`user.yml` enables the timer only when this file exists, so rerun it after
+creating the file.
+
 Manual run / check status:
 
 ```bash

@@ -44,8 +44,6 @@ path=(
     # ./configure --prefix=$HOME/local
     ~/local/bin(N)
 
-    ~/Library/Python/2.7/bin(N)
-
     ~/sdk/$go_sdk/bin(N)
 
     # rustup installs rust and cargo under the directory
@@ -53,8 +51,6 @@ path=(
 
     # https://fly.io/docs/flyctl/
     ~/.fly/bin(N)
-
-    ~/ws/node-v18.15.0-linux-x64/bin(N)
 
     # "pip install --user" uses ~/.local/
     ~/.local/bin(N)

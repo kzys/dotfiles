@@ -14,6 +14,11 @@
       notify: reload systemd
       tags: always
     - meta: flush_handlers
+    # The keep-alive service fails without its credentials, which live
+    # outside this repository.
+    - stat:
+        path: ~/.config/atlassian-keepalive.env
+      register: atlassian_env
     - systemd_service:
         name: "{{ item }}"
         enabled: true
@@ -22,3 +27,10 @@
       loop:
         - xremap.service
         - atlassian-keepalive.timer
+      when: item != 'atlassian-keepalive.timer' or atlassian_env.stat.exists
+    - systemd_service:
+        name: atlassian-keepalive.timer
+        enabled: false
+        state: stopped
+        scope: user
+      when: not atlassian_env.stat.exists

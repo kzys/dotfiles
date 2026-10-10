@@ -63,9 +63,14 @@
             path: /etc/apt/keyrings
             state: directory
             mode: '0755'
+        # Pinned to the key with fingerprint
+        # 35BAA0B33E9EB396F59CA838C0BA5CE6DC6315A3, which Mozilla publishes
+        # in its install instructions. A different key fails here instead of
+        # being trusted by apt.
         - get_url:
             url: https://packages.mozilla.org/apt/repo-signing-key.gpg
             dest: /etc/apt/keyrings/packages.mozilla.org.asc
+            checksum: sha256:3ecc63922b7795eb23fdc449ff9396f9114cb3cf186d6f5b53ad4cc3ebfbb11f
         - copy:
             content: |
               deb [signed-by=/etc/apt/keyrings/packages.mozilla.org.asc] https://packages.mozilla.org/apt mozilla main
