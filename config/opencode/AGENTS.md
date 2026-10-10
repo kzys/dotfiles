@@ -14,7 +14,9 @@
 - Change as little as possible. Don't touch unrelated code.
 - Write commit messages in this style:
   https://tbaggery.com/2008/04/19/a-note-about-git-commit-messages.html
-- Don't name specific callers in code comments. Callers change.
+- In code comments, don't name callers, list a type's methods, or cite
+  line numbers in this repo. They go stale as code moves. Document each
+  function on the function itself.
 - Don't mention automated CI tests in PR descriptions.
 - In Go, don't panic if you can return an error. Unreachable cases can
   become reachable.
