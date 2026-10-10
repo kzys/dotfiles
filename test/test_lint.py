@@ -26,6 +26,7 @@ SHELL_SHEBANG = re.compile(r'#! ?/(usr/)?bin/(env )?(ba)?sh$')
 
 RUBY = shutil.which('ruby')
 SHELLCHECK = shutil.which('shellcheck')
+ANSIBLE_PLAYBOOK = shutil.which('ansible-playbook')
 
 
 def tracked():
@@ -106,3 +107,9 @@ class TestSources:
     @pytest.mark.skipif(not SHELLCHECK, reason='shellcheck is not installed')
     def test_shell_scripts_are_clean(self):
         self.parses('shellcheck', *FILES['shell'])
+
+    @pytest.mark.skipif(not ANSIBLE_PLAYBOOK,
+                        reason='ansible-playbook is not installed')
+    @pytest.mark.parametrize('path', ['user.yml', 'root.yml'])
+    def test_playbook_parses(self, path):
+        self.parses('ansible-playbook', '--syntax-check', path)

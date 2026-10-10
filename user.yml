@@ -1,13 +1,24 @@
 - name: laptop
-  hosts:
-    - localhost
+  hosts: localhost
+  handlers:
+    - name: reload systemd
+      systemd_service:
+        daemon_reload: true
+        scope: user
   tasks:
     # files/home mirrors the paths it installs to
     - copy:
         src: home/
         dest: ~/
         mode: preserve
+      notify: reload systemd
       tags: always
-    - command: systemctl --user daemon-reload
-    - command: systemctl --user enable --now xremap.service
-    - command: systemctl --user enable --now atlassian-keepalive.timer
+    - meta: flush_handlers
+    - systemd_service:
+        name: "{{ item }}"
+        enabled: true
+        state: started
+        scope: user
+      loop:
+        - xremap.service
+        - atlassian-keepalive.timer

@@ -1,12 +1,38 @@
 - name: laptop
-  hosts:
-    - localhost
+  hosts: localhost
+  # Reload even if a later task fails, since the next run won't notify again.
+  force_handlers: true
+  handlers:
+    - name: reload systemd
+      systemd_service:
+        daemon_reload: true
+    - name: reload udev
+      command: udevadm control --reload
+    - name: reload apparmor
+      command: apparmor_parser -r -T -W /etc/apparmor.d/bwrap
   tasks:
-    # files/root mirrors the paths it installs to
+    # files/root mirrors the paths it installs to. Git keeps only the
+    # executable bit, so set the rest here rather than from the checkout.
+    - file:
+        path: "/{{ item.path }}"
+        state: directory
+      with_community.general.filetree: root/
+      when: item.state == 'directory'
+      loop_control:
+        label: "{{ item.path }}"
+      tags: always
     - copy:
-        src: root/
-        dest: /
-        mode: preserve
+        src: "{{ item.src }}"
+        dest: "/{{ item.path }}"
+        mode: "{{ '0755' if (item.mode | int(base=8)) // 64 % 2 else '0644' }}"
+      with_community.general.filetree: root/
+      when: item.state == 'file'
+      loop_control:
+        label: "{{ item.path }}"
+      notify:
+        - reload systemd
+        - reload udev
+        - reload apparmor
       tags: always
     # bin/pino runs pi under bubblewrap, which needs the profile in files/root to
     # create a user namespace.
@@ -14,15 +40,18 @@
         - apt:
             name: bubblewrap
             state: present
-        - command: apparmor_parser -r -T -W /etc/apparmor.d/bwrap
+          notify: reload apparmor
       tags: pi-sandbox
     # powertop auto-tune on boot
     - block:
         - apt:
             name: powertop
             state: present
-        - command: systemctl daemon-reload
-        - command: systemctl enable --now powertop.service
+        - systemd_service:
+            name: powertop.service
+            enabled: true
+            state: started
+            daemon_reload: true
       tags: powertop
     # Firefox: snap build is heavier on CPU/battery than Mozilla's APT package
     - block:
