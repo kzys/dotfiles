@@ -20,6 +20,15 @@ where it goes: publish it however the request or another skill says.
   Quote real excerpts instead of paraphrasing code, and pin them to a
   released tag, the installed version, or the exact commit you read, not a
   moving branch.
+- Link each `path:line` and excerpt to the hosted source, private repos
+  included, at exactly the tag or commit it is pinned to, in the host's
+  permalink format. On GitHub that is
+  `https://github.com/<owner>/<repo>/blob/<ref>/<path>#L6-L7`, with
+  `?plain=1` before the `#` for Markdown and other rendered files. Link
+  only refs the hosted remote has: check a tag with
+  `git ls-remote --exit-code <remote> refs/tags/<tag>`, and a commit with
+  `git branch -r --contains <sha>` after a `git fetch`. Otherwise leave the
+  reference as plain text and say it isn't on the remote.
 - For findings, order by how much they matter, and give each one a concrete
   fix.
 - Leave out what you didn't read rather than guessing, and say that you
@@ -71,7 +80,8 @@ tells the reader. If the answer is "nothing", leave it out.
   a layout that works at phone width and in dark mode.
 - Pick the hero from the subject itself (for a repository, its file tree)
   rather than a big number or a gradient.
-- Give each section heading a stable `id` so it can be linked.
+- Give every heading a stable `id` and a visible permalink next to it, so
+  readers can copy a link to any section.
 - Look at the result, using a screenshot if you can, and fix what's wrong
   before calling it done.
 

@@ -14,20 +14,45 @@
 - Change as little as possible. Don't touch unrelated code.
 - Write commit messages in this style:
   https://tbaggery.com/2008/04/19/a-note-about-git-commit-messages.html
-- Don't name specific callers in code comments. Callers change.
+- In code comments, don't name callers, list a type's methods, or cite
+  line numbers in this repo. They go stale as code moves. Document each
+  function on the function itself.
 - Don't mention automated CI tests in PR descriptions.
+- Don't overuse mocks in tests, even where existing tests do. Run the real
+  code and replace only what a test can't run, such as the network or the
+  clock. Pass replacements in rather than patching globals or the code
+  under test (`monkeypatch.setattr` or `mock.patch` in Python,
+  package-level function variables in Go). If existing code can only be
+  tested by patching, patch it rather than refactor it. Check outputs and
+  state, not internal calls.
+- Write new code so it can be tested without mocks: keep logic in
+  functions that take and return plain values, and keep I/O at the edges.
+- In Go, don't panic if you can return an error. Unreachable cases can
+  become reachable.
 
 ## Responses
 
 - Answer first. No preamble, no closing summary.
 - Don't hedge when you know the answer. Do say when you didn't verify something.
+- Verify before you report. Run the tests or a quick command when that
+  settles a question.
 
-## Go
+## Code style
+
+Follow what the surrounding code already does, including in a new file
+added next to existing ones (a new test file uses the package's test
+framework). Where there is nothing to follow, use these rules.
+
+### Go
 
 - Write doc comments in this style:
   https://go.dev/doc/comment
-- Use t.Context() in new tests.
-- Don't panic if you can return an error. Unreachable cases can become reachable.
+- Use testify and t.Context() in tests.
+
+### Python
+
+- Use pytest for tests.
+- Write methods, not `@property`.
 
 ## Attribution
 
