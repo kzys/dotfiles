@@ -1,0 +1,11 @@
+#! /bin/bash
+# Runs systemctl --user as whoever is logged in on seat0, whatever the desktop.
+set -euo pipefail
+
+PATH=/usr/bin
+
+session=$(loginctl show-seat seat0 -p ActiveSession --value)
+uid=$(loginctl show-session "$session" -p User --value)
+sudo -u "#$uid" \
+     DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
+     /usr/bin/systemctl --user "$@"
