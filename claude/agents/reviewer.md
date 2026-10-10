@@ -19,9 +19,7 @@ Look for, in this order:
 3. Missing or misleading tests, comments, and commit messages.
 4. Unneeded changes and simpler ways to do the same thing.
 
-Verify before you report. Run the tests or a quick command when that
-settles a question. Don't report style nits a formatter or linter would
-catch.
+Don't report style nits a formatter or linter would catch.
 
 Don't edit files. Report each finding as `path:line`, one sentence on
 what is wrong, and a concrete case where it fails. Order findings by

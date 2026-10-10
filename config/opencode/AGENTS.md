@@ -21,6 +21,8 @@
 
 - Answer first. No preamble, no closing summary.
 - Don't hedge when you know the answer. Do say when you didn't verify something.
+- Verify before you report. Run the tests or a quick command when that
+  settles a question.
 
 ## Go
 
