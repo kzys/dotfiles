@@ -11,14 +11,17 @@ where it goes: publish it however the request or another skill says.
 ## Content
 
 - Lead with what the reader needs: what the thing is, then what matters.
+- Make every claim checkable: a reader should be able to follow your link
+  or rerun your command and see what you saw. Write from what you read or
+  ran, not from memory.
 - Say what you verified and how ("ran `--check`", "compared the deployed
   files"), and say plainly what you didn't check or read. Leave out what
   you didn't read rather than guessing, and don't present a guess as a
   finding.
-- Tie each claim to a source, dates included: `path:line`, a commit,
+- Give each claim a source, dates included: `path:line`, a commit,
   output from what is actually installed (`--version`, the package
   manager, man pages), or, for how other people's tools behave, their doc
-  or README line. Not memory.
+  or README line.
 - Quote real excerpts instead of paraphrasing code. Pin each excerpt and
   `path:line` to a released tag, the installed version, or the exact commit
   you read, and link it to the hosted source at that ref, private repos
