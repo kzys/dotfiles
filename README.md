@@ -8,6 +8,10 @@ ansible-playbook user.yml
 sudo ansible-playbook root.yml
 ```
 
+`install.sh` links dotfiles into place, so edits apply right away. The
+playbooks copy `files/` and set up services and packages, so rerun them
+after changing anything there.
+
 ## Atlassian keep-alive
 
 Jira/Confluence Cloud accounts get deactivated from inactivity. `atlassian_keepalive.py`
