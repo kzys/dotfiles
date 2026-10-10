@@ -29,6 +29,8 @@
   functions that take and return plain values, and keep I/O at the edges.
 - In Go, don't panic if you can return an error. Unreachable cases can
   become reachable.
+- Run Chrome with `--password-store=basic`, or it prompts for KWallet. For
+  headless runs, also pass a throwaway `--user-data-dir`.
 
 ## Responses
 
