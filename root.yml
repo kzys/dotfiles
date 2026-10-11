@@ -6,8 +6,6 @@
     - name: reload systemd
       systemd_service:
         daemon_reload: true
-    - name: reload udev
-      command: udevadm control --reload
     - name: reload apparmor
       command: apparmor_parser -r -T -W /etc/apparmor.d/bwrap
   tasks:
@@ -31,7 +29,6 @@
         label: "{{ item.path }}"
       notify:
         - reload systemd
-        - reload udev
         - reload apparmor
       tags: always
     # bin/pino runs pi under bubblewrap, which needs the profile in files/root to
