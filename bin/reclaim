@@ -3,7 +3,8 @@
 # or re-downloaded on demand: Cargo target directories (those holding a
 # CACHEDIR.TAG) under the given directories, if any, package-manager
 # and tool caches, Lima's download cache, and Docker images, containers
-# and build cache not used by a container. Docker volumes and Lima
+# and build cache not used by a container. On macOS, when run from a
+# terminal, it also offers to empty the Trash. Docker volumes and Lima
 # instances are kept. With -n, print what would be removed instead.
 #
 # usage: reclaim [-n] [dir...]
@@ -58,6 +59,20 @@ command -v go >/dev/null && run go clean -modcache
 command -v npm >/dev/null && run npm cache clean --force
 command -v pnpm >/dev/null && run pnpm store prune
 command -v limactl >/dev/null && run limactl prune
+# Emptying the Trash can't be undone, so ask first.
+if [ "$(uname)" = Darwin ] && [ -t 0 ]; then
+    answer=y
+    if [ -z "$dry" ]; then
+        printf 'reclaim: Empty the Trash? [y/N] '
+        read -r answer || answer=
+    fi
+    case $answer in
+    [yY]*)
+        run osascript -e 'with timeout of 3600 seconds' \
+            -e 'tell application "Finder" to empty trash' -e 'end timeout'
+        ;;
+    esac
+fi
 # Only touch Docker Desktop, whatever DOCKER_HOST or the current
 # context says.
 docker() {
