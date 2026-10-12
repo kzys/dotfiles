@@ -1,15 +1,43 @@
-#!/bin/sh
-# Rename the Herdr workspace of the calling pane, and report the title
-# in the front matter of the notes in . for the Spaces panel. Does
-# nothing in a background session, whose HERDR_* variables name another
-# pane.
+#!/usr/bin/env python3
+"""Rename the Herdr workspace of the calling pane, and report the title
+in the front matter of the notes in . for the Spaces panel. Does
+nothing in a background session, whose HERDR_* variables name another
+pane."""
 
-set -eu
+import os
+import subprocess
+import sys
+from pathlib import Path
 
-[ $# -gt 0 ] || { echo "usage: herdr-name-workspace <name>" >&2; exit 2; }
-if ! "$(dirname "$0")/in-herdr-pane"; then
-    echo "herdr-name-workspace: not in a Herdr pane; skipping" >&2
-    exit 0
-fi
-"${HERDR_BIN_PATH:-herdr}" workspace rename "$HERDR_WORKSPACE_ID" "$@"
-"$(dirname "$0")/herdr-front-matter" --report "$HERDR_WORKSPACE_ID" . || true
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from herdr_project.herdr import herdr
+from herdr_project.notes import report_title
+
+
+def main(argv):
+    if not argv:
+        print("usage: herdr-name-workspace <name>", file=sys.stderr)
+        return 2
+    if subprocess.run([Path(__file__).resolve().with_name("in-herdr-pane")]).returncode:
+        print("herdr-name-workspace: not in a Herdr pane; skipping", file=sys.stderr)
+        return 0
+    workspace = os.environ.get("HERDR_WORKSPACE_ID")
+    if not workspace:
+        print("herdr-name-workspace: HERDR_WORKSPACE_ID is not set", file=sys.stderr)
+        return 1
+    try:
+        herdr("workspace", "rename", workspace, *argv)
+    except subprocess.CalledProcessError as e:
+        return e.returncode
+    except OSError as e:
+        print(f"herdr-name-workspace: {e}", file=sys.stderr)
+        return 1
+    try:
+        report_title(workspace, ".", herdr)
+    except (OSError, subprocess.CalledProcessError):
+        pass
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

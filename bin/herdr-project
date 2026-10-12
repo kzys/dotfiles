@@ -19,6 +19,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from herdr_project.agent import agent
 from herdr_project.herdr import herdr
+from herdr_project.notes import report_title
 from herdr_project.remaining import follow_remaining
 
 SELF = Path(__file__).resolve()
@@ -82,6 +83,11 @@ def main(argv):
         try:
             remaining_pane()
         except (KeyError, TypeError, OSError, subprocess.CalledProcessError):
+            pass
+        try:
+            report_title(os.environ["HERDR_WORKSPACE_ID"], os.getcwd(),
+                         lambda *args: herdr(*args, stderr=subprocess.DEVNULL))
+        except (KeyError, OSError, subprocess.CalledProcessError):
             pass
 
     program, args, env = command(selected, argv)

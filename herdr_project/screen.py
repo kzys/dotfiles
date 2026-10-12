@@ -3,6 +3,8 @@
 import curses
 import locale
 import os
+import sys
+import threading
 
 from .match import clip, columns, spans, visible
 
@@ -37,9 +39,44 @@ def put(win, y, x, text, attr=0):
     return x + columns(text)
 
 
-def run(screen, rows, notes):
-    """Lets the user pick one of rows on screen, showing notes(*row[:3])
-    for the highlighted row below them. Returns its index, or
+class Loading:
+    """Rows read from lines, tab-separated, in a background thread."""
+
+    def __init__(self, lines):
+        self.rows = []
+        self.done = False
+        self.error = None
+        self.thread = threading.Thread(target=self.read, args=(lines,), daemon=True)
+        self.thread.start()
+
+    def read(self, lines):
+        """Appends a row for each of lines, then marks the rows done.
+        An error stops reading, keeping the rows read so far, and is
+        kept in error."""
+        try:
+            for line in lines:
+                self.rows.append(line.split("\t", 3))
+        except Exception as e:  # noqa: BLE001 - raised again by pick.
+            self.error = e
+        finally:
+            self.done = True
+
+    def wait(self):
+        """Waits until all rows are read."""
+        self.thread.join()
+
+
+def follow(shown, cursor, new):
+    """Returns where the cursor goes in the rows new shows, so that it
+    stays on the row it highlights in shown, or else stays put."""
+    current = shown[cursor] if 0 <= cursor < len(shown) else None
+    return new.index(current) if current in new else cursor
+
+
+def run(screen, loading, notes):
+    """Lets the user pick one of the rows of loading on screen, showing
+    them as they arrive and notes(*row[:3]) for the highlighted row
+    below them. Returns its index, or
     None if the user quits with Esc or ctrl-g. Up, down, ctrl-p, ctrl-n,
     PgUp and PgDn move; shift-up and shift-down scroll the preview."""
     if curses.has_colors():
@@ -56,9 +93,19 @@ def run(screen, rows, notes):
     # Notes by row, read once: the picker is short-lived, so they can't
     # go stale for long.
     previews = {}
-    shown = visible(rows, query)
+    rows = loading.rows
+    loaded = len(rows)
+    shown = visible(rows[:loaded], query)
     cursor = top = scroll = 0
     while True:
+        # Read whether loading is done before the rows, so the last rows
+        # are drawn before waiting for keys without a timeout.
+        done = loading.done
+        if len(rows) != loaded:
+            loaded = len(rows)
+            new = visible(rows[:loaded], query)
+            cursor = follow(shown, cursor, new)
+            shown = new
         height, width = screen.getmaxyx()
         lines = max(1, (height - 3) // 2)
         cursor = max(0, min(cursor, len(shown) - 1))
@@ -84,7 +131,7 @@ def run(screen, rows, notes):
                 if moved == x:
                     break
                 x = moved
-        count = f"  {len(shown)}/{len(rows)}  "
+        count = f"  {len(shown)}/{loaded}{'' if done else '…'}  "
         put(screen, lines + 1, 0, count, curses.A_DIM)
         if shown:
             put(screen, lines + 1, columns(count), hint(rows[shown[cursor]]), curses.A_DIM)
@@ -105,7 +152,12 @@ def run(screen, rows, notes):
         screen.move(0, min(width - 1, 9 + columns(query)))
         screen.refresh()
 
-        key = screen.get_wch()
+        # Wake up now and then to show rows that arrive meanwhile.
+        screen.timeout(-1 if done else 100)
+        try:
+            key = screen.get_wch()
+        except curses.error:
+            continue
         if key == "\x1b" and pending(screen):
             continue
         moves = {
@@ -118,7 +170,7 @@ def run(screen, rows, notes):
         elif key in ("\n", "\r", curses.KEY_ENTER):
             return shown[cursor] if shown else None
         elif key in moves:
-            cursor += moves[key]
+            cursor = max(0, min(cursor + moves[key], len(shown) - 1))
             scroll = 0
         elif key == curses.KEY_SR:
             scroll = max(0, scroll - 1)
@@ -135,7 +187,7 @@ def run(screen, rows, notes):
             edited = query + key
         if edited != query:
             query = edited
-            shown = visible(rows, query)
+            shown = visible(rows[:loaded], query)
             cursor = top = scroll = 0
 
 
@@ -160,11 +212,15 @@ def pick(lines, notes):
     """Returns the fields of the line the user picks, or None if the user
     quits, including with ctrl-c. notes(kind, directory, session) returns
     the text to show below the list for a line."""
-    rows = [line.split("\t", 3) for line in lines]
+    loading = Loading(lines)
     locale.setlocale(locale.LC_ALL, "")
     os.environ.setdefault("ESCDELAY", "25")
     try:
-        i = curses.wrapper(run, rows, notes)
+        i = curses.wrapper(run, loading, notes)
     except KeyboardInterrupt:
         return None
-    return None if i is None else rows[i][:3]
+    if loading.error and i is None:
+        raise loading.error
+    if loading.error:
+        print(f"Not all projects loaded: {loading.error!r}", file=sys.stderr)
+    return None if i is None else loading.rows[i][:3]

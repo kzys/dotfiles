@@ -12,6 +12,35 @@ REPORT = re.compile(
 )
 
 
+def front_matter(directory, key):
+    """Returns field key from the front matter of README.md in
+    directory, "" if it has no such field, or None if there is no
+    README.md. The front matter starts at the first line, between lines
+    of ---."""
+    try:
+        lines = (Path(directory) / "README.md").read_text(errors="replace").split("\n")
+    except OSError:
+        return None
+    if not lines or lines[0] != "---":
+        return ""
+    for line in lines[1:]:
+        if line == "---":
+            break
+        if line.startswith(f"{key}:"):
+            return line[len(key) + 1:].strip()
+    return ""
+
+
+def report_title(workspace, directory, herdr):
+    """Reports the title in the front matter of README.md in directory as
+    the $title token of Herdr workspace, for the Spaces panel, if there is
+    one. herdr runs a herdr command."""
+    title = front_matter(directory, "title")
+    if title:
+        herdr("workspace", "report-metadata", workspace, "--source", "readme-title",
+              "--token", f"title={title}")
+
+
 def notes(directory, role=None):
     """Returns the notes in directory: AGENT-<role>.md if role is given
     and the file exists, else README.md, then every AGENT-*.md."""

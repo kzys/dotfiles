@@ -20,11 +20,24 @@ def transcripts(directory, home=None):
     return sorted(found, key=lambda p: p.stat().st_mtime, reverse=True)
 
 
-def title(transcript):
+# Claude appends a session's titles again as it goes, so they are near
+# the end of its transcript: in each of 15 renamed sessions up to 7 MB
+# long, the last custom title was within 34 KB of the end.
+TAIL = 131072
+
+
+def title(transcript, tail=TAIL):
     """Returns the title of the session in transcript: the one it was
     renamed to, the one claude generated, or else its first prompt on
-    one line, cut to 60 characters. Returns "" if there is none."""
-    data = transcript.read_bytes()
+    one line, cut to 60 characters. Returns "" if there is none. Reads
+    only the last tail bytes unless they have no title."""
+    with open(transcript, "rb") as f:
+        size = f.seek(0, 2)
+        f.seek(max(0, size - tail))
+        data = f.read()
+        if size > tail and not any(m in data for m, _ in TITLES):
+            f.seek(0)
+            data = f.read()
 
     def field(marker, key, find):
         """Returns key from the first or last line containing marker."""
@@ -38,11 +51,15 @@ def title(transcript):
         except ValueError:
             return None
 
-    for marker, key in (
-        (b'"type":"custom-title"', "customTitle"),
-        (b'"type":"ai-title"', "aiTitle"),
-    ):
+    for marker, key in TITLES:
         if value := field(marker, key, data.rfind):
             return value
     prompt = field(b'"lastPrompt"', "lastPrompt", data.find) or ""
     return " ".join(str(prompt).split())[:60]
+
+
+# Where a title is, and its key, in the order title prefers them.
+TITLES = (
+    (b'"type":"custom-title"', "customTitle"),
+    (b'"type":"ai-title"', "aiTitle"),
+)
