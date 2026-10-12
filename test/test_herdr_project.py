@@ -8,8 +8,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from herdr_project.match import clip, columns, spans, visible
+from herdr_project.notes import notes, reported_role
 from herdr_project.remaining import follow_remaining
-from herdr_project.screen import preview
 
 
 def test_filters_sessions_by_project():
@@ -37,12 +37,31 @@ def test_clips_wide_text():
     assert clip('a税b', 3) == 'a税'
 
 
-def test_previews_notes(tmp_path):
+def test_reads_notes(tmp_path):
     (tmp_path / 'README.md').write_text('readme\n')
     (tmp_path / 'AGENT-b.md').write_text('b\n')
     (tmp_path / 'AGENT-a.md').write_text('a\n')
-    assert preview(str(tmp_path)) == 'readme\na\nb\n'
-    assert preview('') == ''
+    assert notes(str(tmp_path)) == 'readme\na\nb\n'
+    assert notes(str(tmp_path), 'b') == 'b\n'
+    assert notes(str(tmp_path), 'c') == 'readme\na\nb\n'
+    assert notes('') == ''
+
+
+def test_reads_reported_role(tmp_path):
+    def bash(command):
+        return json.dumps({'type': 'assistant', 'message': {'content': [
+            {'type': 'tool_use', 'name': 'Bash', 'input': {'command': command}}]}})
+
+    transcript = tmp_path / 'session.jsonl'
+    transcript.write_text('\n'.join([
+        json.dumps({'type': 'user', 'message': {'content': 'report-metadata --token role=no'}}),
+        bash('herdr pane report-metadata "$HERDR_PANE_ID" --source agent-notes --token role=main'),
+        bash('herdr pane report-metadata w1:p2 --source agent-notes --token role=other'),
+        bash('herdr pane report-metadata "$HERDR_PANE_ID" --source agent-notes --token role=tester'),
+        json.dumps({'message': {'content': [{'type': 'tool_use', 'input': 'report-metadata'}]}}),
+    ]) + '\n')
+    assert reported_role(transcript) == 'tester'
+    assert reported_role(tmp_path / 'missing.jsonl') is None
 
 
 def test_remaining_waits_for_role_and_ends_when_pane_exits(tmp_path, monkeypatch, capsys):

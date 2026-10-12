@@ -26,6 +26,7 @@ from pathlib import Path
 from herdr_agent import agent, codex_context, codex_sessions
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from herdr_project.notes import notes, reported_role
 from herdr_project.screen import pick
 
 HERDR = os.environ.get("HERDR_BIN_PATH", "herdr")
@@ -63,9 +64,23 @@ def sessions(directory):
     directory named after the path."""
     if AGENT == "codex":
         return [s for s in CODEX_SESSIONS if s["cwd"] == str(directory)]
-    named = re.sub("[^a-zA-Z0-9]", "-", str(directory))
-    transcripts = (Path.home() / ".claude/projects" / named).glob("*.jsonl")
+    transcripts = transcript_dir(directory).glob("*.jsonl")
     return sorted(transcripts, key=lambda p: p.stat().st_mtime, reverse=True)
+
+
+def transcript_dir(directory):
+    """Returns where claude keeps the transcripts of the sessions in
+    directory."""
+    return Path.home() / ".claude/projects" / re.sub("[^a-zA-Z0-9]", "-", str(directory))
+
+
+def row_notes(kind, directory, sid):
+    """Returns the notes to show for a row: those of the session's role
+    for a claude session that reported one, else all of the project's."""
+    role = None
+    if kind == "session" and AGENT != "codex":
+        role = reported_role(transcript_dir(directory) / f"{sid}.jsonl")
+    return notes(directory, role)
 
 
 def title(transcript):
@@ -179,7 +194,7 @@ def main():
         for p in herdr("pane", "list")["result"]["panes"]
     ]
 
-    picked = pick(choices(panes))
+    picked = pick(choices(panes), row_notes)
     if picked is None:
         return
     kind, directory, sid = picked[:3]

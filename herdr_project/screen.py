@@ -3,7 +3,6 @@
 import curses
 import locale
 import os
-from pathlib import Path
 
 from .match import clip, columns, spans, visible
 
@@ -14,20 +13,6 @@ HINT = {
     "running": "enter: switch to this running session",
     "session": "enter: resume this session",
 }
-
-
-def preview(directory):
-    """Returns the notes in directory: README.md, then AGENT-*.md."""
-    if not directory:
-        return ""
-    d = Path(directory)
-    texts = []
-    for f in [d / "README.md", *sorted(d.glob("AGENT-*.md"))]:
-        try:
-            texts.append(f.read_text(errors="replace"))
-        except OSError:
-            pass
-    return "".join(texts)
 
 
 def hint(row):
@@ -52,8 +37,9 @@ def put(win, y, x, text, attr=0):
     return x + columns(text)
 
 
-def run(screen, rows):
-    """Lets the user pick one of rows on screen. Returns its index, or
+def run(screen, rows, notes):
+    """Lets the user pick one of rows on screen, showing notes(*row[:3])
+    for the highlighted row below them. Returns its index, or
     None if the user quits with Esc or ctrl-g. Up, down, ctrl-p, ctrl-n,
     PgUp and PgDn move; shift-up and shift-down scroll the preview."""
     if curses.has_colors():
@@ -67,6 +53,9 @@ def run(screen, rows):
         return curses.color_pair(n) if curses.has_colors() else 0
 
     query = ""
+    # Notes by row, read once: the picker is short-lived, so they can't
+    # go stale for long.
+    previews = {}
     shown = visible(rows, query)
     cursor = top = scroll = 0
     while True:
@@ -101,9 +90,13 @@ def run(screen, rows):
             put(screen, lines + 1, columns(count), hint(rows[shown[cursor]]), curses.A_DIM)
         rule = lines + 2
         put(screen, rule, 0, "─" * width, color(3))
-        notes = preview(rows[shown[cursor]][1]).splitlines() if shown else []
-        scroll = min(scroll, max(0, len(notes) - 1))
-        for y, line in enumerate(notes[scroll:], start=rule + 1):
+        text = []
+        if shown:
+            if shown[cursor] not in previews:
+                previews[shown[cursor]] = notes(*rows[shown[cursor]][:3]).splitlines()
+            text = previews[shown[cursor]]
+        scroll = min(scroll, max(0, len(text) - 1))
+        for y, line in enumerate(text[scroll:], start=rule + 1):
             if y >= height:
                 break
             put(screen, y, 0, line.expandtabs())
@@ -163,14 +156,15 @@ def pending(screen):
         screen.nodelay(False)
 
 
-def pick(lines):
+def pick(lines, notes):
     """Returns the fields of the line the user picks, or None if the user
-    quits, including with ctrl-c."""
+    quits, including with ctrl-c. notes(kind, directory, session) returns
+    the text to show below the list for a line."""
     rows = [line.split("\t", 3) for line in lines]
     locale.setlocale(locale.LC_ALL, "")
     os.environ.setdefault("ESCDELAY", "25")
     try:
-        i = curses.wrapper(run, rows)
+        i = curses.wrapper(run, rows, notes)
     except KeyboardInterrupt:
         return None
     return None if i is None else rows[i][:3]
