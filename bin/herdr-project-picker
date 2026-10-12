@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Pick a project under ~/project, one of its agent sessions, or a new
-project with fzf. Each project is listed with the title from the front
+project. Each project is listed with the title from the front
 matter of its README.md, followed by its sessions, newest first, with
-their titles. Sessions running in Herdr are marked.
+their titles. Sessions running in Herdr are marked. Typing filters the
+list: every word must appear in a project row, or in a session row or
+its project's row.
 
 Enter on a running session switches to its pane. On any other session
 it resumes that session, and on a project it starts a new one, in a new
@@ -23,23 +25,16 @@ from pathlib import Path
 
 from herdr_agent import agent, codex_context, codex_sessions
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from herdr_project.notes import notes, reported_role
+from herdr_project.screen import pick
+
 HERDR = os.environ.get("HERDR_BIN_PATH", "herdr")
 BIN = Path(__file__).resolve().parent
 AGENT = agent()
 CODEX_SESSIONS = codex_sessions() if AGENT == "codex" else []
 PROJECTS = Path.home() / "project"
 FRONT_MATTER = BIN / "herdr-front-matter"
-
-# What fzf shows in its header for the highlighted row, whose fields
-# are {1} kind and {4} display text.
-HEADER = """case {1} in
-    new) echo "enter: start a new session in a new project" ;;
-    project) echo "enter: start a new session in this project" ;;
-    *) case {4} in
-        *●*) echo "enter: switch to this running session" ;;
-        *) echo "enter: resume this session" ;;
-    esac ;;
-esac"""
 
 
 def herdr(*args):
@@ -69,9 +64,23 @@ def sessions(directory):
     directory named after the path."""
     if AGENT == "codex":
         return [s for s in CODEX_SESSIONS if s["cwd"] == str(directory)]
-    named = re.sub("[^a-zA-Z0-9]", "-", str(directory))
-    transcripts = (Path.home() / ".claude/projects" / named).glob("*.jsonl")
+    transcripts = transcript_dir(directory).glob("*.jsonl")
     return sorted(transcripts, key=lambda p: p.stat().st_mtime, reverse=True)
+
+
+def transcript_dir(directory):
+    """Returns where claude keeps the transcripts of the sessions in
+    directory."""
+    return Path.home() / ".claude/projects" / re.sub("[^a-zA-Z0-9]", "-", str(directory))
+
+
+def row_notes(kind, directory, sid):
+    """Returns the notes to show for a row: those of the session's role
+    for a claude session that reported one, else all of the project's."""
+    role = None
+    if kind == "session" and AGENT != "codex":
+        role = reported_role(transcript_dir(directory) / f"{sid}.jsonl")
+    return notes(directory, role)
 
 
 def title(transcript):
@@ -133,14 +142,22 @@ def background(sid):
 
 
 def choices(panes):
-    """Returns the lines for fzf. Fields: kind, directory, session, then
-    what fzf shows. Directory names start with the date, so reverse
-    order puts the newest projects first."""
+    """Returns the lines for pick. Fields: kind, directory, session, then
+    what pick shows. Projects with an agent running in Herdr come first.
+    Directory names start with the date, so reverse order puts the
+    newest projects first."""
     running = {p["session"] for p in panes
                if p["session"] and p["agent"] == AGENT}
+    active = {p["cwd"] for p in panes if p["agent"] == AGENT}
+
+    def has_agent(d):
+        """Returns whether an agent runs in d or under it."""
+        return any(c == str(d) or c.startswith(f"{d}/") for c in active)
+
     lines = ["new\t\t\t+ new project"]
     for d in sorted(
         (d for d in PROJECTS.iterdir() if d.is_dir() and d.name[0] != "."),
+        key=lambda d: (has_agent(d), d.name),
         reverse=True,
     ):
         summary = front_matter(d, "title")
@@ -164,26 +181,6 @@ def choices(panes):
     return lines
 
 
-def pick(lines):
-    """Returns the fields of the line the user picks with fzf, or None."""
-    proc = subprocess.run(
-        [
-            "fzf", "--reverse", "--delimiter=\t", "--with-nth=4..",
-            "--prompt=project> ",
-            "--header=enter: open a session, or start one in a project",
-            f"--bind=focus:transform-header({HEADER})",
-            "--preview=cd {2} 2>/dev/null && cat README.md AGENT-*.md 2>/dev/null",
-            "--preview-window=down,50%",
-        ],
-        input="\n".join(lines),
-        stdout=subprocess.PIPE,
-        text=True,
-    )
-    if proc.returncode != 0:
-        return None
-    return proc.stdout.rstrip("\n").split("\t")
-
-
 def main():
     PROJECTS.mkdir(exist_ok=True)
     panes = [
@@ -197,7 +194,7 @@ def main():
         for p in herdr("pane", "list")["result"]["panes"]
     ]
 
-    picked = pick(choices(panes))
+    picked = pick(choices(panes), row_notes)
     if picked is None:
         return
     kind, directory, sid = picked[:3]

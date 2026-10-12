@@ -145,6 +145,20 @@ class TestAgent:
             picker.main()
         herdr.assert_called_with('agent', 'focus', 'p')
 
+    def test_picker_lists_projects_with_agents_first(self):
+        os.environ['HERDR_PROJECT_AGENT'] = 'codex'
+        picker = load('herdr_picker_order', ROOT / 'bin/herdr-project-picker')
+        picker.PROJECTS = self.home / 'project'
+        for name in ('20261001-a', '20261002-b', '20261003-c'):
+            (picker.PROJECTS / name).mkdir(parents=True)
+        panes = [
+            {'agent': 'codex', 'cwd': str(picker.PROJECTS / '20261001-a/sub'), 'session': ''},
+            {'agent': None, 'cwd': str(picker.PROJECTS / '20261002-b'), 'session': ''},
+        ]
+        projects = [line.split('\t')[1].rsplit('/', 1)[1]
+                    for line in picker.choices(panes) if line.startswith('project')]
+        assert projects == ['20261001-a', '20261003-c', '20261002-b']
+
     def test_hook_preserves_prompt_on_tool_event_and_skips_children(self):
         hook = load('codex_hook', ROOT / 'bin/codex-hook')
         os.environ.update(HERDR_ENV='1', HERDR_PANE_ID='pane')
