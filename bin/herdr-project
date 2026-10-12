@@ -126,7 +126,7 @@ def follow_remaining(pane):
     watch = PaneWatch(pane)
     while (info := herdr("pane", "get", pane)) is not None:
         try:
-            role = info["result"]["pane"]["tokens"].get("role") or ""
+            role = (info["result"]["pane"].get("tokens") or {}).get("role") or ""
             out = remaining_section(role)
         except (KeyError, TypeError, AttributeError) as e:
             out = f"Cannot read the agent's role: {e!r}"
