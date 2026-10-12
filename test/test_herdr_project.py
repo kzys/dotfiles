@@ -12,7 +12,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from herdr_project import claude
-from herdr_project.herdr import herdr
+from herdr_project.herdr import ancestors, herdr, in_pane
 from herdr_project.match import clip, columns, spans, visible
 from herdr_project.notes import front_matter, notes, report_title, reported_role
 from herdr_project.remaining import follow_remaining
@@ -195,3 +195,21 @@ def test_reports_title(tmp_path):
     report_title('w', tmp_path, lambda *args: calls.append(args))
     assert calls == [('workspace', 'report-metadata', 'w', '--source', 'readme-title',
                       '--token', 'title=A title')]
+
+
+def test_in_pane_skips_background_sessions():
+    env = {'HERDR_ENV': '1', 'HERDR_PANE_ID': 'p'}
+    assert in_pane(env, ['claude', 'zsh'])
+    assert not in_pane(env, ['claude', 'claude --bg-pty-host 3'])
+    assert not in_pane({'HERDR_PANE_ID': 'p'}, [])
+    assert not in_pane({'HERDR_ENV': '1'}, [])
+
+
+def test_ancestors_walks_up_from_pid():
+    with subprocess.Popen(['sleep', '10']) as child:
+        try:
+            found = ancestors(child.pid)
+            assert next(found) == 'sleep 10'
+            assert 'pytest' in next(found)
+        finally:
+            child.kill()

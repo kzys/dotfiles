@@ -1,87 +1,218 @@
-#!/bin/sh
-# Claude Code status line: prints context window usage, the model,
-# effort, how long the prompt cache stays warm, and rate limit usage.
-# Inside a Herdr pane it also reports context window usage, the last
-# prompt, the model, and the working directory and branch as the pane's
-# $ctx, $prompt, $model, $dir and $branch tokens for the agent panel,
-# plus $bg when it runs as a background session, and the full working
-# directory as $cwd for opening new tabs there.
-#
-# It also leaves the context window usage in the session's project
-# directory, in claude-<session>.json, for the project picker.
+#!/usr/bin/env python3
+"""Claude Code status line: prints context window usage, the model,
+effort, how long the prompt cache stays warm, and rate limit usage.
+Inside a Herdr pane it also reports context window usage, the last
+prompt, the model, and the working directory and branch as the pane's
+$ctx, $prompt, $model, $dir and $branch tokens for the agent panel,
+plus $bg when it runs as a background session, and the full working
+directory as $cwd for opening new tabs there.
 
-input=$(cat)
-pct=$(printf '%s' "$input" | jq -r '
-  .context_window as $w
-  | if $w.used_percentage != null then $w.used_percentage
-    elif $w.current_usage != null and ($w.context_window_size // 0) > 0 then
-      ($w.current_usage | (.input_tokens // 0) + (.cache_creation_input_tokens // 0)
-        + (.cache_read_input_tokens // 0)) * 100 / $w.context_window_size
-    else empty end
-  | floor')
+It also leaves the context window usage in the session's project
+directory, in claude-<session>.json, for the project picker."""
 
-[ -n "$pct" ] || exit 0
+import json
+import math
+import os
+import subprocess
+import sys
+import time
+from pathlib import Path
 
-{
-    read -r session
-    read -r project
-} <<END
-$(printf '%s' "$input" | jq -r '.session_id // empty, (.workspace.project_dir // .cwd // empty)')
-END
-if [ -n "$session" ] && [ -d "$project" ]; then
-    printf '%s' "$input" | jq -c '{used_percentage: .context_window.used_percentage,
-        context_window_size: .context_window.context_window_size}' \
-        >"$project/claude-$session.json"
-fi
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from herdr_project.herdr import ancestors, herdr, in_pane
 
-if [ "${HERDR_ENV:-}" = 1 ] && [ -n "${HERDR_PANE_ID:-}" ]; then
-    # The transcript records each prompt as a "last-prompt" line; the
-    # newest is near the end.
-    transcript=$(printf '%s' "$input" | jq -r '.transcript_path // empty')
-    prompt=
-    if [ -f "$transcript" ]; then
-        prompt=$(tail -c 262144 "$transcript" | grep -F '"lastPrompt"' |
-            tail -n 1 | jq -r '.lastPrompt // empty | gsub("\\s+"; " ")')
-    fi
-    model=$(printf '%s' "$input" | jq -r '.model.display_name // empty')
-    dir=$(printf '%s' "$input" | jq -r '.workspace.current_dir // .cwd // empty')
-    cwd=$dir
-    branch=$(git -C "$dir" branch --show-current 2>/dev/null)
-    case $dir in
-    "$HOME"/*) dir="~${dir#"$HOME"}" ;;
-    esac
+# How far from the end of the transcript to look for the last prompt.
+TRANSCRIPT_TAIL = 262144
+
+
+def get(data, *keys):
+    """Returns data[keys[0]][keys[1]]..., or None where a level is
+    missing or isn't an object."""
+    for key in keys:
+        if not isinstance(data, dict):
+            return None
+        data = data.get(key)
+    return data
+
+
+def number(value):
+    """Returns value if it is a finite number, else None."""
+    if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value):
+        return value
+    return None
+
+
+def string(value):
+    """Returns value if it is a string, else None."""
+    return value if isinstance(value, str) else None
+
+
+def either(value, default):
+    """Returns value, or default if value is null or false, like jq's
+    // operator."""
+    return default if value is None or value is False else value
+
+
+def percent(data):
+    """Returns the used percentage of the context window, floored, or
+    None if data doesn't say."""
+    window = get(data, "context_window")
+    used = get(window, "used_percentage")
+    if used is not None:
+        return math.floor(used) if number(used) is not None else None
+    usage = get(window, "current_usage")
+    size = number(get(window, "context_window_size")) or 0
+    if not isinstance(usage, dict) or size <= 0:
+        return None
+    keys = ["input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"]
+    tokens = sum(number(usage.get(key)) or 0 for key in keys)
+    return math.floor(tokens * 100 / size)
+
+
+def size(tokens):
+    """Returns tokens abbreviated, like 200k or 1M."""
+    if tokens >= 1000000:
+        return f"{tokens / 1000000:.15g}M"
+    return f"{math.floor(tokens / 1000)}k"
+
+
+def status(data, pct, now, clock):
+    """Returns the status line for data, kept within 80 columns. A part
+    whose fields are missing or malformed is left out. now is the time
+    in seconds, and clock formats a time as HH:MM."""
+    window = number(get(data, "context_window", "context_window_size"))
+    parts = [f"{pct}% of {size(window)} ctx" if window is not None else f"{pct}% ctx"]
+
+    model = string(get(data, "model", "display_name"))
+    if model is not None:
+        effort = string(get(data, "effort", "level"))
+        parts.append(model + (f" ({effort})" if effort is not None else ""))
+
+    cache = get(data, "prompt_cache")
+    if isinstance(cache, dict):
+        expires = number(cache.get("expires_at"))
+        if cache.get("warm") is not True:
+            parts.append("cache cold")
+        elif expires is not None:
+            parts.append(f"cache {math.floor((expires - now) / 60)}m")
+
+    limit = get(data, "rate_limits", "five_hour")
+    if isinstance(limit, dict):
+        used = number(limit.get("used_percentage"))
+        resets = number(limit.get("resets_at"))
+        if used is not None and resets is not None:
+            parts.append(f"5h {math.floor(used)}% ({clock(resets)})")
+
+    limit = get(data, "rate_limits", "seven_day")
+    if isinstance(limit, dict):
+        used = number(limit.get("used_percentage"))
+        if used is not None:
+            parts.append(f"7d {math.floor(used)}%")
+
+    return " · ".join(parts)
+
+
+def usage(data):
+    """Returns the file that leaves the context window usage in the
+    project for the picker, and its contents, or None."""
+    session = get(data, "session_id")
+    project = string(either(get(data, "workspace", "project_dir"), get(data, "cwd")))
+    if not session or not project or not os.path.isdir(project):
+        return None
+    window = get(data, "context_window")
+    contents = {
+        "used_percentage": get(window, "used_percentage"),
+        "context_window_size": get(window, "context_window_size"),
+    }
+    return Path(project, f"claude-{session}.json"), json.dumps(contents, separators=(",", ":"))
+
+
+def last_prompt(transcript):
+    """Returns the last prompt in the transcript with its whitespace
+    collapsed, or "". The transcript records each prompt as a
+    "last-prompt" line; the newest is near the end."""
+    try:
+        with open(transcript, "rb") as f:
+            f.seek(max(0, f.seek(0, os.SEEK_END) - TRANSCRIPT_TAIL))
+            lines = f.read().decode(errors="replace").split("\n")
+    except (OSError, TypeError):
+        return ""
+    for line in reversed(lines):
+        if '"lastPrompt"' not in line:
+            continue
+        try:
+            prompt = string(get(json.loads(line), "lastPrompt"))
+        except ValueError:
+            return ""
+        return " ".join(prompt.split()) if prompt else ""
+    return ""
+
+
+def metadata(data, pct, prompt, branch, home, own_pane):
+    """Returns the arguments for herdr pane report-metadata. branch
+    returns the git branch of a directory, home is the home directory,
+    and own_pane says whether the session runs in the pane it reports
+    to."""
+    cwd = string(either(get(data, "workspace", "current_dir"), get(data, "cwd"))) or ""
+    directory = cwd
+    if directory.startswith(home + "/"):
+        directory = "~" + directory[len(home):]
     # A background session reports to the pane that started the daemon,
     # which may be showing a different session; $bg flags that, and it
     # leaves $cwd, where new tabs open, to the pane's own session.
-    if "$(dirname "$0")/in-herdr-pane"; then
-        set -- --clear-token bg --token cwd="$cwd"
-    else
-        set -- --token bg="bg"
-    fi
-    herdr pane report-metadata "$HERDR_PANE_ID" --source claude-statusline \
-        "$@" --token ctx="${pct}%" --token prompt="$prompt" \
-        --token model="$model" \
-        --token dir="$dir" --token branch="$branch" >/dev/null 2>&1
-fi
+    if own_pane:
+        args = ["--clear-token", "bg", "--token", f"cwd={cwd}"]
+    else:
+        args = ["--token", "bg=bg"]
+    return args + [
+        "--token", f"ctx={pct}%",
+        "--token", f"prompt={prompt}",
+        "--token", f"model={string(get(data, 'model', 'display_name')) or ''}",
+        "--token", f"dir={directory}",
+        "--token", f"branch={branch(cwd)}",
+    ]
 
-# Kept within 80 columns. A part whose fields are missing or malformed
-# is left out.
-printf '%s' "$input" | jq -r --arg pct "$pct" '
-  def part(f): first(f | strings)? // empty;
-  def size: if . >= 1000000 then "\(. / 1000000)M" else "\(. / 1000 | floor)k" end;
-  def clock: strflocaltime("%H:%M");
-  . as $in
-  | [
-      part("\($pct)% of \(.context_window.context_window_size | numbers | size) ctx")
-        // "\($pct)% ctx",
-      part(.model.display_name | strings
-        | . + (part($in.effort.level | strings | " (\(.))") // "")),
-      part(.prompt_cache | objects
-        | if .warm == true
-          then "cache \((.expires_at | numbers) - now | . / 60 | floor)m"
-          else "cache cold" end),
-      part(.rate_limits.five_hour | objects
-        | "5h \(.used_percentage | numbers | floor)% (\(.resets_at | numbers | clock))"),
-      part(.rate_limits.seven_day | objects
-        | "7d \(.used_percentage | numbers | floor)%")
-    ] | join(" · ")'
+
+def branch(directory):
+    """Returns the current git branch of directory, or ""."""
+    try:
+        return subprocess.run(
+            ["git", "-C", directory, "branch", "--show-current"],
+            capture_output=True, text=True, check=False,
+        ).stdout.strip()
+    except OSError:
+        return ""
+
+
+def main():
+    try:
+        data = json.load(sys.stdin)
+    except ValueError:
+        return
+    pct = percent(data)
+    if pct is None:
+        return
+
+    found = usage(data)
+    if found:
+        try:
+            found[0].write_text(found[1] + "\n")
+        except OSError:
+            pass
+
+    pane = os.environ.get("HERDR_PANE_ID")
+    if os.environ.get("HERDR_ENV") == "1" and pane:
+        try:
+            args = metadata(data, pct, last_prompt(get(data, "transcript_path")), branch,
+                            os.environ.get("HOME", ""), in_pane(os.environ, ancestors()))
+            herdr("pane", "report-metadata", pane, "--source", "claude-statusline", *args,
+                  stderr=subprocess.DEVNULL)
+        except Exception:  # noqa: BLE001 - the status line must still print.
+            pass
+
+    print(status(data, pct, time.time(),
+                 lambda t: time.strftime("%H:%M", time.localtime(t))))
+
+
+if __name__ == "__main__":
+    main()
