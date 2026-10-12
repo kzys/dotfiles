@@ -31,6 +31,13 @@
   become reachable.
 - Run Chrome with `--password-store=basic`, or it prompts for KWallet. For
   headless runs, also pass a throwaway `--user-data-dir`.
+- Keep browser automation on sites I'm logged into, such as banks and
+  tax sites, minimal; heavy clicking may get flagged as a bot. To check a
+  page, read its text or take a screenshot. Scrolling through it is fine,
+  but stop if it keeps loading more. Don't click through menus, explore,
+  or retry failing actions. If getting to the page takes more than one or
+  two clicks or form submissions, ask me to open or download it, or use
+  local files or the Gmail connector instead.
 
 ## Responses
 
