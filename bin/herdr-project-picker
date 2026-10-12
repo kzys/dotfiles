@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Pick a project under ~/project, one of its agent sessions, or a new
-project with fzf. Each project is listed with the title from the front
+project. Each project is listed with the title from the front
 matter of its README.md, followed by its sessions, newest first, with
-their titles. Sessions running in Herdr are marked.
+their titles. Sessions running in Herdr are marked. Typing filters the
+list: every word must appear in a project row, or in a session row or
+its project's row.
 
 Enter on a running session switches to its pane. On any other session
 it resumes that session, and on a project it starts a new one, in a new
@@ -23,23 +25,15 @@ from pathlib import Path
 
 from herdr_agent import agent, codex_context, codex_sessions
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from herdr_project.screen import pick
+
 HERDR = os.environ.get("HERDR_BIN_PATH", "herdr")
 BIN = Path(__file__).resolve().parent
 AGENT = agent()
 CODEX_SESSIONS = codex_sessions() if AGENT == "codex" else []
 PROJECTS = Path.home() / "project"
 FRONT_MATTER = BIN / "herdr-front-matter"
-
-# What fzf shows in its header for the highlighted row, whose fields
-# are {1} kind and {4} display text.
-HEADER = """case {1} in
-    new) echo "enter: start a new session in a new project" ;;
-    project) echo "enter: start a new session in this project" ;;
-    *) case {4} in
-        *●*) echo "enter: switch to this running session" ;;
-        *) echo "enter: resume this session" ;;
-    esac ;;
-esac"""
 
 
 def herdr(*args):
@@ -133,8 +127,8 @@ def background(sid):
 
 
 def choices(panes):
-    """Returns the lines for fzf. Fields: kind, directory, session, then
-    what fzf shows. Directory names start with the date, so reverse
+    """Returns the lines for pick. Fields: kind, directory, session, then
+    what pick shows. Directory names start with the date, so reverse
     order puts the newest projects first."""
     running = {p["session"] for p in panes
                if p["session"] and p["agent"] == AGENT}
@@ -162,26 +156,6 @@ def choices(panes):
                 f"session\t{d}\t{sid}\t  {mark} {when} {ctx:>4}  {title(t)}"
             )
     return lines
-
-
-def pick(lines):
-    """Returns the fields of the line the user picks with fzf, or None."""
-    proc = subprocess.run(
-        [
-            "fzf", "--reverse", "--delimiter=\t", "--with-nth=4..",
-            "--prompt=project> ",
-            "--header=enter: open a session, or start one in a project",
-            f"--bind=focus:transform-header({HEADER})",
-            "--preview=cd {2} 2>/dev/null && cat README.md AGENT-*.md 2>/dev/null",
-            "--preview-window=down,50%",
-        ],
-        input="\n".join(lines),
-        stdout=subprocess.PIPE,
-        text=True,
-    )
-    if proc.returncode != 0:
-        return None
-    return proc.stdout.rstrip("\n").split("\t")
 
 
 def main():
