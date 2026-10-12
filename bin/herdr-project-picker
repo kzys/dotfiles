@@ -128,13 +128,21 @@ def background(sid):
 
 def choices(panes):
     """Returns the lines for pick. Fields: kind, directory, session, then
-    what pick shows. Directory names start with the date, so reverse
-    order puts the newest projects first."""
+    what pick shows. Projects with an agent running in Herdr come first.
+    Directory names start with the date, so reverse order puts the
+    newest projects first."""
     running = {p["session"] for p in panes
                if p["session"] and p["agent"] == AGENT}
+    active = {p["cwd"] for p in panes if p["agent"] == AGENT}
+
+    def has_agent(d):
+        """Returns whether an agent runs in d or under it."""
+        return any(c == str(d) or c.startswith(f"{d}/") for c in active)
+
     lines = ["new\t\t\t+ new project"]
     for d in sorted(
         (d for d in PROJECTS.iterdir() if d.is_dir() and d.name[0] != "."),
+        key=lambda d: (has_agent(d), d.name),
         reverse=True,
     ):
         summary = front_matter(d, "title")
