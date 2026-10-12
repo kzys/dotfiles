@@ -1,12 +1,18 @@
 import json
+import os
 import socket
+import subprocess
 import sys
 import threading
 import time
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+from herdr_project import claude
+from herdr_project.herdr import herdr, herdr_or_none
 from herdr_project.match import clip, columns, spans, visible
 from herdr_project.notes import notes, reported_role
 from herdr_project.remaining import follow_remaining
@@ -96,3 +102,42 @@ def test_remaining_waits_for_role_and_ends_when_pane_exits(tmp_path, monkeypatch
     assert elapsed < 4
     assert 'Waiting for the agent to report its role.' in capsys.readouterr().out
     assert {'type': 'pane.exited'} in subscriptions
+
+
+def test_runs_herdr(tmp_path, monkeypatch):
+    fake = tmp_path / 'herdr'
+    fake.write_text('#!/bin/sh\n[ "$1" = fail ] && exit 1\n[ "$1" = text ] && echo hi && exit\n'
+                    'echo "{\\"args\\": \\"$*\\"}"\n')
+    fake.chmod(0o755)
+    monkeypatch.setenv('HERDR_BIN_PATH', str(fake))
+    assert herdr('pane', 'list') == {'args': 'pane list'}
+    assert herdr('text') == {}
+    assert herdr_or_none('fail') is None
+    with pytest.raises(subprocess.CalledProcessError):
+        herdr('fail')
+
+
+def test_reads_claude_transcripts(tmp_path, monkeypatch):
+    monkeypatch.setenv('HOME', str(tmp_path))
+    project = tmp_path / 'project' / '2026-a_b'
+    found = claude.transcript_dir(project)
+    assert found.parent == tmp_path / '.claude/projects'
+    assert found.name.endswith('-project-2026-a-b')
+    found.mkdir(parents=True)
+
+    def transcript(name, mtime, *records):
+        path = found / f'{name}.jsonl'
+        path.write_text(''.join(json.dumps(r, separators=(',', ':')) + '\n' for r in records))
+        os.utime(path, (mtime, mtime))
+        return path
+
+    renamed = transcript('renamed', 300,
+                         {'type': 'last-prompt', 'lastPrompt': 'first\n  prompt'},
+                         {'type': 'ai-title', 'aiTitle': 'Generated'},
+                         {'type': 'custom-title', 'customTitle': 'Renamed'})
+    generated = transcript('generated', 200, {'type': 'ai-title', 'aiTitle': 'Generated'})
+    prompted = transcript('prompted', 100, {'type': 'last-prompt', 'lastPrompt': 'first\n  prompt'})
+    empty = transcript('empty', 50)
+    assert claude.transcripts(project) == [renamed, generated, prompted, empty]
+    assert [claude.title(t) for t in (renamed, generated, prompted, empty)] == [
+        'Renamed', 'Generated', 'first prompt', '']
