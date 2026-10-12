@@ -25,21 +25,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from herdr_project import claude
 from herdr_project.agent import agent, codex_context, codex_sessions
 from herdr_project.herdr import herdr
-from herdr_project.notes import notes, reported_role
+from herdr_project.notes import front_matter, notes, reported_role
 from herdr_project.screen import pick
 
 BIN = Path(__file__).resolve().parent
 PROJECTS = Path.home() / "project"
 FRONT_MATTER = BIN / "herdr-front-matter"
-
-
-def front_matter(directory, key):
-    """Returns field key from the front matter of the notes in directory,
-    or None if there are no notes."""
-    proc = subprocess.run(
-        [FRONT_MATTER, str(directory), key], capture_output=True, text=True
-    )
-    return proc.stdout.strip() if proc.returncode == 0 else None
 
 
 def sessions(directory, selected, codex):

@@ -12,6 +12,24 @@ REPORT = re.compile(
 )
 
 
+def front_matter(directory, key):
+    """Returns field key from the front matter of README.md in
+    directory, "" if it has no such field, or None if there is no
+    README.md. Reads it as bin/herdr-front-matter does."""
+    try:
+        lines = (Path(directory) / "README.md").read_text(errors="replace").split("\n")
+    except OSError:
+        return None
+    if not lines or lines[0] != "---":
+        return ""
+    for line in lines[1:]:
+        if line == "---":
+            break
+        if line.startswith(f"{key}:"):
+            return line[len(key) + 1:].strip()
+    return ""
+
+
 def notes(directory, role=None):
     """Returns the notes in directory: AGENT-<role>.md if role is given
     and the file exists, else README.md, then every AGENT-*.md."""

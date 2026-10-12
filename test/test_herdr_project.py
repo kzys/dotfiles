@@ -14,7 +14,7 @@ sys.path.insert(0, str(ROOT))
 from herdr_project import claude
 from herdr_project.herdr import herdr
 from herdr_project.match import clip, columns, spans, visible
-from herdr_project.notes import notes, reported_role
+from herdr_project.notes import front_matter, notes, reported_role
 from herdr_project.remaining import follow_remaining
 
 
@@ -142,3 +142,27 @@ def test_reads_claude_transcripts(tmp_path):
     assert claude.transcripts(project, tmp_path) == [renamed, generated, prompted, empty]
     assert [claude.title(t) for t in (renamed, generated, prompted, empty)] == [
         'Renamed', 'Generated', 'first prompt', '']
+
+
+def test_reads_front_matter(tmp_path):
+    assert front_matter(tmp_path, 'title') is None
+    (tmp_path / 'README.md').write_text('---\ntitle:  A title\nname: a\n---\nnames: b\n')
+    assert front_matter(tmp_path, 'title') == 'A title'
+    assert front_matter(tmp_path, 'name') == 'a'
+    assert front_matter(tmp_path, 'names') == ''
+    (tmp_path / 'README.md').write_text('# No front matter\ntitle: x\n')
+    assert front_matter(tmp_path, 'title') == ''
+
+
+def test_reads_titles_from_the_tail(tmp_path):
+    def line(record):
+        return json.dumps(record, separators=(',', ':')) + '\n'
+
+    padding = line({'type': 'progress', 'text': 'x' * 100})
+    titled = tmp_path / 'titled.jsonl'
+    titled.write_text(line({'type': 'ai-title', 'aiTitle': 'Old'}) + padding * 3
+                      + line({'type': 'ai-title', 'aiTitle': 'New'}))
+    prompted = tmp_path / 'prompted.jsonl'
+    prompted.write_text(line({'type': 'last-prompt', 'lastPrompt': 'first'}) + padding * 3)
+    assert claude.title(titled, tail=200) == 'New'
+    assert claude.title(prompted, tail=200) == 'first'
