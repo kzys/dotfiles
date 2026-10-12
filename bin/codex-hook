@@ -12,42 +12,70 @@ from herdr_project.agent import codex_context, codex_sessions
 from herdr_project.herdr import herdr
 
 
-def main():
-    if os.environ.get('HERDR_ENV') != '1' or not os.environ.get('HERDR_PANE_ID'):
-        return
-    data = json.load(sys.stdin)
+def pane(env):
+    """Returns the Herdr pane to report to, from env, or None outside
+    Herdr."""
+    if env.get('HERDR_ENV') != '1':
+        return None
+    return env.get('HERDR_PANE_ID') or None
+
+
+def report(data, env, sessions, branch):
+    """Returns the arguments for herdr pane report-metadata from the hook
+    event data, and the file and contents that leave the context usage
+    in the project for the picker, or None for them; or None if this
+    session shouldn't report. env is the environment, sessions returns
+    Codex's sessions, and branch returns the git branch of a directory."""
     sid = data.get('session_id')
     # A subagent or a Codex started by this thread doesn't own the pane.
-    parent = os.environ.get('CODEX_THREAD_ID')
+    parent = env.get('CODEX_THREAD_ID')
     if not sid or data.get('agent_id') or (parent and parent != sid):
-        return
+        return None
     directory = data.get('cwd', '')
     if not directory:
-        return
-    session = next((s for s in codex_sessions() if s['id'] == sid), {})
+        return None
+    session = next((s for s in sessions() if s['id'] == sid), {})
     prompt = data.get('prompt')
     if not prompt and data.get('hook_event_name') == 'SessionStart':
         prompt = session.get('title', '')
     pct = codex_context(data.get('transcript_path') or session.get('rollout_path', ''))
-    branch = subprocess.run(['git', '-C', directory, 'branch', '--show-current'],
-                            capture_output=True, text=True).stdout.strip()
     args = ['--clear-token', 'bg', '--token', f'cwd={directory}',
-            '--token', f'dir={directory}', '--token', f'branch={branch}']
+            '--token', f'dir={directory}', '--token', f'branch={branch(directory)}']
     if prompt:
         args += ['--token', 'prompt=' + ' '.join(prompt.split())[:200]]
     if session.get('model'):
         args += ['--token', 'model=' + session['model']]
+    usage = None
     if pct is not None:
         args += ['--token', f'ctx={pct}%']
         project = session.get('cwd', directory)
-        try:
-            Path(project, f'codex-{sid}.json').write_text(json.dumps({'used_percentage': pct}))
-        except OSError:
-            pass
+        usage = Path(project, f'codex-{sid}.json'), json.dumps({'used_percentage': pct})
     elif data.get('hook_event_name') == 'SessionStart':
         args += ['--clear-token', 'ctx']
-    herdr('pane', 'report-metadata', os.environ['HERDR_PANE_ID'],
-          '--source', 'codex-hook', *args, stderr=subprocess.DEVNULL)
+    return args, usage
+
+
+def branch(directory):
+    """Returns the current git branch of directory, or ""."""
+    return subprocess.run(['git', '-C', directory, 'branch', '--show-current'],
+                          capture_output=True, text=True).stdout.strip()
+
+
+def main():
+    target = pane(os.environ)
+    if target is None:
+        return
+    reported = report(json.load(sys.stdin), os.environ, codex_sessions, branch)
+    if reported is None:
+        return
+    args, usage = reported
+    if usage:
+        try:
+            usage[0].write_text(usage[1])
+        except OSError:
+            pass
+    herdr('pane', 'report-metadata', target, '--source', 'codex-hook', *args,
+          stderr=subprocess.DEVNULL)
 
 
 if __name__ == '__main__':

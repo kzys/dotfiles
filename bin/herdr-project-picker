@@ -29,8 +29,6 @@ from herdr_project.notes import notes, reported_role
 from herdr_project.screen import pick
 
 BIN = Path(__file__).resolve().parent
-AGENT = agent()
-CODEX_SESSIONS = codex_sessions() if AGENT == "codex" else []
 PROJECTS = Path.home() / "project"
 FRONT_MATTER = BIN / "herdr-front-matter"
 
@@ -44,50 +42,48 @@ def front_matter(directory, key):
     return proc.stdout.strip() if proc.returncode == 0 else None
 
 
-def sessions(directory):
-    """Returns the sessions in directory, newest first: transcripts for
-    claude, or Codex's records."""
-    if AGENT == "codex":
-        return [s for s in CODEX_SESSIONS if s["cwd"] == str(directory)]
+def sessions(directory, selected, codex):
+    """Returns the sessions of the selected agent in directory, newest
+    first: transcripts for claude, or Codex's records, from codex."""
+    if selected == "codex":
+        return [s for s in codex if s["cwd"] == str(directory)]
     return claude.transcripts(directory)
 
 
-def row_notes(kind, directory, sid):
+def row_notes(kind, directory, sid, selected):
     """Returns the notes to show for a row: those of the session's role
     for a claude session that reported one, else all of the project's."""
     role = None
-    if kind == "session" and AGENT != "codex":
+    if kind == "session" and selected != "codex":
         role = reported_role(claude.transcript_dir(directory) / f"{sid}.jsonl")
     return notes(directory, role)
 
 
-def title(transcript):
-    """Returns the title of the session in transcript."""
-    if AGENT == "codex":
+def title(transcript, selected):
+    """Returns the title of the selected agent's session in transcript."""
+    if selected == "codex":
         return " ".join((transcript.get("name") or transcript.get("title") or
                          transcript.get("first_user_message") or "(untitled)").split())[:60]
     return claude.title(transcript) or "(untitled)"
 
 
-def context(directory, sid):
-    """Returns the context window usage of session sid, as the
-    statusline left it in directory, or "" if it didn't."""
+def context(directory, sid, selected):
+    """Returns the context window usage of the selected agent's session
+    sid, as the statusline left it in directory, or "" if it didn't."""
     try:
-        used = json.loads((directory / f"{AGENT}-{sid}.json").read_text())
+        used = json.loads((directory / f"{selected}-{sid}.json").read_text())
         return f"{int(used['used_percentage'])}%"
     except (OSError, ValueError, KeyError, TypeError):
         return ""
 
 
-def background(sid):
+def background(sid, selected, run=subprocess.run):
     """Returns the ID and status of claude session sid if it runs in
-    the background, else None."""
-    if AGENT == "codex":
+    the background, else None. run runs a command like subprocess.run."""
+    if selected == "codex":
         return None
     try:
-        proc = subprocess.run(
-            ["claude", "agents", "--json"], capture_output=True, text=True
-        )
+        proc = run(["claude", "agents", "--json"], capture_output=True, text=True)
         agents = json.loads(proc.stdout)
         for a in agents:
             if a.get("kind") == "background" and a.get("sessionId") == sid:
@@ -97,14 +93,15 @@ def background(sid):
     return None
 
 
-def choices(panes):
-    """Returns the lines for pick. Fields: kind, directory, session, then
-    what pick shows. Projects with an agent running in Herdr come first.
-    Directory names start with the date, so reverse order puts the
-    newest projects first."""
+def choices(panes, selected, projects, codex):
+    """Returns the lines for pick, for the projects in directory projects
+    and the selected agent's sessions, with codex holding Codex's. Fields:
+    kind, directory, session, then what pick shows. Projects with an
+    agent running in Herdr panes come first. Directory names start with
+    the date, so reverse order puts the newest projects first."""
     running = {p["session"] for p in panes
-               if p["session"] and p["agent"] == AGENT}
-    active = {p["cwd"] for p in panes if p["agent"] == AGENT}
+               if p["session"] and p["agent"] == selected}
+    active = {p["cwd"] for p in panes if p["agent"] == selected}
 
     def has_agent(d):
         """Returns whether an agent runs in d or under it."""
@@ -112,7 +109,7 @@ def choices(panes):
 
     lines = ["new\t\t\t+ new project"]
     for d in sorted(
-        (d for d in PROJECTS.iterdir() if d.is_dir() and d.name[0] != "."),
+        (d for d in projects.iterdir() if d.is_dir() and d.name[0] != "."),
         key=lambda d: (has_agent(d), d.name),
         reverse=True,
     ):
@@ -122,24 +119,37 @@ def choices(panes):
         elif not summary:
             summary = "(no title)"
         lines.append(f"project\t{d}\t\t{d.name}  {summary}")
-        for t in sessions(d):
-            sid = t["id"] if AGENT == "codex" else t.stem
-            updated = t["updated_at"] if AGENT == "codex" else t.stat().st_mtime
+        for t in sessions(d, selected, codex):
+            sid = t["id"] if selected == "codex" else t.stem
+            updated = t["updated_at"] if selected == "codex" else t.stat().st_mtime
             mark = "●" if sid in running else " "
             when = datetime.fromtimestamp(updated).strftime("%m-%d %H:%M")
-            ctx = context(d, sid)
-            if AGENT == "codex" and not ctx:
+            ctx = context(d, sid, selected)
+            if selected == "codex" and not ctx:
                 pct = codex_context(t["rollout_path"])
                 ctx = f"{pct}%" if pct is not None else ""
             lines.append(
-                f"session\t{d}\t{sid}\t  {mark} {when} {ctx:>4}  {title(t)}"
+                f"session\t{d}\t{sid}\t  {mark} {when} {ctx:>4}  {title(t, selected)}"
             )
     return lines
 
 
 def main():
+    selected = agent()
+    codex = codex_sessions() if selected == "codex" else []
     PROJECTS.mkdir(exist_ok=True)
-    panes = [
+    panes = pane_records(herdr("pane", "list"))
+
+    picked = pick(choices(panes, selected, PROJECTS, codex),
+                  lambda *row: row_notes(*row, selected))
+    if picked is not None:
+        open_picked(picked, panes, selected, PROJECTS, herdr, report)
+
+
+def pane_records(listed):
+    """Returns the panes in the output of herdr pane list, each with its
+    agent, workspace, cwd, pane ID and agent session ID, or ""."""
+    return [
         {
             "agent": p.get("agent"),
             "workspace": p["workspace_id"],
@@ -147,25 +157,35 @@ def main():
             "pane": p["pane_id"],
             "session": (p.get("agent_session") or {}).get("value") or "",
         }
-        for p in herdr("pane", "list")["result"]["panes"]
+        for p in listed["result"]["panes"]
     ]
 
-    picked = pick(choices(panes), row_notes)
-    if picked is None:
-        return
+
+def report(workspace, directory):
+    """Reports the title of the notes in directory to Herdr workspace."""
+    subprocess.run([FRONT_MATTER, "--report", workspace, directory])
+
+
+def open_picked(picked, panes, selected, projects, herdr, report):
+    """Opens the picked row, (kind, directory, session), with the
+    selected agent: switches to the pane among panes running its session,
+    or starts the agent in a new tab of the project's workspace or in a
+    new workspace, creating a project under projects for a new one. herdr
+    runs a herdr command, and report(workspace, directory) reports the
+    project's title to its workspace."""
     kind, directory, sid = picked[:3]
     if kind == "new":
         directory = tempfile.mkdtemp(
-            prefix=datetime.now().strftime("%Y%m%d-"), dir=PROJECTS
+            prefix=datetime.now().strftime("%Y%m%d-"), dir=projects
         )
 
-    cmd = f"HERDR_PROJECT_AGENT={AGENT} " + shlex.quote(str(BIN / "herdr-project"))
+    cmd = f"HERDR_PROJECT_AGENT={selected} " + shlex.quote(str(BIN / "herdr-project"))
     if sid:
         for p in panes:
-            if p["agent"] == AGENT and p["session"] == sid:
+            if p["agent"] == selected and p["session"] == sid:
                 herdr("agent", "focus", p["pane"])
                 return
-        bg = background(sid)
+        bg = background(sid, selected)
         if bg and bg[1] == "idle" and subprocess.run(
             ["claude", "stop", bg[0]], stdout=subprocess.DEVNULL
         ).returncode == 0:
@@ -194,7 +214,7 @@ def main():
             "workspace", "create", "--cwd", directory, *label, "--focus"
         )
         workspace = created["result"]["workspace"]["workspace_id"]
-    subprocess.run([FRONT_MATTER, "--report", workspace, directory])
+    report(workspace, directory)
     herdr("pane", "run", created["result"]["root_pane"]["pane_id"], cmd)
 
 
