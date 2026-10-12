@@ -16,9 +16,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from herdr_agent import agent
-
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from herdr_project.agent import agent
 from herdr_project.remaining import follow_remaining
 
 HERDR = os.environ.get("HERDR_BIN_PATH", "herdr")
