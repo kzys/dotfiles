@@ -12,7 +12,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from herdr_project import claude
-from herdr_project.herdr import herdr, herdr_or_none
+from herdr_project.herdr import herdr
 from herdr_project.match import clip, columns, spans, visible
 from herdr_project.notes import notes, reported_role
 from herdr_project.remaining import follow_remaining
@@ -93,7 +93,12 @@ def test_remaining_waits_for_role_and_ends_when_pane_exits(tmp_path, monkeypatch
     thread.start()
     monkeypatch.setenv('HERDR_SOCKET_PATH', str(path))
     start = time.monotonic()
-    follow_remaining('p', lambda *args: replies.pop() if replies else None)
+    def herdr(*args):
+        if not replies:
+            raise subprocess.CalledProcessError(1, ['herdr', *args])
+        return replies.pop()
+
+    follow_remaining('p', herdr)
     elapsed = time.monotonic() - start
     thread.join(5)
     for conn in conns:
@@ -112,7 +117,6 @@ def test_runs_herdr(tmp_path, monkeypatch):
     monkeypatch.setenv('HERDR_BIN_PATH', str(fake))
     assert herdr('pane', 'list') == {'args': 'pane list'}
     assert herdr('text') == {}
-    assert herdr_or_none('fail') is None
     with pytest.raises(subprocess.CalledProcessError):
         herdr('fail')
 

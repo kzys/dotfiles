@@ -18,10 +18,3 @@ def herdr(*args, stderr=None):
     except ValueError:
         return {}
 
-
-def herdr_or_none(*args):
-    """Runs herdr like herdr, but quietly, and returns None if it fails."""
-    try:
-        return herdr(*args, stderr=subprocess.DEVNULL)
-    except (OSError, subprocess.CalledProcessError):
-        return None

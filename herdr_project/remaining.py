@@ -5,6 +5,7 @@ import os
 import select
 import shutil
 import socket
+import subprocess
 import sys
 import textwrap
 import time
@@ -82,11 +83,16 @@ class PaneWatch:
 def follow_remaining(pane, herdr):
     """Prints the "## Remaining" section of the agent in Herdr pane
     until the pane is gone, refreshing every few seconds. herdr runs a
-    herdr command and returns its parsed output, or None if it fails. A
-    failed read shows as a message rather than ending the loop, since
-    that would close the pane."""
+    herdr command and returns its parsed output, or raises if it fails,
+    which means the pane is gone. A failed read of the role shows as a
+    message rather than ending the loop, since that would close the
+    pane."""
     watch = PaneWatch(pane)
-    while (info := herdr("pane", "get", pane)) is not None:
+    while True:
+        try:
+            info = herdr("pane", "get", pane)
+        except (OSError, subprocess.CalledProcessError):
+            return
         try:
             role = (info["result"]["pane"].get("tokens") or {}).get("role") or ""
             out = remaining_section(role)

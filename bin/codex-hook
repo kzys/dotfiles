@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from herdr_project.agent import codex_context, codex_sessions
-from herdr_project.herdr import herdr_or_none
+from herdr_project.herdr import herdr
 
 
 def main():
@@ -46,12 +46,12 @@ def main():
             pass
     elif data.get('hook_event_name') == 'SessionStart':
         args += ['--clear-token', 'ctx']
-    herdr_or_none('pane', 'report-metadata', os.environ['HERDR_PANE_ID'],
-                  '--source', 'codex-hook', *args)
+    herdr('pane', 'report-metadata', os.environ['HERDR_PANE_ID'],
+          '--source', 'codex-hook', *args, stderr=subprocess.DEVNULL)
 
 
 if __name__ == '__main__':
     try:
         main()
-    except (OSError, ValueError, TypeError, KeyError):
+    except (OSError, ValueError, TypeError, KeyError, subprocess.CalledProcessError):
         pass  # Reporting must never interrupt an agent turn.
