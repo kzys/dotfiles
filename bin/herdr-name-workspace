@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from herdr_project.herdr import herdr
+from herdr_project.herdr import ancestors, herdr, in_pane
 from herdr_project.notes import report_title
 
 
@@ -18,7 +18,7 @@ def main(argv):
     if not argv:
         print("usage: herdr-name-workspace <name>", file=sys.stderr)
         return 2
-    if subprocess.run([Path(__file__).resolve().with_name("in-herdr-pane")]).returncode:
+    if not in_pane(os.environ, ancestors()):
         print("herdr-name-workspace: not in a Herdr pane; skipping", file=sys.stderr)
         return 0
     workspace = os.environ.get("HERDR_WORKSPACE_ID")
