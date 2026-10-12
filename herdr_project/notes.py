@@ -15,7 +15,8 @@ REPORT = re.compile(
 def front_matter(directory, key):
     """Returns field key from the front matter of README.md in
     directory, "" if it has no such field, or None if there is no
-    README.md. Reads it as bin/herdr-front-matter does."""
+    README.md. The front matter starts at the first line, between lines
+    of ---."""
     try:
         lines = (Path(directory) / "README.md").read_text(errors="replace").split("\n")
     except OSError:
@@ -28,6 +29,16 @@ def front_matter(directory, key):
         if line.startswith(f"{key}:"):
             return line[len(key) + 1:].strip()
     return ""
+
+
+def report_title(workspace, directory, herdr):
+    """Reports the title in the front matter of README.md in directory as
+    the $title token of Herdr workspace, for the Spaces panel, if there is
+    one. herdr runs a herdr command."""
+    title = front_matter(directory, "title")
+    if title:
+        herdr("workspace", "report-metadata", workspace, "--source", "readme-title",
+              "--token", f"title={title}")
 
 
 def notes(directory, role=None):

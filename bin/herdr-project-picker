@@ -25,12 +25,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from herdr_project import claude
 from herdr_project.agent import agent, codex_context, codex_sessions
 from herdr_project.herdr import herdr
-from herdr_project.notes import front_matter, notes, reported_role
+from herdr_project.notes import front_matter, notes, report_title, reported_role
 from herdr_project.screen import pick
 
 BIN = Path(__file__).resolve().parent
 PROJECTS = Path.home() / "project"
-FRONT_MATTER = BIN / "herdr-front-matter"
 
 
 def sessions(directory, selected, codex):
@@ -131,7 +130,7 @@ def main():
     picked = pick(choices(panes, selected, PROJECTS, codex),
                   lambda *row: row_notes(*row, selected))
     if picked is not None:
-        open_picked(picked, panes, selected, PROJECTS, herdr, report)
+        open_picked(picked, panes, selected, PROJECTS, herdr)
 
 
 def pane_records(listed):
@@ -149,18 +148,12 @@ def pane_records(listed):
     ]
 
 
-def report(workspace, directory):
-    """Reports the title of the notes in directory to Herdr workspace."""
-    subprocess.run([FRONT_MATTER, "--report", workspace, directory])
-
-
-def open_picked(picked, panes, selected, projects, herdr, report):
+def open_picked(picked, panes, selected, projects, herdr):
     """Opens the picked row, (kind, directory, session), with the
     selected agent: switches to the pane among panes running its session,
     or starts the agent in a new tab of the project's workspace or in a
     new workspace, creating a project under projects for a new one. herdr
-    runs a herdr command, and report(workspace, directory) reports the
-    project's title to its workspace."""
+    runs a herdr command."""
     kind, directory, sid = picked[:3]
     if kind == "new":
         directory = tempfile.mkdtemp(
@@ -202,7 +195,9 @@ def open_picked(picked, panes, selected, projects, herdr, report):
             "workspace", "create", "--cwd", directory, *label, "--focus"
         )
         workspace = created["result"]["workspace"]["workspace_id"]
-    report(workspace, directory)
+    if cmd.startswith("claude attach "):
+        # Without herdr-project, nothing else reports the title.
+        report_title(workspace, directory, herdr)
     herdr("pane", "run", created["result"]["root_pane"]["pane_id"], cmd)
 
 

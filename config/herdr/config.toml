@@ -23,7 +23,7 @@ rows = [
 ]
 
 [ui.sidebar.spaces]
-# $title is reported by bin/herdr-front-matter.
+# $title is reported by herdr_project.notes.report_title.
 rows = [
   ["state_icon", "workspace"],
   [{ token = "$title", dim = true }],

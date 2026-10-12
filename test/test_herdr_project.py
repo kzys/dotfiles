@@ -14,7 +14,7 @@ sys.path.insert(0, str(ROOT))
 from herdr_project import claude
 from herdr_project.herdr import herdr
 from herdr_project.match import clip, columns, spans, visible
-from herdr_project.notes import front_matter, notes, reported_role
+from herdr_project.notes import front_matter, notes, report_title, reported_role
 from herdr_project.remaining import follow_remaining
 from herdr_project.screen import Loading, follow
 
@@ -186,3 +186,12 @@ def test_cursor_follows_its_row_as_rows_arrive():
     assert follow([0, 2], 1, [0, 1, 2]) == 2
     assert follow([0, 2], 1, [0, 1]) == 1
     assert follow([], 0, [0]) == 0
+
+
+def test_reports_title(tmp_path):
+    calls = []
+    report_title('w', tmp_path, lambda *args: calls.append(args))
+    (tmp_path / 'README.md').write_text('---\ntitle: A title\n---\n')
+    report_title('w', tmp_path, lambda *args: calls.append(args))
+    assert calls == [('workspace', 'report-metadata', 'w', '--source', 'readme-title',
+                      '--token', 'title=A title')]

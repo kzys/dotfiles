@@ -117,7 +117,6 @@ class TestAgent:
     def test_picker_reuses_workspace_with_shell_pane(self):
         picker = load('herdr_picker_shell', ROOT / 'bin/herdr-project-picker')
         calls = []
-        reports = []
 
         def herdr(*args):
             calls.append(args)
@@ -125,10 +124,8 @@ class TestAgent:
 
         panes = [{'workspace': 'w', 'cwd': str(self.home), 'pane': 'shell',
                   'agent': None, 'session': ''}]
-        picker.open_picked(['project', str(self.home), ''], panes, 'codex', self.home,
-                           herdr, lambda *args: reports.append(args))
+        picker.open_picked(['project', str(self.home), ''], panes, 'codex', self.home, herdr)
         assert calls[0][:2] == ('tab', 'create')
-        assert reports == [('w', str(self.home))]
         assert calls[-1][-1].startswith('HERDR_PROJECT_AGENT=codex ')
 
     def test_picker_focuses_running_session(self):
@@ -137,7 +134,7 @@ class TestAgent:
         panes = [{'workspace': 'w', 'cwd': str(self.home), 'pane': 'p',
                   'agent': 'codex', 'session': 'id'}]
         picker.open_picked(['session', str(self.home), 'id'], panes, 'codex', self.home,
-                           lambda *args: calls.append(args), None)
+                           lambda *args: calls.append(args))
         assert calls == [('agent', 'focus', 'p')]
 
     def test_picker_lists_projects_with_agents_first(self):
