@@ -70,7 +70,7 @@ def test_reads_reported_role(tmp_path):
     assert reported_role(tmp_path / 'missing.jsonl') is None
 
 
-def test_remaining_waits_for_role_and_ends_when_pane_exits(tmp_path, monkeypatch, capsys):
+def test_remaining_waits_for_role_and_ends_when_pane_exits(tmp_path, capsys):
     path = tmp_path / 'herdr.sock'
     server = socket.socket(socket.AF_UNIX)
     server.bind(str(path))
@@ -91,14 +91,13 @@ def test_remaining_waits_for_role_and_ends_when_pane_exits(tmp_path, monkeypatch
 
     thread = threading.Thread(target=herdr_server, daemon=True)
     thread.start()
-    monkeypatch.setenv('HERDR_SOCKET_PATH', str(path))
-    start = time.monotonic()
-    def herdr(*args):
+    def fake_herdr(*args):
         if not replies:
             raise subprocess.CalledProcessError(1, ['herdr', *args])
         return replies.pop()
 
-    follow_remaining('p', herdr)
+    start = time.monotonic()
+    follow_remaining('p', fake_herdr, str(path))
     elapsed = time.monotonic() - start
     thread.join(5)
     for conn in conns:
@@ -109,22 +108,20 @@ def test_remaining_waits_for_role_and_ends_when_pane_exits(tmp_path, monkeypatch
     assert {'type': 'pane.exited'} in subscriptions
 
 
-def test_runs_herdr(tmp_path, monkeypatch):
+def test_runs_herdr(tmp_path):
     fake = tmp_path / 'herdr'
     fake.write_text('#!/bin/sh\n[ "$1" = fail ] && exit 1\n[ "$1" = text ] && echo hi && exit\n'
                     'echo "{\\"args\\": \\"$*\\"}"\n')
     fake.chmod(0o755)
-    monkeypatch.setenv('HERDR_BIN_PATH', str(fake))
-    assert herdr('pane', 'list') == {'args': 'pane list'}
-    assert herdr('text') == {}
+    assert herdr('pane', 'list', command=fake) == {'args': 'pane list'}
+    assert herdr('text', command=fake) == {}
     with pytest.raises(subprocess.CalledProcessError):
-        herdr('fail')
+        herdr('fail', command=fake)
 
 
-def test_reads_claude_transcripts(tmp_path, monkeypatch):
-    monkeypatch.setenv('HOME', str(tmp_path))
+def test_reads_claude_transcripts(tmp_path):
     project = tmp_path / 'project' / '2026-a_b'
-    found = claude.transcript_dir(project)
+    found = claude.transcript_dir(project, tmp_path)
     assert found.parent == tmp_path / '.claude/projects'
     assert found.name.endswith('-project-2026-a-b')
     found.mkdir(parents=True)
@@ -142,6 +139,6 @@ def test_reads_claude_transcripts(tmp_path, monkeypatch):
     generated = transcript('generated', 200, {'type': 'ai-title', 'aiTitle': 'Generated'})
     prompted = transcript('prompted', 100, {'type': 'last-prompt', 'lastPrompt': 'first\n  prompt'})
     empty = transcript('empty', 50)
-    assert claude.transcripts(project) == [renamed, generated, prompted, empty]
+    assert claude.transcripts(project, tmp_path) == [renamed, generated, prompted, empty]
     assert [claude.title(t) for t in (renamed, generated, prompted, empty)] == [
         'Renamed', 'Generated', 'first prompt', '']

@@ -5,17 +5,18 @@ import re
 from pathlib import Path
 
 
-def transcript_dir(directory):
+def transcript_dir(directory, home=None):
     """Returns where claude keeps the transcripts of the sessions in
-    directory: under ~/.claude/projects, in a directory named after the
-    path."""
-    return Path.home() / ".claude/projects" / re.sub("[^a-zA-Z0-9]", "-", str(directory))
+    directory: under .claude/projects in home, by default the user's
+    home, in a directory named after the path."""
+    home = home or Path.home()
+    return home / ".claude/projects" / re.sub("[^a-zA-Z0-9]", "-", str(directory))
 
 
-def transcripts(directory):
+def transcripts(directory, home=None):
     """Returns the transcripts of the sessions in directory, newest
-    first."""
-    found = transcript_dir(directory).glob("*.jsonl")
+    first. home is as for transcript_dir."""
+    found = transcript_dir(directory, home).glob("*.jsonl")
     return sorted(found, key=lambda p: p.stat().st_mtime, reverse=True)
 
 
