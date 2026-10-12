@@ -84,28 +84,34 @@ def main(argv):
         except (KeyError, TypeError, OSError, subprocess.CalledProcessError):
             pass
 
+    program, args, env = command(selected, argv)
+    os.environ.update(env)
+    os.execvp(program, args)
+
+
+def command(selected, argv):
+    """Returns the program and arguments that start the selected agent,
+    passing it argv, and the environment variables to set for it."""
     if selected == "codex":
         # --resume is the picker's common spelling; Codex uses a subcommand.
         if argv[:1] == ["--resume"]:
             argv = ["resume", *argv[1:]]
         rules = (SELF.parent.parent / "config/opencode/AGENTS.md").read_text()
-        os.execvp("codex", [
+        return "codex", [
             # Scratch projects may be untrusted, where Codex defaults to
             # read-only permissions and rejects additional writable roots.
             "codex", "--sandbox", "workspace-write",
             "--add-dir", str(SELF.parent.parent),
             "-c", "developer_instructions=" + json.dumps(rules + "\n\n" + instructions()),
             *argv,
-        ])
+        ], {}
 
     # Run claude's commands in bash, not the login shell, whose quirks
     # trip it up.
-    os.environ["CLAUDE_CODE_SHELL"] = "/bin/bash"
-
-    os.execvp("claude", [
+    return "claude", [
         "claude", "--add-dir", str(Path.home() / "ws/dotfiles"),
         "--append-system-prompt", instructions(), *argv,
-    ])
+    ], {"CLAUDE_CODE_SHELL": "/bin/bash"}
 
 
 if __name__ == "__main__":

@@ -7,8 +7,10 @@ from contextlib import closing
 from pathlib import Path
 
 
-def agent():
-    value = os.environ.get('HERDR_PROJECT_AGENT', 'claude')
+def agent(env=None):
+    """Returns the agent HERDR_PROJECT_AGENT in env, by default this
+    process's environment, selects: claude, the default, or codex."""
+    value = (os.environ if env is None else env).get('HERDR_PROJECT_AGENT', 'claude')
     if value not in ('claude', 'codex'):
         raise SystemExit('HERDR_PROJECT_AGENT must be claude or codex')
     return value
@@ -18,13 +20,14 @@ def codex_home():
     return Path(os.environ.get('CODEX_HOME', str(Path.home() / '.codex'))).expanduser()
 
 
-def codex_sessions():
-    """Newest main sessions, excluding archived sessions and subagents.
+def codex_sessions(home=None):
+    """Newest main sessions, excluding archived sessions and subagents,
+    of the Codex in home, by default codex_home().
 
     Prefer the read-only state database, which also covers paginated history.
     Older installations without a state database use rollout session metadata.
     """
-    home = codex_home()
+    home = home or codex_home()
     databases = sorted(home.glob('state_*.sqlite'),
                        key=lambda p: int(p.stem.split('_')[-1]), reverse=True)
     for path in databases:
