@@ -16,6 +16,7 @@ from herdr_project.herdr import herdr
 from herdr_project.match import clip, columns, spans, visible
 from herdr_project.notes import front_matter, notes, reported_role
 from herdr_project.remaining import follow_remaining
+from herdr_project.screen import Loading, follow
 
 
 def test_filters_sessions_by_project():
@@ -146,7 +147,7 @@ def test_reads_claude_transcripts(tmp_path):
 
 def test_reads_front_matter(tmp_path):
     assert front_matter(tmp_path, 'title') is None
-    (tmp_path / 'README.md').write_text('---\ntitle:  A title\nname: a\n---\nnames: b\n')
+    (tmp_path / 'README.md').write_text('---\ntitle:  A title \nname:\ta\n---\nnames: b\n')
     assert front_matter(tmp_path, 'title') == 'A title'
     assert front_matter(tmp_path, 'name') == 'a'
     assert front_matter(tmp_path, 'names') == ''
@@ -166,3 +167,22 @@ def test_reads_titles_from_the_tail(tmp_path):
     prompted.write_text(line({'type': 'last-prompt', 'lastPrompt': 'first'}) + padding * 3)
     assert claude.title(titled, tail=200) == 'New'
     assert claude.title(prompted, tail=200) == 'first'
+
+
+def test_loads_rows_in_the_background():
+    def lines():
+        yield 'new\t\t\t+ new project'
+        yield 'project\t/a\t\ta  A'
+        raise OSError('gone')
+
+    loading = Loading(lines())
+    loading.wait()
+    assert loading.rows == [['new', '', '', '+ new project'], ['project', '/a', '', 'a  A']]
+    assert loading.done
+    assert isinstance(loading.error, OSError)
+
+
+def test_cursor_follows_its_row_as_rows_arrive():
+    assert follow([0, 2], 1, [0, 1, 2]) == 2
+    assert follow([0, 2], 1, [0, 1]) == 1
+    assert follow([], 0, [0]) == 0

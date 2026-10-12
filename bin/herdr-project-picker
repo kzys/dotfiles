@@ -85,7 +85,7 @@ def background(sid, selected, run=subprocess.run):
 
 
 def choices(panes, selected, projects, codex):
-    """Returns the lines for pick, for the projects in directory projects
+    """Yields the lines for pick, for the projects in directory projects
     and the selected agent's sessions, with codex holding Codex's. Fields:
     kind, directory, session, then what pick shows. Projects with an
     agent running in Herdr panes come first. Directory names start with
@@ -98,7 +98,7 @@ def choices(panes, selected, projects, codex):
         """Returns whether an agent runs in d or under it."""
         return any(c == str(d) or c.startswith(f"{d}/") for c in active)
 
-    lines = ["new\t\t\t+ new project"]
+    yield "new\t\t\t+ new project"
     for d in sorted(
         (d for d in projects.iterdir() if d.is_dir() and d.name[0] != "."),
         key=lambda d: (has_agent(d), d.name),
@@ -109,7 +109,7 @@ def choices(panes, selected, projects, codex):
             summary = "(no notes)"
         elif not summary:
             summary = "(no title)"
-        lines.append(f"project\t{d}\t\t{d.name}  {summary}")
+        yield f"project\t{d}\t\t{d.name}  {summary}"
         for t in sessions(d, selected, codex):
             sid = t["id"] if selected == "codex" else t.stem
             updated = t["updated_at"] if selected == "codex" else t.stat().st_mtime
@@ -119,10 +119,7 @@ def choices(panes, selected, projects, codex):
             if selected == "codex" and not ctx:
                 pct = codex_context(t["rollout_path"])
                 ctx = f"{pct}%" if pct is not None else ""
-            lines.append(
-                f"session\t{d}\t{sid}\t  {mark} {when} {ctx:>4}  {title(t, selected)}"
-            )
-    return lines
+            yield f"session\t{d}\t{sid}\t  {mark} {when} {ctx:>4}  {title(t, selected)}"
 
 
 def main():
