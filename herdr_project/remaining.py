@@ -5,6 +5,7 @@ import os
 import select
 import shutil
 import socket
+import subprocess
 import sys
 import textwrap
 import time
@@ -39,12 +40,14 @@ class PaneWatch:
     exits, without polling. Without the socket it can only sleep, and
     the caller polls."""
 
-    def __init__(self, pane):
+    def __init__(self, pane, socket_path=None):
+        """Watches pane through the socket at socket_path, by default
+        $HERDR_SOCKET_PATH."""
         self.pane = pane
         self.buf = b""
         try:
             self.sock = socket.socket(socket.AF_UNIX)
-            self.sock.connect(os.environ["HERDR_SOCKET_PATH"])
+            self.sock.connect(socket_path or os.environ["HERDR_SOCKET_PATH"])
             request = {"id": "1", "method": "events.subscribe",
                        "params": {"subscriptions": [{"type": "pane.closed"},
                                                  {"type": "pane.exited"}]}}
@@ -79,14 +82,20 @@ class PaneWatch:
         return False
 
 
-def follow_remaining(pane, herdr):
+def follow_remaining(pane, herdr, socket_path=None):
     """Prints the "## Remaining" section of the agent in Herdr pane
     until the pane is gone, refreshing every few seconds. herdr runs a
-    herdr command and returns its parsed output, or None if it fails. A
-    failed read shows as a message rather than ending the loop, since
-    that would close the pane."""
-    watch = PaneWatch(pane)
-    while (info := herdr("pane", "get", pane)) is not None:
+    herdr command and returns its parsed output, or raises if it fails,
+    which means the pane is gone. A failed read of the role shows as a
+    message rather than ending the loop, since that would close the
+    pane. Herdr's socket is at socket_path, by default
+    $HERDR_SOCKET_PATH."""
+    watch = PaneWatch(pane, socket_path)
+    while True:
+        try:
+            info = herdr("pane", "get", pane)
+        except (OSError, subprocess.CalledProcessError):
+            return
         try:
             role = (info["result"]["pane"].get("tokens") or {}).get("role") or ""
             out = remaining_section(role)

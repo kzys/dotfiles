@@ -11,10 +11,9 @@ from unittest.mock import patch
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / 'bin'))
-import herdr_agent
-
+sys.path.insert(0, str(ROOT))
 import install_codex
+from herdr_project import agent as herdr_agent
 
 
 def load(name, path):
