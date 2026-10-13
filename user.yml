@@ -6,6 +6,15 @@
         daemon_reload: true
         scope: user
   tasks:
+    # The services find this checkout through $DOTFILES, which install.sh
+    # sets in the user manager.
+    - command: systemctl --user show-environment
+      register: user_env
+      changed_when: false
+      check_mode: false
+    - assert:
+        that: user_env.stdout_lines | select('match', 'DOTFILES=.') | list | length > 0
+        fail_msg: DOTFILES isn't set; run install.sh first.
     # files/home mirrors the paths it installs to
     - copy:
         src: home/
