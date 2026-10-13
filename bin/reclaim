@@ -3,9 +3,10 @@
 # or re-downloaded on demand: Cargo target directories (those holding a
 # CACHEDIR.TAG) under the given directories, if any, package-manager
 # and tool caches, Lima's download cache, and Docker images, containers
-# and build cache not used by a container. On macOS, when run from a
-# terminal, it also offers to empty the Trash. Docker volumes and Lima
-# instances are kept. With -n, print what would be removed instead.
+# and build cache not used by a container. When run from a terminal,
+# it also offers to delete each stopped Lima VM and, on macOS, to empty
+# the Trash. Docker volumes are kept. With -n, print what would be
+# removed instead.
 #
 # usage: reclaim [-n] [dir...]
 
@@ -48,6 +49,7 @@ if [ $# -gt 0 ] && [ -z "${skip_targets:-}" ]; then
         -type d -name target -exec test -f {}/CACHEDIR.TAG \; -print -prune 2>/dev/null |
         while IFS= read -r d; do remove "$d"; done
 fi
+# TODO: Offer to remove stale Git worktrees under the given directories.
 
 for d in goimports Cypress; do
     remove "$HOME/Library/Caches/$d"
@@ -59,6 +61,23 @@ command -v go >/dev/null && run go clean -modcache
 command -v npm >/dev/null && run npm cache clean --force
 command -v pnpm >/dev/null && run pnpm store prune
 command -v limactl >/dev/null && run limactl prune
+# Lima VM disks are often large and can't be rebuilt, so ask about each.
+if command -v limactl >/dev/null && [ -t 0 ]; then
+    for name in $(limactl list --format '{{if eq .Status "Stopped"}}{{.Name}}{{end}}' 2>/dev/null); do
+        dir=$(limactl list --format '{{.Dir}}' "$name") || continue
+        size=$(du -sh "$dir" 2>/dev/null | awk '{ print $1 }')
+        answer=y
+        if [ -n "$dry" ]; then
+            echo "$size	$dir"
+        else
+            printf 'reclaim: Delete the stopped Lima VM %s (%s)? [y/N] ' "$name" "$size"
+            read -r answer || answer=
+        fi
+        case $answer in
+        [yY]*) run limactl delete "$name" ;;
+        esac
+    done
+fi
 # Emptying the Trash can't be undone, so ask first.
 if [ "$(uname)" = Darwin ] && [ -t 0 ]; then
     answer=y
