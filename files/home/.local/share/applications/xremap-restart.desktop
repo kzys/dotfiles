@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=Restart xremap
 Comment=Restart the xremap key remapping service
-Exec=bash -c 'exec "$HOME/ws/dotfiles/bin/xremap-restart"'
+Exec=bash -c 'exec "$DOTFILES/bin/xremap-restart"'
 Icon=input-keyboard
 Type=Application
 Categories=System;

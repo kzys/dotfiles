@@ -38,6 +38,13 @@ main() {
         link "$PWD/config/$file" "$HOME/.config/$file"
     done
 
+    # The session's services and apps find this checkout through $DOTFILES.
+    mkdir -p "$HOME/.config/environment.d"
+    echo "DOTFILES=$PWD" > "$HOME/.config/environment.d/dotfiles.conf"
+    if systemctl --user show-environment >/dev/null 2>&1; then
+        systemctl --user set-environment "DOTFILES=$PWD"
+    fi
+
     # Claude reads the same house rules under its own name.
     link "$PWD/config/opencode/AGENTS.md" "$HOME/.claude/CLAUDE.md"
     "$PWD/install-claude.py"

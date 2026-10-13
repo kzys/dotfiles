@@ -27,10 +27,11 @@ SELF = Path(__file__).resolve()
 
 def instructions():
     """Returns the instructions in herdr-project.md, filling in this
-    session's directory and start time."""
+    session's directory, its start time and this checkout's directory."""
     start = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M %Z")
     text = (SELF.parent / "herdr-project.md").read_text()
-    return text.replace("$PWD", os.getcwd()).replace("$start", start)
+    return (text.replace("$PWD", os.getcwd()).replace("$start", start)
+            .replace("$dotfiles", str(SELF.parent.parent)))
 
 
 def remaining_pane():
@@ -103,6 +104,8 @@ def command(selected, argv):
         if argv[:1] == ["--resume"]:
             argv = ["resume", *argv[1:]]
         rules = (SELF.parent.parent / "config/opencode/AGENTS.md").read_text()
+        # Codex doesn't expand imports, so give it a path it can open.
+        rules = rules.replace("@../../", f"@{SELF.parent.parent}/")
         return "codex", [
             # Scratch projects may be untrusted, where Codex defaults to
             # read-only permissions and rejects additional writable roots.
@@ -115,7 +118,7 @@ def command(selected, argv):
     # Run claude's commands in bash, not the login shell, whose quirks
     # trip it up.
     return "claude", [
-        "claude", "--add-dir", str(Path.home() / "ws/dotfiles"),
+        "claude", "--add-dir", str(SELF.parent.parent),
         "--append-system-prompt", instructions(), *argv,
     ], {"CLAUDE_CODE_SHELL": "/bin/bash"}
 

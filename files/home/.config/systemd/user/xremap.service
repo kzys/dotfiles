@@ -1,5 +1,5 @@
 [Service]
-ExecStart=%h/.cargo/bin/xremap --watch=device %h/ws/dotfiles/xremap.yml
+ExecStart=%h/.cargo/bin/xremap --watch=device ${DOTFILES}/xremap.yml
 
 [Install]
 WantedBy=graphical-session.target

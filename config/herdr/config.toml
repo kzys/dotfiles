@@ -10,7 +10,7 @@ prompt_new_tab_name = false
 
 tab_bar_right = [
   { type = "zoom" },
-  { type = "command", command = '"$HOME/ws/dotfiles/bin/herdr-agent-tally"', interval_seconds = 1, timeout_seconds = 2 },
+  { type = "command", command = '"$(dirname "$(readlink -f ~/.config/herdr/config.toml)")/../../bin/herdr-agent-tally"', interval_seconds = 1, timeout_seconds = 2 },
 ]
 tab_bar_right_separator = " · "
 
@@ -53,7 +53,7 @@ switch_workspace = "prefix+shift+1..9"
 key = "prefix+w"
 type = "popup"
 description = "ask agent"
-command = '"$HOME/ws/dotfiles/bin/herdr-project-picker"'
+command = '"$(dirname "$(readlink -f ~/.config/herdr/config.toml)")/../../bin/herdr-project-picker"'
 width = "80%"
 height = "60%"
 

@@ -70,4 +70,4 @@ framework). Where there is nothing to follow, use these rules.
 
 # Work
 
-@~/ws/dotfiles/work/AGENTS.md
+@../../work/AGENTS.md
