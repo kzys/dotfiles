@@ -1,0 +1,5 @@
+[Service]
+ExecStart=%h/.cargo/bin/xremap --watch=device {{ playbook_dir }}/xremap.yml
+
+[Install]
+WantedBy=graphical-session.target

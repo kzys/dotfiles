@@ -32,13 +32,16 @@ if [[ -d ~/sdk ]]; then
     go_sdk=$(ls -r ~/sdk | sort | tail -1)
 fi
 
+# This checkout, found through the ~/.zshrc symlink.
+dotfiles=${${(%):-%x}:A:h}
+
 # Path
 # http://www.clear-code.com/blog/2011/9/5.html
 typeset -U path
 path=(
     # My own scripts
     ~/ws/sandbox/bin(N)
-    ~/ws/dotfiles/bin(N)
+    $dotfiles/bin(N)
     ~/bin(N)
 
     # ./configure --prefix=$HOME/local
@@ -303,8 +306,8 @@ if [[ -d ~/.bun ]]; then
 fi
 
 # Work-specific settings, if this is a work machine.
-if [[ -f ~/ws/dotfiles/work/zshrc ]]; then
-    source ~/ws/dotfiles/work/zshrc
+if [[ -f $dotfiles/work/zshrc ]]; then
+    source $dotfiles/work/zshrc
 fi
 
 # THIS SECTION MUST BE AT THE END
