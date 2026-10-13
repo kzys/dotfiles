@@ -49,6 +49,7 @@ if [ $# -gt 0 ] && [ -z "${skip_targets:-}" ]; then
         -type d -name target -exec test -f {}/CACHEDIR.TAG \; -print -prune 2>/dev/null |
         while IFS= read -r d; do remove "$d"; done
 fi
+# TODO: Offer to remove stale Git worktrees under the given directories.
 
 for d in goimports Cypress; do
     remove "$HOME/Library/Caches/$d"
