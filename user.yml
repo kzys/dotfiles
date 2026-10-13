@@ -13,17 +13,6 @@
         mode: preserve
       notify: reload systemd
       tags: always
-    # templates/home does too, for files that name this checkout
-    - template:
-        src: "home/{{ item }}"
-        dest: "~/{{ item }}"
-        mode: preserve
-      loop:
-        - .config/systemd/user/atlassian-keepalive.service
-        - .config/systemd/user/xremap.service
-        - .local/share/applications/xremap-restart.desktop
-      notify: reload systemd
-      tags: always
     - meta: flush_handlers
     # The keep-alive service fails without its credentials, which live
     # outside this repository.
