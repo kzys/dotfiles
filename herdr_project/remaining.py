@@ -35,6 +35,22 @@ def remaining_section(role):
     return "\n".join(out) or f'No "## Remaining" section in {path} yet.'
 
 
+def follower_file(pane, env):
+    """Returns the file that names the agent pane Herdr pane pane
+    follows, under $XDG_STATE_HOME from env, by default ~/.local/state.
+    Herdr restores the pane as a shell, and zshrc resumes following
+    from it."""
+    state = env.get("XDG_STATE_HOME") or Path(env["HOME"]) / ".local/state"
+    return Path(state) / "herdr-project/remaining" / pane
+
+
+def remember_follower(pane, agent_pane, env):
+    """Records that Herdr pane pane follows agent_pane."""
+    path = follower_file(pane, env)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(agent_pane)
+
+
 class PaneWatch:
     """Learns from Herdr's socket when a pane closes or its process
     exits, without polling. Without the socket it can only sleep, and

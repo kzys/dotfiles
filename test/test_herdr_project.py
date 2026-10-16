@@ -15,7 +15,7 @@ from herdr_project import claude
 from herdr_project.herdr import ancestors, herdr, in_pane
 from herdr_project.match import clip, columns, spans, visible
 from herdr_project.notes import front_matter, notes, report_title, reported_role
-from herdr_project.remaining import follow_remaining
+from herdr_project.remaining import follow_remaining, remember_follower
 from herdr_project.screen import Loading, follow
 
 
@@ -107,6 +107,15 @@ def test_remaining_waits_for_role_and_ends_when_pane_exits(tmp_path, capsys):
     assert elapsed < 4
     assert 'Waiting for the agent to report its role.' in capsys.readouterr().out
     assert {'type': 'pane.exited'} in subscriptions
+
+
+def test_remembers_follower_where_zshrc_looks(tmp_path):
+    remember_follower('w1:p2', 'w1:p1', {'HOME': str(tmp_path)})
+    found = subprocess.run(
+        ['zsh', '-c', 'cat ${XDG_STATE_HOME:-$HOME/.local/state}/herdr-project/remaining/$HERDR_PANE_ID'],
+        env={'HOME': str(tmp_path), 'HERDR_PANE_ID': 'w1:p2'},
+        stdout=subprocess.PIPE, text=True, check=True).stdout
+    assert found == 'w1:p1'
 
 
 def test_runs_herdr(tmp_path):

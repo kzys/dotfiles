@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from herdr_project.agent import agent
 from herdr_project.herdr import herdr
 from herdr_project.notes import report_title
-from herdr_project.remaining import follow_remaining
+from herdr_project.remaining import follow_remaining, remember_follower
 
 SELF = Path(__file__).resolve()
 
@@ -58,6 +58,7 @@ def remaining_pane():
     except (OSError, subprocess.CalledProcessError):
         quiet("pane", "close", pane)
         raise
+    remember_follower(pane, env["HERDR_PANE_ID"], env)
     quiet("pane", "swap", "--source-pane", pane,
           "--target-pane", env["HERDR_PANE_ID"])
     quiet("pane", "focus", "--direction", "down", "--pane", pane)
