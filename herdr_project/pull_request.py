@@ -3,11 +3,8 @@ the Herdr agent working on each one, when its checks, review or state
 change."""
 
 import json
-import os
 import re
 import subprocess
-import sys
-import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -262,19 +259,13 @@ def table(prs, owners, panes_by_url):
     return [r for _, r in sorted(rows, key=lambda r: r[0])]
 
 
-def state_file(env):
-    """Returns the file that keeps the state of the pull requests,
-    under $XDG_STATE_HOME from env, by default ~/.local/state."""
-    state = env.get("XDG_STATE_HOME") or Path(env["HOME"]) / ".local/state"
-    return Path(state) / "herdr-project/pull-requests.json"
-
-
 def poll(herdr, root, path, gh="gh", orgs=()):
     """Checks the pull requests once: tells the user and their agents
     about changes since the state in path, saves the new state there,
-    and returns the lines of table. herdr runs a herdr command and
-    returns its parsed output. The projects are under root. Only pull
-requests in orgs count, or all without orgs."""
+    and returns the lines of table and the projects of the pull requests
+    by url. herdr runs a herdr command and returns its parsed output.
+    The projects are under root. Only pull requests in orgs count, or
+    all without orgs."""
     try:
         old = json.loads(path.read_text())
     except (OSError, ValueError):
@@ -301,29 +292,5 @@ requests in orgs count, or all without orgs."""
                 pass
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(remember(old, prs), indent=1))
-    return table(prs, owners, panes_by_url)
+    return table(prs, owners, panes_by_url), owners
 
-
-def watch(herdr, root, path, orgs=(), interval=120):
-    """Polls the pull requests in orgs, or all without orgs, every
-    interval seconds, printing the table, until interrupted. Failures show instead of the table."""
-    while True:
-        try:
-            lines = poll(herdr, root, path, orgs=orgs)
-        except (OSError, ValueError, KeyError, TypeError,
-                subprocess.CalledProcessError) as e:
-            lines = [f"Cannot check pull requests: {e!r}"]
-        stamp = datetime.now().strftime("%H:%M")
-        sys.stdout.write("\033[H\033[2J" + f"Pull requests at {stamp}\n" + "\n".join(lines))
-        sys.stdout.flush()
-        time.sleep(interval)
-
-
-def main(herdr, orgs=()):
-    """Watches the pull requests in orgs, or all without orgs, of the
-    projects under ~/project."""
-    try:
-        watch(herdr, Path.home() / "project", state_file(os.environ), orgs)
-    except KeyboardInterrupt:
-        pass
-    return 0

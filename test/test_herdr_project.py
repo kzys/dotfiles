@@ -12,7 +12,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from herdr_project import claude, pull_request
+from herdr_project import claude, pull_request, slack, watch
 from herdr_project.herdr import ancestors, herdr, in_pane
 from herdr_project.match import clip, columns, spans, visible
 from herdr_project.notes import front_matter, notes, report_title, reported_role
@@ -353,11 +353,13 @@ def test_polls_pull_requests(tmp_path):
         return {}
 
     state = tmp_path / 'state/pull-requests.json'
-    lines = pull_request.poll(fake_herdr, tmp_path / 'project', state, gh=str(gh))
+    lines, owners = pull_request.poll(fake_herdr, tmp_path / 'project', state, gh=str(gh))
+    assert owners['https://github.com/org/app/pull/1']['project'] == str(
+        tmp_path / 'project/20261001-a')
     assert lines == [f'… ● {"app#1":<24} {"one":<20} PR 1']
     assert calls == [('pane', 'list')]
     calls.clear()
-    lines = pull_request.poll(fake_herdr, tmp_path / 'project', state, gh=str(gh))
+    lines, _ = pull_request.poll(fake_herdr, tmp_path / 'project', state, gh=str(gh))
     assert lines[0].startswith('✗ ● app#1')
     url = 'https://github.com/org/app/pull/1'
     assert calls[1:] == [
@@ -375,3 +377,75 @@ def test_searches_pull_requests_in_orgs():
         'is:pr author:@me archived:false updated:>=2026-10-02 sort:updated-desc')
     assert pull_request.search_query(since, ['a', 'b']) == (
         'is:pr author:@me archived:false org:a org:b updated:>=2026-10-02 sort:updated-desc')
+
+
+def conversation(channel_id, thread_ts, last_ts, waiting=False, links=()):
+    return {'channel_id': channel_id, 'thread_ts': thread_ts, 'channel': f'#{channel_id}',
+            'summary': f'about {thread_ts}', 'waiting_on_me': waiting, 'last_ts': last_ts,
+            'links': list(links)}
+
+
+def test_reads_slack_conversations():
+    found = [conversation('C1', '1.5', '2.0')]
+    assert slack.conversations({'structured_output': {'conversations': found}}) == found
+    with pytest.raises(ValueError, match='denied'):
+        slack.conversations({'is_error': True, 'result': 'denied'})
+    with pytest.raises(ValueError):
+        slack.conversations({'result': 'no schema'})
+
+
+def test_finds_projects_of_slack_conversations():
+    texts = [('/p/a', 'main', 'Slack thread C1 p1700000000123456 asks for review'),
+             ('/p/b', None, 'see C2 for context'),
+             ('/p/c', 'dm', 'DM in D9 about the rollout')]
+    pr_owners = {'https://github.com/o/r/pull/1': {'project': '/p/x', 'dir': None, 'role': None}}
+
+    def find(c):
+        return (slack.owner(c, texts, pr_owners) or {}).get('project')
+
+    assert find(conversation('C1', '1700000000123456.000000', '0')) is None
+    assert find(conversation('C1', '1700000000.123456', '0')) == '/p/a'
+    assert find(conversation('D9', '', '0')) == '/p/c'
+    assert find(conversation('C2', '17.5', '0', links=['https://github.com/o/r/pull/1'])) == '/p/x'
+    assert find(conversation('C3', '18.5', '0')) is None
+
+
+def test_reports_slack_conversations_waiting_on_me():
+    before = [conversation('C1', '1.0', '100', waiting=True), conversation('C2', '2.0', '100')]
+    assert slack.events(None, before) == []
+    old = slack.remember(None, before, now=200)
+    after = [conversation('C1', '1.0', '100', waiting=True),
+             conversation('C2', '2.0', '150', waiting=True),
+             conversation('C3', '3.0', '160', waiting=True),
+             conversation('C4', '4.0', '170')]
+    assert [c['channel_id'] for c in slack.events(old, after)] == ['C2', 'C3']
+    assert slack.remember(old, after, now=100 + 7 * 86400 + 10) == {
+        'C2/2.0': '150', 'C3/3.0': '160', 'C4/4.0': '170'}
+
+
+def test_polls_slack(tmp_path):
+    (tmp_path / 'a').mkdir()
+    (tmp_path / 'a/README.md').write_text('---\nname: alpha\n---\n')
+    texts = [(str(tmp_path / 'a'), None, 'thread C1 p15')]
+    runs = [[conversation('C1', '1.5', '10')],
+            [conversation('C1', '1.5', '20', waiting=True), conversation('C2', '', '5')]]
+    calls = []
+    state = tmp_path / 'state/slack.json'
+
+    def fake_herdr(*args):
+        calls.append(args)
+        return {}
+
+    assert slack.poll(fake_herdr, texts, state, {}, fetch=lambda d: runs.pop(0)) == [
+        f'  {"#C1":<26} {"alpha":<20} about 1.5']
+    assert calls == []
+    lines = slack.poll(fake_herdr, texts, state, {}, fetch=lambda d: runs.pop(0))
+    assert lines[0] == f'* {"#C1":<26} {"alpha":<20} about 1.5'
+    assert calls == [('notification', 'show', 'Slack #C1', '--body', 'about 1.5 (a)',
+                      '--sound', 'request')]
+
+
+def test_draws_watch_screen():
+    at = datetime(2026, 10, 16, 15, 4)
+    assert watch.screen([('PRs', at, ['a', 'b']), ('Slack', None, ['c'])]) == (
+        'PRs at 15:04\na\nb\n\nSlack\nc')
