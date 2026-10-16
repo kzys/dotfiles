@@ -12,11 +12,15 @@ tab of the project's workspace, or in a new workspace labeled with the
 name from the front matter. A session running in the background is
 stopped and resumed if idle, and attached otherwise.
 
-With --inbox it lists instead what waits on the user in each project:
+Closed projects, whose README.md front matter has a closed field, come
+after the others with no agent running in Herdr.
+
+With --inbox it lists instead what waits on the user in each open project:
 items its agents' notes tag [you], untagged ones that likely do (marked
 "you?"), and what herdr-project --watch found. Enter on one switches to
 or resumes the session of the agent whose item it is, or that worked on
 the project last, and on one without a project starts a new project.
+Projects that look finished are listed with a suggestion to close them.
 """
 
 import json
@@ -108,7 +112,7 @@ def choices(panes, selected, projects, codex):
     yield "new\t\t\t+ new project"
     for d in sorted(
         (d for d in projects.iterdir() if d.is_dir() and d.name[0] != "."),
-        key=lambda d: (has_agent(d), d.name),
+        key=lambda d: (has_agent(d), not front_matter(d, "closed"), d.name),
         reverse=True,
     ):
         summary = front_matter(d, "title")
@@ -116,6 +120,8 @@ def choices(panes, selected, projects, codex):
             summary = "(no notes)"
         elif not summary:
             summary = "(no title)"
+        if front_matter(d, "closed"):
+            summary += " (closed)"
         yield f"project\t{d}\t\t{d.name}  {summary}"
         for t in sessions(d, selected, codex):
             sid = t["id"] if selected == "codex" else t.stem
@@ -130,8 +136,8 @@ def choices(panes, selected, projects, codex):
 
 
 # How inbox rows show where an item comes from.
-SOURCES = {"you": "you", "?": "you?", "maybe": "maybe", "pr": "pr", "slack": "slack",
-           "linear": "linear"}
+SOURCES = {"you": "you", "?": "you?", "maybe": "maybe", "close": "close?", "pr": "pr",
+           "slack": "slack", "linear": "linear"}
 
 
 def session_for(directory, role, panes, selected, codex):
@@ -162,15 +168,16 @@ def inbox_choices(panes, selected, projects, codex, watched):
     and watched, the watcher's items, under their projects, newest first,
     then the watcher's items without a project."""
     running = {p["session"] for p in panes if p["session"] and p["agent"] == selected}
-    dirs = sorted((d for d in projects.iterdir() if d.is_dir() and d.name[0] != "."),
+    dirs = sorted((d for d in projects.iterdir()
+                   if d.is_dir() and d.name[0] != "." and not front_matter(d, "closed")),
                   reverse=True)
     known = {str(d) for d in dirs}
     by_project = {}
     for i in watched:
-        # Items of projects since removed count as having none.
+        # Items of projects since removed or closed count as having none.
         by_project.setdefault(i["project"] if i["project"] in known else None, []).append(i)
     for d in dirs:
-        items = sorted(inbox.note_items(d) + by_project.get(str(d), []), key=inbox.rank)
+        items = sorted(inbox.project_items(d, by_project.get(str(d), [])), key=inbox.rank)
         if not items:
             continue
         yield f"project\t{d}\t\t{d.name}  {front_matter(d, 'title') or '(no title)'}"

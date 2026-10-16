@@ -33,10 +33,16 @@ SELF = Path(__file__).resolve()
 
 
 def instructions():
-    """Returns the instructions in herdr-project.md, filling in this
-    session's directory, its start time and this checkout's directory."""
+    """Returns the instructions in herdr-project.md, followed by those in
+    work/herdr-project.md if this checkout has it, filling in this
+    session's directory, its start time and this checkout's directory.
+    work/ is gitignored, so it can hold rules that must stay private."""
     start = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M %Z")
     text = (SELF.parent / "herdr-project.md").read_text()
+    try:
+        text += "\n" + (SELF.parent.parent / "work/herdr-project.md").read_text()
+    except OSError:
+        pass
     return (text.replace("$PWD", os.getcwd()).replace("$start", start)
             .replace("$dotfiles", str(SELF.parent.parent)))
 

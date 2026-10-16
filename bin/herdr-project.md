@@ -52,3 +52,28 @@ About 5 minutes after the session started, once the task is clear,
 write README.md if needed and rename the Herdr workspace to its name,
 once:
 herdr-name-workspace <name>
+
+When the user says the task is done, close the project, so that its
+directory can be deleted:
+
+1. Read every .md file in this directory, including other agents'
+   notes, and make sure nothing is left behind: each open item is done,
+   or carried by what you close the project with.
+2. Keep what a later task would need to know, such as how a system
+   behaves, a fix that worked or a step that is easy to get wrong,
+   where the closing rules below say, or else in the user's
+   instructions after asking them. Leave out this task's history.
+3. Follow the closing rules below, if any, then add a closed field to
+   the front matter of README.md with a link to what carries the
+   outcome and any remaining work, such as a pull request or a ticket,
+   or a few words on the outcome if nothing does, and empty your
+   "## Remaining" section:
+
+   closed: <link>
+
+4. Offer to delete the directory, after checking that no other agent
+   pane in `herdr pane list` is in it and listing what else it holds,
+   such as scripts, logs and data. Delete it only if the user agrees.
+   Remove its git worktrees first with git worktree remove, never with
+   --force: if one has uncommitted changes or a branch that isn't
+   pushed, stop and tell the user.
