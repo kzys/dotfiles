@@ -75,12 +75,21 @@ def owner(conversation, texts, pr_owners):
     pull_request.project_of finds it from texts and pr_owners: the one
     whose notes mention the thread or, for a DM, the channel, else that
     of a pull request it links to."""
-    ts = conversation["thread_ts"].replace(".", "")
+    ts = re.escape(conversation["thread_ts"].replace(".", ""))
     if ts:
         pattern = rf"(?<!\d)p?{ts}(?!\d)"
     else:
         pattern = rf"\b{re.escape(conversation['channel_id'])}\b"
     return pull_request.project_of(pattern, conversation.get("links"), texts, pr_owners)
+
+
+def last(conversation):
+    """Returns the ts of conversation's latest message, written the same
+    way however Claude wrote it, if it is a number."""
+    try:
+        return f"{float(conversation['last_ts']):.6f}"
+    except ValueError:
+        return conversation["last_ts"]
 
 
 def events(old, conversations):
@@ -90,7 +99,7 @@ def events(old, conversations):
     if old is None:
         return []
     return [c for c in conversations
-            if c["waiting_on_me"] and old.get(key(c)) != c["last_ts"]]
+            if c["waiting_on_me"] and old.get(key(c)) != last(c)]
 
 
 def remember(old, conversations, now, days=7):
@@ -99,13 +108,13 @@ def remember(old, conversations, now, days=7):
     days days before now, a Unix time."""
     state = dict(old or {})
     for c in conversations:
-        state[key(c)] = c["last_ts"]
+        state[key(c)] = last(c)
 
     def recent(ts):
         try:
             return float(ts) > now - days * 86400
         except ValueError:
-            return False
+            return True  # Keep what Claude wrote oddly, or it notifies every time.
 
     return {k: ts for k, ts in state.items() if recent(ts)}
 

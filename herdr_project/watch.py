@@ -2,7 +2,6 @@
 issues together, each at its own pace, in one pane."""
 
 import os
-import subprocess
 import sys
 import threading
 import time
@@ -11,7 +10,6 @@ from pathlib import Path
 
 from herdr_project import linear, pull_request, slack
 
-ERRORS = (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError)
 
 
 def state_dir(env):
@@ -46,8 +44,8 @@ def watch(herdr, root, state, orgs=(), pr_interval=300, queue_interval=1800):
     def show():
         with lock:
             text = screen([tuple(prs), *(tuple(section) for _, section, _ in queues)])
-        sys.stdout.write("\033[H\033[2J" + text)
-        sys.stdout.flush()
+            sys.stdout.write("\033[H\033[2J" + text)
+            sys.stdout.flush()
 
     def queue_loop(module, section, name):
         while True:
@@ -56,7 +54,7 @@ def watch(herdr, root, state, orgs=(), pr_interval=300, queue_interval=1800):
             try:
                 lines = module.poll(herdr, pull_request.notes_texts(root), state / name,
                                     owners)
-            except ERRORS as e:
+            except Exception as e:  # Show any failure rather than end the thread.
                 lines = [f"Cannot check {section[0]}: {e!r}"]
             with lock:
                 section[1:] = [datetime.now(), lines]
@@ -69,7 +67,7 @@ def watch(herdr, root, state, orgs=(), pr_interval=300, queue_interval=1800):
         try:
             lines, owners = pull_request.poll(herdr, root, state / "pull-requests.json",
                                               orgs=orgs)
-        except ERRORS as e:
+        except Exception as e:  # Show any failure rather than end the watcher.
             lines, owners = [f"Cannot check pull requests: {e!r}"], {}
         with lock:
             prs[1:] = [datetime.now(), lines]

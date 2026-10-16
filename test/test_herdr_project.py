@@ -421,7 +421,7 @@ def test_reports_slack_conversations_waiting_on_me():
              conversation('C4', '4.0', '170')]
     assert [c['channel_id'] for c in slack.events(old, after)] == ['C2', 'C3']
     assert slack.remember(old, after, now=100 + 7 * 86400 + 10) == {
-        'C2/2.0': '150', 'C3/3.0': '160', 'C4/4.0': '170'}
+        'C2/2.0': '150.000000', 'C3/3.0': '160.000000', 'C4/4.0': '170.000000'}
 
 
 def test_polls_slack(tmp_path):
@@ -486,13 +486,56 @@ def test_polls_linear(tmp_path):
         calls.append(args)
         return {}
 
-    assert linear.poll(fake_herdr, texts, state, {}, fetch=lambda d: runs.pop(0)) == [
+    assert linear.poll(fake_herdr, texts, state, {}, fetch=lambda d: runs.pop(0),
+                       now=datetime(2026, 10, 16)) == [
         f'* ABC-1     Backlog     {"":<20} about ABC-1',
         f'  ABC-2     Backlog     {"a":<20} about ABC-2']
     assert calls == []
-    assert linear.poll(fake_herdr, texts, state, {}, fetch=lambda d: runs.pop(0)) == [
+    assert linear.poll(fake_herdr, texts, state, {}, fetch=lambda d: runs.pop(0),
+                       now=datetime(2026, 10, 16)) == [
         f'* ABC-2     In Progress {"a":<20} about ABC-2',
         f'* ABC-1     Backlog     {"":<20} about ABC-1',
         f'  ABC-3     Backlog     {"":<20} about ABC-3']
     assert calls == [('notification', 'show', 'Linear ABC-2', '--body', 'about ABC-2 (a)',
                       '--sound', 'request')]
+
+
+def test_compares_times_however_claude_writes_them():
+    old = linear.remember(None, [issue('ABC-1', '2026-10-15T10:00:00.000Z', waiting=True),
+                                 issue('ABC-2', 'yesterday', waiting=True),
+                                 issue('ABC-3', '2026-08-01T00:00:00Z')],
+                          now=datetime(2026, 10, 16))
+    assert old == {'ABC-1': '2026-10-15T10:00:00', 'ABC-2': 'yesterday'}
+    again = [issue('ABC-1', '2026-10-15T03:00:00-07:00', waiting=True),
+             issue('ABC-2', 'yesterday', waiting=True)]
+    assert linear.events(old, again) == []
+    # One left out doesn't count as new when it is back.
+    assert linear.remember(old, [], now=datetime(2026, 10, 16)) == old
+
+    convs = [conversation('C1', '1.5', '1700000000.1', waiting=True)]
+    old = slack.remember(None, convs, now=1700000100)
+    assert slack.events(old, [conversation('C1', '1.5', '1700000000.100000', waiting=True)]) == []
+
+
+def test_matches_odd_thread_ts_literally():
+    texts = [('/p/a', None, 'p12(3')]
+    assert slack.owner(conversation('C1', '12(3', '0'), texts, {})['project'] == '/p/a'
+    assert slack.owner(conversation('C1', '1.2(', '0'), [], {}) is None
+
+
+def test_reports_errored_and_unnamed_checks():
+    node = pr_node(1, 'a', checks='PENDING')
+    old = pull_request.remember(None, pull_request.pull_requests(search(node)))
+    node = pr_node(1, 'a', checks='ERROR')
+    node['commits']['nodes'][0]['commit']['statusCheckRollup']['contexts']['nodes'].append(
+        {'__typename': 'StatusContext', 'state': 'ERROR'})
+    [(_, message, wake)] = pull_request.events(old, pull_request.pull_requests(search(node)))
+    assert (message, wake) == ('checks failed: ?', True)
+
+
+def test_needs_the_pull_requests_repo_in_the_worktree():
+    pr = pull_request.pull_requests(search(pr_node(1, 'me/one', repo='Org/App')))[0]
+    def tree(repo):
+        return [{'project': '/p/a', 'dir': '/p/a/app', 'branch': 'me/one', 'repo': repo}]
+    assert pull_request.owner(pr, tree('org/app'), [])['dir'] == '/p/a/app'
+    assert pull_request.owner(pr, tree(None), []) is None

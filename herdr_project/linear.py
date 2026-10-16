@@ -5,7 +5,7 @@ starts waiting on them."""
 import json
 import re
 import subprocess
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from herdr_project import headless, pull_request
@@ -80,12 +80,37 @@ def events(old, issues):
     if old is None:
         return []
     return [i for i in issues
-            if i["waiting_on_me"] and old.get(i["identifier"]) != i["updated_at"]]
+            if i["waiting_on_me"] and old.get(i["identifier"]) != updated(i)]
 
 
-def remember(issues):
-    """Returns the state to compare the next issues with."""
-    return {i["identifier"]: i["updated_at"] for i in issues}
+def updated(issue):
+    """Returns when issue was last updated, in UTC to the second, however
+    Claude wrote it, if it is an ISO time."""
+    try:
+        at = datetime.fromisoformat(issue["updated_at"])
+    except ValueError:
+        return issue["updated_at"]
+    if at.tzinfo:
+        at = at.astimezone(timezone.utc)
+    return at.replace(tzinfo=None, microsecond=0).isoformat()
+
+
+def remember(old, issues, now, days=30):
+    """Returns the state to compare the next issues with: old updated
+    with issues, so that one Claude leaves out once doesn't count as new
+    when it is back, without those last updated days days before now, a
+    naive UTC datetime."""
+    state = dict(old or {})
+    for i in issues:
+        state[i["identifier"]] = updated(i)
+
+    def recent(at):
+        try:
+            return datetime.fromisoformat(at) > now - timedelta(days=days)
+        except ValueError:
+            return True  # Keep what Claude wrote oddly, or it notifies every time.
+
+    return {k: at for k, at in state.items() if recent(at)}
 
 
 def table(issues, owners):
@@ -104,12 +129,13 @@ def table(issues, owners):
     return [r for _, r in sorted(rows, key=lambda r: r[0])]
 
 
-def poll(herdr, texts, path, pr_owners, fetch=fetch):
+def poll(herdr, texts, path, pr_owners, fetch=fetch, now=None):
     """Checks the Linear issues once with fetch: tells the user about
     those newly waiting on them since the state in path, saves the new
     state there, and returns the lines of table. herdr runs a herdr
     command. texts are the projects' notes, and pr_owners the projects
-    of pull requests by url."""
+    of pull requests by url. now is a naive UTC datetime, by default
+    the current time."""
     try:
         old = json.loads(path.read_text())
     except (OSError, ValueError):
@@ -125,5 +151,6 @@ def poll(herdr, texts, path, pr_owners, fetch=fetch):
                   "--body", f"{i['summary']}{where}", "--sound", "request")
         except (OSError, subprocess.CalledProcessError):
             pass
-    path.write_text(json.dumps(remember(found), indent=1))
+    now = now or datetime.now(timezone.utc).replace(tzinfo=None)
+    path.write_text(json.dumps(remember(old, found, now), indent=1))
     return table(found, owners)

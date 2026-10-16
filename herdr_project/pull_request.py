@@ -73,7 +73,7 @@ def pull_requests(data):
         rollup = (commits[0].get("commit") or {}).get("statusCheckRollup") or {}
         contexts = (rollup.get("contexts") or {}).get("nodes") or []
         failed = sorted({
-            c.get("name") or c.get("context") for c in contexts
+            c.get("name") or c.get("context") or "?" for c in contexts
             if (c.get("conclusion") or c.get("state")) in FAILED
         })
         prs.append({
@@ -153,7 +153,7 @@ def owner(pr, trees, texts):
     notes mention pr or None. A worktree on the branch wins over notes.
     Returns None if no project is."""
     for t in trees:
-        if t["branch"] == pr["branch"] and t["repo"] in (pr["repo"], None):
+        if t["branch"] == pr["branch"] and (t["repo"] or "").lower() == pr["repo"].lower():
             return {"project": t["project"], "dir": t["dir"], "role": None}
     found = None
     for project, role, text in texts:
@@ -227,8 +227,8 @@ def events(old, prs):
     for pr in prs:
         before = old.get(pr["url"])
         if before is None:
-            if pr["state"] == "OPEN" and pr["checks"] == "FAILURE":
-                out.append((pr, f"checks failed: {', '.join(pr['failed'])}", True))
+            if pr["state"] == "OPEN" and pr["checks"] in FAILED:
+                out.append((pr, failure(pr), True))
             continue
         if pr["state"] != before["state"]:
             out.append((pr, pr["state"].lower(), False))
@@ -236,14 +236,19 @@ def events(old, prs):
         if pr["state"] != "OPEN":
             continue
         if pr["checks"] != before["checks"]:
-            if pr["checks"] == "FAILURE":
-                out.append((pr, f"checks failed: {', '.join(pr['failed'])}", True))
+            if pr["checks"] in FAILED:
+                out.append((pr, failure(pr), True))
             elif pr["checks"] == "SUCCESS":
                 out.append((pr, "checks passed", False))
         if pr["review"] != before["review"] and pr["review"] in (
                 "APPROVED", "CHANGES_REQUESTED"):
             out.append((pr, pr["review"].lower().replace("_", " "), False))
     return out
+
+
+def failure(pr):
+    """Returns the message saying pr's checks failed."""
+    return "checks failed" + (f": {', '.join(pr['failed'])}" if pr["failed"] else "")
 
 
 def remember(old, prs):
