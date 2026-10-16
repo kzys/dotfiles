@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import socket
 import subprocess
 import sys
@@ -110,6 +111,7 @@ def test_remaining_waits_for_role_and_ends_when_pane_exits(tmp_path, capsys):
     assert {'type': 'pane.exited'} in subscriptions
 
 
+@pytest.mark.skipif(shutil.which('zsh') is None, reason='zsh is not installed')
 def test_remembers_follower_where_zshrc_looks(tmp_path):
     remember_follower('w1:p2', 'w1:p1', {'HOME': str(tmp_path)})
     found = subprocess.run(
