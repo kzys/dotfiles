@@ -6,6 +6,8 @@ import os
 import re
 from pathlib import Path
 
+from herdr_project.notes import front_matter
+
 # Untagged items that likely wait on the user, in notes written before
 # agents were told to tag them.
 LIKELY = re.compile(
@@ -26,7 +28,7 @@ SOFT = re.compile(
 SETTLED = ("none", "nothing", "done", "[x]")
 
 # The order of marks in the inbox, most pressing first.
-ORDER = {"you": 0, "?": 1, "maybe": 2}
+ORDER = {"you": 0, "?": 1, "maybe": 2, "close": 3}
 
 
 def remaining_items(text):
@@ -83,6 +85,41 @@ def rank(item):
     """Returns where item goes in the inbox, the most pressing first;
     what the watcher found goes with the likely ones."""
     return ORDER.get(item["mark"], ORDER["?"])
+
+
+def settled(directory):
+    """Reports whether the project in directory looks finished: it has
+    agents' notes, each has a "## Remaining" section whose items all say
+    nothing is left or are ticked, and at least one has such an item,
+    since an empty section may only not be written yet."""
+    found = False
+    for f in Path(directory).glob("AGENT-*.md"):
+        try:
+            text = f.read_text(errors="replace")
+        except OSError:
+            continue
+        if "## Remaining" not in text.splitlines():
+            return False
+        items = remaining_items(text)
+        if not all(i.lower().startswith(SETTLED) for i in items):
+            return False
+        found = found or bool(items)
+    return found
+
+
+def project_items(directory, watched=()):
+    """Returns what waits on the user in the project in directory, as
+    note_items does, followed by watched, the watcher's items for it, or
+    an item suggesting to close it if it looks finished and the watcher
+    found nothing. A closed project has none."""
+    if front_matter(directory, "closed"):
+        return []
+    if watched:
+        return note_items(directory) + list(watched)
+    if settled(directory):
+        return [{"role": None, "mark": "close",
+                 "text": "Nothing remaining; tell its agent the task is done to close it"}]
+    return note_items(directory)
 
 
 def read_sources(path):

@@ -119,8 +119,17 @@ class TestAgent:
     def test_picker_lists_inbox(self):
         picker = load('herdr_picker_inbox', ROOT / 'bin/herdr-project-picker')
         old, new, idle = self.home / '20261001-a', self.home / '20261002-b', self.home / '20261003-c'
-        for d in (old, new, idle):
+        done, closed = self.home / '20261004-d', self.home / '20261005-e'
+        for d in (old, new, idle, done, closed):
             d.mkdir()
+        (done / 'AGENT-main.md').write_text('## Remaining\n- None.\n\n## Log\n- did it\n')
+        (closed / 'README.md').write_text('---\ntitle: Closed\nclosed: https://x/1\n---\n')
+        (closed / 'AGENT-main.md').write_text('## Remaining\n- [you] Decide Y\n')
+        fresh, failing = self.home / '20261006-f', self.home / '20261007-g'
+        for d in (fresh, failing):
+            d.mkdir()
+        (fresh / 'AGENT-main.md').write_text('## Remaining\n\n## Log\n')
+        (failing / 'AGENT-main.md').write_text('## Remaining\n- None.\n')
         (old / 'README.md').write_text('---\ntitle: Old work\n---\n')
         (old / 'AGENT-main.md').write_text('## Remaining\n- Offer: a follow-up\n- [you] Decide X\n')
         (idle / 'AGENT-main.md').write_text('## Remaining\n- Write tests\n')
@@ -130,9 +139,16 @@ class TestAgent:
         watched = [{'project': str(new), 'role': 'main', 'mark': 'pr', 'text': 'app#1 failed'},
                    {'project': None, 'role': None, 'mark': 'slack', 'text': 'Slack #x: hi'},
                    {'project': str(self.home / 'gone'), 'role': None, 'mark': 'linear',
-                    'text': 'ABC-1: moved'}]
+                    'text': 'ABC-1: moved'},
+                   {'project': str(closed), 'role': None, 'mark': 'pr', 'text': 'app#2 failed'},
+                   {'project': str(failing), 'role': None, 'mark': 'pr', 'text': 'app#3 failed'}]
         rows = list(picker.inbox_choices(panes, 'codex', self.home, codex, watched))
         assert rows == [
+            f'project\t{failing}\t\t20261007-g  (no title)',
+            f'session\t{failing}\t\t    pr     app#3 failed',
+            f'project\t{done}\t\t20261004-d  (no title)',
+            (f'session\t{done}\t\t    close? Nothing remaining; tell its agent the task is done '
+             'to close it'),
             f'project\t{new}\t\t20261002-b  (no title)',
             f'session\t{new}\ts2\t  ● pr     app#1 failed',
             f'project\t{old}\t\t20261001-a  Old work',
@@ -140,6 +156,7 @@ class TestAgent:
             f'session\t{old}\ts1\t    maybe  Offer: a follow-up',
             'new\t\t\t+ slack  Slack #x: hi',
             'new\t\t\t+ linear ABC-1: moved',
+            'new\t\t\t+ pr     app#2 failed',
         ]
 
     def test_picker_reuses_workspace_with_shell_pane(self):
