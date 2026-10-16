@@ -5,6 +5,7 @@ one starts waiting on them."""
 import json
 import re
 import subprocess
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -61,7 +62,7 @@ def fetch(state_dir, days=3, command="claude"):
     """Returns the user's Slack conversations of the last days days as
     the headless Claude session in state_dir reports them. Raises if it
     fails."""
-    since = datetime.now() - timedelta(days=days)
+    since = datetime.now().astimezone() - timedelta(days=days)
     return headless.ask(state_dir, prompt(since), SCHEMA, TOOLS, "conversations", command)
 
 
@@ -155,5 +156,5 @@ def poll(herdr, texts, path, pr_owners, fetch=fetch):
                   "--body", f"{c['summary']}{where}", "--sound", "request")
         except (OSError, subprocess.CalledProcessError):
             pass
-    path.write_text(json.dumps(remember(old, found, datetime.now().timestamp()), indent=1))
+    path.write_text(json.dumps(remember(old, found, time.time()), indent=1))
     return table(found, owners)

@@ -5,7 +5,7 @@ starts waiting on them."""
 import json
 import re
 import subprocess
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from herdr_project import headless, pull_request
@@ -60,7 +60,7 @@ def prompt(created_since, recent_since):
 def fetch(state_dir, command="claude"):
     """Returns the user's active Linear issues as the headless Claude
     session in state_dir reports them. Raises if it fails."""
-    now = datetime.now()
+    now = datetime.now().astimezone()
     return headless.ask(state_dir, prompt(now - timedelta(days=14), now - timedelta(days=3)),
                         SCHEMA, TOOLS, "issues", command)
 
@@ -91,22 +91,21 @@ def updated(issue):
     except ValueError:
         return issue["updated_at"]
     if at.tzinfo:
-        at = at.astimezone(timezone.utc)
+        at = at.astimezone(UTC)
     return at.replace(tzinfo=None, microsecond=0).isoformat()
 
 
 def remember(old, issues, now, days=30):
     """Returns the state to compare the next issues with: old updated
     with issues, so that one Claude leaves out once doesn't count as new
-    when it is back, without those last updated days days before now, a
-    naive UTC datetime."""
+    when it is back, without those last updated days days before now."""
     state = dict(old or {})
     for i in issues:
         state[i["identifier"]] = updated(i)
 
     def recent(at):
         try:
-            return datetime.fromisoformat(at) > now - timedelta(days=days)
+            return datetime.fromisoformat(at).replace(tzinfo=UTC) > now - timedelta(days=days)
         except ValueError:
             return True  # Keep what Claude wrote oddly, or it notifies every time.
 
@@ -124,8 +123,9 @@ def table(issues, owners):
         if found:
             name = front_matter(found["project"], "name") or Path(found["project"]).name
         mark = "*" if i["waiting_on_me"] else " "
-        rows.append((not i["waiting_on_me"], f"{mark} {i['identifier']:<9} "
-                                             f"{i['state'][:11]:<11} {name:<20} {i['summary']}"))
+        rows.append((not i["waiting_on_me"], (f"{mark} {i['identifier']:<9} "
+                                              f"{i['state'][:11]:<11} {name:<20} "
+                                              f"{i['summary']}")))
     return [r for _, r in sorted(rows, key=lambda r: r[0])]
 
 
@@ -134,8 +134,7 @@ def poll(herdr, texts, path, pr_owners, fetch=fetch, now=None):
     those newly waiting on them since the state in path, saves the new
     state there, and returns the lines of table. herdr runs a herdr
     command. texts are the projects' notes, and pr_owners the projects
-    of pull requests by url. now is a naive UTC datetime, by default
-    the current time."""
+    of pull requests by url. now is the current time unless given."""
     try:
         old = json.loads(path.read_text())
     except (OSError, ValueError):
@@ -151,6 +150,6 @@ def poll(herdr, texts, path, pr_owners, fetch=fetch, now=None):
                   "--body", f"{i['summary']}{where}", "--sound", "request")
         except (OSError, subprocess.CalledProcessError):
             pass
-    now = now or datetime.now(timezone.utc).replace(tzinfo=None)
+    now = now or datetime.now(UTC)
     path.write_text(json.dumps(remember(old, found, now), indent=1))
     return table(found, owners)

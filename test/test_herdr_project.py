@@ -5,7 +5,7 @@ import subprocess
 import sys
 import threading
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -372,7 +372,7 @@ def test_polls_pull_requests(tmp_path):
 
 
 def test_searches_pull_requests_in_orgs():
-    since = datetime(2026, 10, 2)
+    since = datetime(2026, 10, 2, tzinfo=UTC)
     assert pull_request.search_query(since) == (
         'is:pr author:@me archived:false updated:>=2026-10-02 sort:updated-desc')
     assert pull_request.search_query(since, ['a', 'b']) == (
@@ -447,7 +447,7 @@ def test_polls_slack(tmp_path):
 
 
 def test_draws_watch_screen():
-    at = datetime(2026, 10, 16, 15, 4)
+    at = datetime(2026, 10, 16, 15, 4, tzinfo=UTC)
     assert watch.screen([('PRs', at, ['a', 'b']), ('Slack', None, ['c'])]) == (
         'PRs at 15:04\na\nb\n\nSlack\nc')
 
@@ -487,12 +487,12 @@ def test_polls_linear(tmp_path):
         return {}
 
     assert linear.poll(fake_herdr, texts, state, {}, fetch=lambda d: runs.pop(0),
-                       now=datetime(2026, 10, 16)) == [
+                       now=datetime(2026, 10, 16, tzinfo=UTC)) == [
         f'* ABC-1     Backlog     {"":<20} about ABC-1',
         f'  ABC-2     Backlog     {"a":<20} about ABC-2']
     assert calls == []
     assert linear.poll(fake_herdr, texts, state, {}, fetch=lambda d: runs.pop(0),
-                       now=datetime(2026, 10, 16)) == [
+                       now=datetime(2026, 10, 16, tzinfo=UTC)) == [
         f'* ABC-2     In Progress {"a":<20} about ABC-2',
         f'* ABC-1     Backlog     {"":<20} about ABC-1',
         f'  ABC-3     Backlog     {"":<20} about ABC-3']
@@ -504,13 +504,13 @@ def test_compares_times_however_claude_writes_them():
     old = linear.remember(None, [issue('ABC-1', '2026-10-15T10:00:00.000Z', waiting=True),
                                  issue('ABC-2', 'yesterday', waiting=True),
                                  issue('ABC-3', '2026-08-01T00:00:00Z')],
-                          now=datetime(2026, 10, 16))
+                          now=datetime(2026, 10, 16, tzinfo=UTC))
     assert old == {'ABC-1': '2026-10-15T10:00:00', 'ABC-2': 'yesterday'}
     again = [issue('ABC-1', '2026-10-15T03:00:00-07:00', waiting=True),
              issue('ABC-2', 'yesterday', waiting=True)]
     assert linear.events(old, again) == []
     # One left out doesn't count as new when it is back.
-    assert linear.remember(old, [], now=datetime(2026, 10, 16)) == old
+    assert linear.remember(old, [], now=datetime(2026, 10, 16, tzinfo=UTC)) == old
 
     convs = [conversation('C1', '1.5', '1700000000.1', waiting=True)]
     old = slack.remember(None, convs, now=1700000100)

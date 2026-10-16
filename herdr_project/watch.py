@@ -11,7 +11,6 @@ from pathlib import Path
 from herdr_project import linear, pull_request, slack
 
 
-
 def state_dir(env):
     """Returns the directory that keeps what the watcher saw last, under
     $XDG_STATE_HOME from env, by default ~/.local/state."""
@@ -54,10 +53,10 @@ def watch(herdr, root, state, orgs=(), pr_interval=300, queue_interval=1800):
             try:
                 lines = module.poll(herdr, pull_request.notes_texts(root), state / name,
                                     owners)
-            except Exception as e:  # Show any failure rather than end the thread.
+            except Exception as e:  # noqa: BLE001 - shown rather than ending the thread.
                 lines = [f"Cannot check {section[0]}: {e!r}"]
             with lock:
-                section[1:] = [datetime.now(), lines]
+                section[1:] = [datetime.now().astimezone(), lines]
             show()
             time.sleep(queue_interval)
 
@@ -67,10 +66,10 @@ def watch(herdr, root, state, orgs=(), pr_interval=300, queue_interval=1800):
         try:
             lines, owners = pull_request.poll(herdr, root, state / "pull-requests.json",
                                               orgs=orgs)
-        except Exception as e:  # Show any failure rather than end the watcher.
+        except Exception as e:  # noqa: BLE001 - shown rather than ending the watcher.
             lines, owners = [f"Cannot check pull requests: {e!r}"], {}
         with lock:
-            prs[1:] = [datetime.now(), lines]
+            prs[1:] = [datetime.now().astimezone(), lines]
             pr_owners.update(owners)
         show()
         for t in threads:

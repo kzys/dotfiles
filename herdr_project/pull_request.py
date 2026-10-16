@@ -50,7 +50,7 @@ def fetch(command="gh", days=14, orgs=()):
     any of orgs, or anywhere without orgs, most recently updated first,
     including merged and closed ones, as GitHub's GraphQL API returns
     them. Raises if gh fails."""
-    since = datetime.now() - timedelta(days=days)
+    since = datetime.now().astimezone() - timedelta(days=days)
     out = subprocess.run(
         [command, "api", "graphql", "-f", f"query={QUERY}",
          "-f", f"q={search_query(since, orgs)}"],
@@ -103,20 +103,19 @@ def worktrees(root):
     """Returns the git checkouts directly in the projects under root as
     dicts with their project, dir, branch and repo ("owner/name" of
     origin, or None)."""
+    def git(d, *args):
+        return subprocess.run(
+            ["git", "-C", str(d), *args], stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL, text=True, check=False,
+        ).stdout.strip()
+
     trees = []
     for d in sorted(Path(root).glob("*/*/.git")):
         d = d.parent
-
-        def git(*args):
-            return subprocess.run(
-                ["git", "-C", str(d), *args], stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL, text=True, check=False,
-            ).stdout.strip()
-
-        branch = git("branch", "--show-current")
+        branch = git(d, "branch", "--show-current")
         if branch:
             trees.append({"project": str(d.parent), "dir": str(d), "branch": branch,
-                          "repo": repo_name(git("remote", "get-url", "origin"))})
+                          "repo": repo_name(git(d, "remote", "get-url", "origin"))})
     return trees
 
 
@@ -157,11 +156,10 @@ def owner(pr, trees, texts):
             return {"project": t["project"], "dir": t["dir"], "role": None}
     found = None
     for project, role, text in texts:
-        if mentions(text, pr):
-            # Prefer the latest project, and an agent's notes over README.md.
-            if found is None or project > found["project"] or (
-                    project == found["project"] and role):
-                found = {"project": project, "dir": None, "role": role}
+        # Prefer the latest project, and an agent's notes over README.md.
+        if mentions(text, pr) and (found is None or project > found["project"] or (
+                project == found["project"] and role)):
+            found = {"project": project, "dir": None, "role": role}
     return found
 
 
@@ -281,8 +279,8 @@ def table(prs, owners, panes_by_url):
         mark = MARKS.get(pr["checks"], " ")
         agent = "●" if panes_by_url.get(pr["url"]) else " "
         draft = " (draft)" if pr["draft"] else ""
-        rows.append((found is None, f"{mark} {agent} {label(pr):<24} {name:<20} "
-                                    f"{pr['title']}{draft}"))
+        rows.append((found is None, (f"{mark} {agent} {label(pr):<24} {name:<20} "
+                                     f"{pr['title']}{draft}")))
     return [r for _, r in sorted(rows, key=lambda r: r[0])]
 
 
