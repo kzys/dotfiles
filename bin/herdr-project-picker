@@ -11,9 +11,16 @@ it resumes that session, and on a project it starts a new one, in a new
 tab of the project's workspace, or in a new workspace labeled with the
 name from the front matter. A session running in the background is
 stopped and resumed if idle, and attached otherwise.
+
+With --inbox it lists instead what waits on the user in each project:
+items its agents' notes tag [you], untagged ones that likely do (marked
+"you?"), and what herdr-project --watch found. Enter on one switches to
+or resumes the session of the agent whose item it is, or that worked on
+the project last, and on one without a project starts a new project.
 """
 
 import json
+import os
 import shlex
 import subprocess
 import sys
@@ -22,11 +29,12 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from herdr_project import claude
+from herdr_project import claude, inbox
 from herdr_project.agent import agent, codex_context, codex_sessions
 from herdr_project.herdr import herdr
 from herdr_project.notes import front_matter, notes, report_title, reported_role
 from herdr_project.screen import pick
+from herdr_project.watch import state_dir
 
 BIN = Path(__file__).resolve().parent
 PROJECTS = Path.home() / "project"
@@ -121,21 +129,82 @@ def choices(panes, selected, projects, codex):
             yield f"session\t{d}\t{sid}\t  {mark} {when} {ctx:>4}  {title(t, selected)}"
 
 
+# How inbox rows show where an item comes from.
+SOURCES = {"you": "you", "?": "you?", "maybe": "maybe", "pr": "pr", "slack": "slack",
+           "linear": "linear"}
+
+
+def session_for(directory, role, panes, selected, codex):
+    """Returns the session of the selected agent in directory to open
+    for an item of role, or "" if there is none: the one running in a
+    pane with role, else, for claude, the newest that reported role,
+    else the newest. Without a role it is the newest, which may not be
+    the one running."""
+    for p in panes:
+        if (p["agent"] == selected and p["session"] and role and p["role"] == role
+                and (p["cwd"] == str(directory) or p["cwd"].startswith(f"{directory}/"))):
+            return p["session"]
+    found = sessions(directory, selected, codex)
+    if not found:
+        return ""
+    if selected == "codex":
+        return found[0]["id"]
+    if role:
+        for t in found:
+            if reported_role(t) == role:
+                return t.stem
+    return found[0].stem
+
+
+def inbox_choices(panes, selected, projects, codex, watched):
+    """Yields the lines for pick, as choices does, for what waits on the
+    user: the items in the notes of the projects in directory projects
+    and watched, the watcher's items, under their projects, newest first,
+    then the watcher's items without a project."""
+    running = {p["session"] for p in panes if p["session"] and p["agent"] == selected}
+    dirs = sorted((d for d in projects.iterdir() if d.is_dir() and d.name[0] != "."),
+                  reverse=True)
+    known = {str(d) for d in dirs}
+    by_project = {}
+    for i in watched:
+        # Items of projects since removed count as having none.
+        by_project.setdefault(i["project"] if i["project"] in known else None, []).append(i)
+    for d in dirs:
+        items = sorted(inbox.note_items(d) + by_project.get(str(d), []), key=inbox.rank)
+        if not items:
+            continue
+        yield f"project\t{d}\t\t{d.name}  {front_matter(d, 'title') or '(no title)'}"
+        sids = {}
+        for i in items:
+            if i["role"] not in sids:
+                sids[i["role"]] = session_for(d, i["role"], panes, selected, codex)
+            sid = sids[i["role"]]
+            mark = "●" if sid in running else " "
+            yield f"session\t{d}\t{sid}\t  {mark} {SOURCES.get(i['mark'], i['mark']):<6} {i['text']}"
+    for i in by_project.get(None, []):
+        yield f"new\t\t\t+ {SOURCES.get(i['mark'], i['mark']):<6} {i['text']}"
+
+
 def main():
     selected = agent()
     codex = codex_sessions() if selected == "codex" else []
     PROJECTS.mkdir(exist_ok=True)
     panes = pane_records(herdr("pane", "list"))
 
-    picked = pick(choices(panes, selected, PROJECTS, codex),
-                  lambda *row: row_notes(*row, selected))
+    if sys.argv[1:] == ["--inbox"]:
+        rows = inbox_choices(panes, selected, PROJECTS, codex,
+                             inbox.watched_items(state_dir(os.environ) / "inbox.json"))
+    else:
+        rows = choices(panes, selected, PROJECTS, codex)
+    picked = pick(rows, lambda *row: row_notes(*row, selected))
     if picked is not None:
         open_picked(picked, panes, selected, PROJECTS, herdr)
 
 
 def pane_records(listed):
     """Returns the panes in the output of herdr pane list, each with its
-    agent, workspace, cwd, pane ID and agent session ID, or ""."""
+    agent, workspace, cwd, pane ID, agent session ID, or "", and the
+    role its agent reported, or ""."""
     return [
         {
             "agent": p.get("agent"),
@@ -143,6 +212,7 @@ def pane_records(listed):
             "cwd": p["cwd"],
             "pane": p["pane_id"],
             "session": (p.get("agent_session") or {}).get("value") or "",
+            "role": (p.get("tokens") or {}).get("role") or "",
         }
         for p in listed["result"]["panes"]
     ]

@@ -21,7 +21,9 @@ name: <name>
 ---
 
 Write README.md if it doesn't exist; otherwise change it only when the
-task itself changes.
+task itself changes. If you take this directory over for a different
+task, rewrite README.md for it and mark each other agent's remaining
+items as done or moved in your own notes.
 
 Keep your own notes in AGENT-<role>.md with what you have done so far,
 where <role> is a short name for your part, such as main or reviewer.
@@ -32,8 +34,15 @@ pick a role of your own. The session started at $start; check the time
 with date and update your notes about every hour, and before you finish.
 
 Start your notes with a "## Remaining" section listing what's left to
-do or decide, and keep it current; a pane shows it to the user. Put
-the log of what you have done under "## Log" after it. Once you know
+do or decide, and keep it current; a pane shows it to the user. Make
+each item a line starting with "- ", and put right after that [you] when it
+waits on the user to decide or do something, [wait] when it waits on
+someone else or on CI, or [cleanup] when it is something to tidy up,
+such as a worktree, a branch, a test cluster or a cordoned node; the
+user's inbox lists the [you] items. Remove items once they are done,
+including pull requests that merged or closed. Put the log of what you
+have done under "## Log" after it, starting each entry with the date,
+time and zone, like 2026-10-16 14:50 PDT. Once you know
 your role, report it so that the pane shows your section, at the start
 of every session, including resumed ones, since a resumed session runs
 in a new pane:

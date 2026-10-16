@@ -13,7 +13,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from herdr_project import claude, headless, linear, pull_request, slack, watch
+from herdr_project import claude, headless, inbox, linear, pull_request, slack, watch
 from herdr_project.herdr import ancestors, herdr, in_pane
 from herdr_project.match import clip, columns, spans, visible
 from herdr_project.notes import front_matter, notes, report_title, reported_role
@@ -355,13 +355,16 @@ def test_polls_pull_requests(tmp_path):
         return {}
 
     state = tmp_path / 'state/pull-requests.json'
-    lines, owners = pull_request.poll(fake_herdr, tmp_path / 'project', state, gh=str(gh))
+    lines, owners, items = pull_request.poll(fake_herdr, tmp_path / 'project', state, gh=str(gh))
+    assert items == []
     assert owners['https://github.com/org/app/pull/1']['project'] == str(
         tmp_path / 'project/20261001-a')
     assert lines == [f'… ● {"app#1":<24} {"one":<20} PR 1']
     assert calls == [('pane', 'list')]
     calls.clear()
-    lines, _ = pull_request.poll(fake_herdr, tmp_path / 'project', state, gh=str(gh))
+    lines, _, items = pull_request.poll(fake_herdr, tmp_path / 'project', state, gh=str(gh))
+    assert items == [{'project': str(tmp_path / 'project/20261001-a'), 'role': None,
+                      'mark': 'pr', 'text': 'app#1 checks failed: test: PR 1'}]
     assert lines[0].startswith('✗ ● app#1')
     url = 'https://github.com/org/app/pull/1'
     assert calls[1:] == [
@@ -439,10 +442,12 @@ def test_polls_slack(tmp_path):
         calls.append(args)
         return {}
 
-    assert slack.poll(fake_herdr, texts, state, {}, fetch=lambda d: runs.pop(0)) == [
+    assert slack.poll(fake_herdr, texts, state, {}, fetch=lambda d: runs.pop(0))[0] == [
         f'  {"#C1":<26} {"alpha":<20} about 1.5']
     assert calls == []
-    lines = slack.poll(fake_herdr, texts, state, {}, fetch=lambda d: runs.pop(0))
+    lines, items = slack.poll(fake_herdr, texts, state, {}, fetch=lambda d: runs.pop(0))
+    assert items == [{'project': str(tmp_path / 'a'), 'role': None, 'mark': 'slack',
+                      'text': 'Slack #C1: about 1.5'}]
     assert lines[0] == f'* {"#C1":<26} {"alpha":<20} about 1.5'
     assert calls == [('notification', 'show', 'Slack #C1', '--body', 'about 1.5 (a)',
                       '--sound', 'request')]
@@ -489,12 +494,12 @@ def test_polls_linear(tmp_path):
         return {}
 
     assert linear.poll(fake_herdr, texts, state, {}, fetch=lambda d: runs.pop(0),
-                       now=datetime(2026, 10, 16, tzinfo=UTC)) == [
+                       now=datetime(2026, 10, 16, tzinfo=UTC))[0] == [
         f'* ABC-1     Backlog     {"":<20} about ABC-1',
         f'  ABC-2     Backlog     {"a":<20} about ABC-2']
     assert calls == []
     assert linear.poll(fake_herdr, texts, state, {}, fetch=lambda d: runs.pop(0),
-                       now=datetime(2026, 10, 16, tzinfo=UTC)) == [
+                       now=datetime(2026, 10, 16, tzinfo=UTC))[0] == [
         f'* ABC-2     In Progress {"a":<20} about ABC-2',
         f'* ABC-1     Backlog     {"":<20} about ABC-1',
         f'  ABC-3     Backlog     {"":<20} about ABC-3']
@@ -541,3 +546,78 @@ def test_needs_the_pull_requests_repo_in_the_worktree():
         return [{'project': '/p/a', 'dir': '/p/a/app', 'branch': 'me/one', 'repo': repo}]
     assert pull_request.owner(pr, tree('org/app'), [])['dir'] == '/p/a/app'
     assert pull_request.owner(pr, tree(None), []) is None
+
+
+def test_finds_what_waits_on_me_in_notes(tmp_path):
+    (tmp_path / 'AGENT-main.md').write_text(
+        '## Remaining\n'
+        '- [you] Decide on the rollout\n'
+        '  for the canary first.\n'
+        '- [wait] CI on #12\n'
+        '- Ask the user before pushing\n'
+        '- Write the tests\n'
+        '- Optional: post findings to the thread if the user asks\n'
+        '- Base image commit reviewed, not pushed\n'
+        '- Reported findings to the user\n'
+        '- Nothing; answered the user.\n'
+        '- None unless user wants a fix PR\n'
+        '- [cleanup] Remove the worktree\n'
+        '- None.\n'
+        '\n'
+        '## Log\n'
+        '- [you] old\n')
+    (tmp_path / 'AGENT-side.md').write_text('## Remaining\n- [You] Approve the plan\n')
+    (tmp_path / 'README.md').write_text('## Remaining\n- [you] not an agent\n')
+    assert inbox.note_items(tmp_path) == [
+        {'role': 'main', 'mark': 'you', 'text': 'Decide on the rollout for the canary first.'},
+        {'role': 'side', 'mark': 'you', 'text': 'Approve the plan'},
+        {'role': 'main', 'mark': '?', 'text': 'Ask the user before pushing'},
+        {'role': 'main', 'mark': '?', 'text': 'Base image commit reviewed, not pushed'},
+        {'role': 'main', 'mark': 'maybe',
+         'text': 'Optional: post findings to the thread if the user asks'}]
+
+
+def test_keeps_watched_items(tmp_path):
+    path = tmp_path / 'inbox.json'
+    assert inbox.watched_items(path) == []
+    one = {'project': '/p/a', 'role': None, 'mark': 'pr', 'text': '1'}
+    two = {'project': None, 'role': None, 'mark': 'slack', 'text': '2'}
+    inbox.write_sources(path, {'a': [one], 'b': [two]})
+    assert inbox.read_sources(path) == {'a': [one], 'b': [two]}
+    assert inbox.watched_items(path) == [one, two]
+    assert [p.name for p in tmp_path.iterdir()] == ['inbox.json']
+    path.write_text('[]')
+    assert inbox.read_sources(path) == {}
+    path.write_text(json.dumps({'a': [{'text': 't', 'mark': 'new', 'project': None, 'role': None},
+                                      'junk', {'text': 1}], 'b': 'junk'}))
+    assert inbox.watched_items(path) == [
+        {'text': 't', 'mark': 'new', 'project': None, 'role': None}]
+
+
+def test_lists_pull_requests_waiting_on_me():
+    prs = pull_request.pull_requests(search(
+        pr_node(1, 'a', checks='FAILURE', failed=['test']),
+        pr_node(2, 'b', checks='SUCCESS', review='CHANGES_REQUESTED'),
+        pr_node(3, 'c', checks='SUCCESS', review='APPROVED'),
+        pr_node(4, 'd', checks='PENDING', review='APPROVED'),
+        pr_node(5, 'e', state='MERGED', checks='FAILURE'),
+        pr_node(6, 'f', checks='SUCCESS')))
+    owners = {prs[0]['url']: {'project': '/p/a', 'dir': '/p/a/app', 'role': None}}
+    assert [(i['project'], i['text']) for i in pull_request.waiting_items(prs, owners)] == [
+        ('/p/a', 'app#1 checks failed: test: PR 1'),
+        (None, 'app#2 changes requested: PR 2'),
+        (None, 'app#3 approved, ready to merge: PR 3')]
+
+
+def test_guesses_what_waits_on_me():
+    assert [inbox.waiting(i) for i in [
+        'Apply the change to staging (user)', 'Cleanup left (ask): branches',
+        'Agree on the design with the user', 'Rollout not decided yet', 'Branch is local only',
+        'Offer: file a ticket', 'Post outcome in the thread if user wants',
+        'Rerun 4 timed-out clusters', 'Unverified: GPU containers work',
+        '[ ] Decide on the rollout', '[x] Decide on the rollout', 'Is the user okay to push?',
+        'Offers to file a ticket', 'Wrote notes for the user', 'Shared summary with the user',
+        'PR approved, waiting on CI', 'Decision: went with B', 'Needs approval from the owner',
+        'Confirm the plan with the user']] == [
+        '?', '?', '?', '?', '?', 'maybe', 'maybe', None, None,
+        '?', None, '?', 'maybe', None, None, None, None, '?', '?']
