@@ -5,13 +5,14 @@ import subprocess
 import sys
 import threading
 import time
+from datetime import datetime
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from herdr_project import claude
+from herdr_project import claude, pull_request
 from herdr_project.herdr import ancestors, herdr, in_pane
 from herdr_project.match import clip, columns, spans, visible
 from herdr_project.notes import front_matter, notes, report_title, reported_role
@@ -222,3 +223,155 @@ def test_ancestors_walks_up_from_pid():
             assert 'pytest' in next(found)
         finally:
             child.kill()
+
+
+def pr_node(number, branch, state='OPEN', checks=None, failed=(), review=None,
+            repo='org/app'):
+    contexts = [{'__typename': 'CheckRun', 'name': n, 'conclusion': 'FAILURE'} for n in failed]
+    contexts.append({'__typename': 'StatusContext', 'context': 'ok', 'state': 'SUCCESS'})
+    rollup = {'state': checks, 'contexts': {'nodes': contexts}} if checks else None
+    return {'number': number, 'title': f'PR {number}',
+            'url': f'https://github.com/{repo}/pull/{number}', 'state': state,
+            'isDraft': False, 'headRefName': branch, 'reviewDecision': review,
+            'repository': {'nameWithOwner': repo},
+            'commits': {'nodes': [{'commit': {'statusCheckRollup': rollup}}]}}
+
+
+def search(*nodes):
+    return {'data': {'search': {'nodes': list(nodes)}}}
+
+
+def test_reads_pull_requests():
+    prs = pull_request.pull_requests(search(
+        pr_node(1, 'a', checks='FAILURE', failed=['test', 'lint']), pr_node(2, 'b'), {}))
+    assert [(p['number'], p['checks'], p['failed']) for p in prs] == [
+        (1, 'FAILURE', ['lint', 'test']), (2, None, [])]
+    assert prs[0]['repo'] == 'org/app'
+    assert prs[0]['branch'] == 'a'
+
+
+def test_reads_repo_names():
+    assert pull_request.repo_name('git@github.com:org/app.git') == 'org/app'
+    assert pull_request.repo_name('https://github.com/org/app') == 'org/app'
+    assert pull_request.repo_name('https://github.com/org/app.git\n') == 'org/app'
+    assert pull_request.repo_name('ssh://git@github.com/org/app.git') == 'org/app'
+    assert pull_request.repo_name('git@gitlab.com:org/app.git') is None
+
+
+def git_checkout(path, branch, remote='git@github.com:org/app.git'):
+    path.mkdir(parents=True)
+    run = lambda *args: subprocess.run(['git', '-C', str(path), *args], check=True,
+                                       stdout=subprocess.DEVNULL)
+    run('init', '-q', '-b', branch)
+    run('remote', 'add', 'origin', remote)
+
+
+def test_finds_projects_of_pull_requests(tmp_path):
+    git_checkout(tmp_path / '20261001-a/app', 'me/one')
+    git_checkout(tmp_path / '20261001-a/other', 'me/two', 'git@github.com:org/other.git')
+    (tmp_path / '20261002-b').mkdir()
+    (tmp_path / '20261002-b/AGENT-prs.md').write_text('- app#3 and app#40 wait for review\n')
+    (tmp_path / '20261002-b/README.md').write_text('app#3\n')
+    (tmp_path / '20261003-c').mkdir()
+    (tmp_path / '20261003-c/AGENT-main.md').write_text('https://github.com/org/app/pull/5 done\n')
+    trees = pull_request.worktrees(tmp_path)
+    texts = pull_request.notes_texts(tmp_path)
+    prs = {p['number']: p for p in pull_request.pull_requests(search(
+        pr_node(1, 'me/one'), pr_node(2, 'me/two'), pr_node(3, 'x'), pr_node(4, 'y'),
+        pr_node(5, 'z')))}
+
+    def found(n):
+        return pull_request.owner(prs[n], trees, texts)
+
+    assert found(1) == {'project': str(tmp_path / '20261001-a'),
+                        'dir': str(tmp_path / '20261001-a/app'), 'role': None}
+    # The checkout on me/two is of another repository.
+    assert found(2) is None
+    assert found(3) == {'project': str(tmp_path / '20261002-b'), 'dir': None, 'role': 'prs'}
+    assert found(4) is None
+    assert found(5)['project'] == str(tmp_path / '20261003-c')
+
+
+def test_finds_agent_panes():
+    def pane(id, cwd, role=None, agent='claude'):
+        return {'pane_id': id, 'agent': agent, 'cwd': '/p/a',
+                'tokens': {'cwd': cwd, **({'role': role} if role else {})}}
+
+    panes = [pane('shell', '/p/a/app', agent=None), pane('main', '/p/a', 'main'),
+             pane('prs', '/p/a', 'prs'), pane('app', '/p/a/app/sub'), pane('b', '/p/ab')]
+    find = lambda **f: (pull_request.agent_pane(panes, {'project': '/p/a', 'dir': None,
+                                                       'role': None, **f}) or {}).get('pane_id')
+    assert find(dir='/p/a/app') == 'app'
+    assert find(role='prs') == 'prs'
+    assert find(role='gone') == 'main'
+    assert find(project='/p/c') is None
+
+
+def test_reports_pull_request_changes():
+    def prs(*nodes):
+        return pull_request.pull_requests(search(*nodes))
+
+    before = prs(pr_node(1, 'a', checks='PENDING'), pr_node(2, 'b', checks='PENDING'),
+                 pr_node(3, 'c', checks='SUCCESS'), pr_node(4, 'd', checks='FAILURE'))
+    assert pull_request.events(None, before) == []
+    old = pull_request.remember(None, before)
+    after = prs(pr_node(1, 'a', checks='FAILURE', failed=['test']),
+                pr_node(2, 'b', checks='SUCCESS', review='APPROVED'),
+                pr_node(3, 'c', state='MERGED', checks='SUCCESS'),
+                pr_node(4, 'd', checks='FAILURE'),
+                pr_node(5, 'e', checks='FAILURE', failed=['lint']),
+                pr_node(6, 'f', checks='PENDING'))
+    assert [(p['number'], m, w) for p, m, w in pull_request.events(old, after)] == [
+        (1, 'checks failed: test', True), (2, 'checks passed', False),
+        (2, 'approved', False), (3, 'merged', False), (5, 'checks failed: lint', True)]
+    assert sorted(pull_request.remember(old, after)) == [
+        f'https://github.com/org/app/pull/{n}' for n in (1, 2, 4, 5, 6)]
+
+
+def test_polls_pull_requests(tmp_path):
+    # Only GitHub is replaced; git, the notes and the state file are real.
+    git_checkout(tmp_path / 'project/20261001-a/app', 'me/one')
+    (tmp_path / 'project/20261001-a/README.md').write_text('---\nname: one\n---\n')
+    responses = tmp_path / 'responses'
+    responses.mkdir()
+    gh = tmp_path / 'gh'
+    gh.write_text(f'#!/bin/sh\nf=$(ls {responses} | head -1)\ncat {responses}/$f\n'
+                  f'[ $(ls {responses} | wc -l) -gt 1 ] && rm {responses}/$f\nexit 0\n')
+    gh.chmod(0o755)
+    (responses / '1').write_text(json.dumps(search(pr_node(1, 'me/one', checks='PENDING'))))
+    (responses / '2').write_text(json.dumps(search(
+        pr_node(1, 'me/one', checks='FAILURE', failed=['test']))))
+    calls = []
+    status = ['idle']
+
+    def fake_herdr(*args):
+        calls.append(args)
+        if args[:2] == ('pane', 'list'):
+            return {'result': {'panes': [
+                {'pane_id': 'w1:p1', 'agent': 'claude', 'agent_status': status[0],
+                 'cwd': str(tmp_path / 'project/20261001-a'), 'tokens': {}}]}}
+        return {}
+
+    state = tmp_path / 'state/pull-requests.json'
+    lines = pull_request.poll(fake_herdr, tmp_path / 'project', state, gh=str(gh))
+    assert lines == [f'… ● {"app#1":<24} {"one":<20} PR 1']
+    assert calls == [('pane', 'list')]
+    calls.clear()
+    lines = pull_request.poll(fake_herdr, tmp_path / 'project', state, gh=str(gh))
+    assert lines[0].startswith('✗ ● app#1')
+    url = 'https://github.com/org/app/pull/1'
+    assert calls[1:] == [
+        ('notification', 'show', 'app#1 checks failed: test', '--body', 'PR 1 (20261001-a)',
+         '--sound', 'request'),
+        ('pane', 'run', 'w1:p1', pull_request.wake_message(
+            pull_request.pull_requests(search(pr_node(1, 'me/one')))[0],
+            'checks failed: test'))]
+    assert json.loads(state.read_text())[url]['checks'] == 'FAILURE'
+
+
+def test_searches_pull_requests_in_orgs():
+    since = datetime(2026, 10, 2)
+    assert pull_request.search_query(since) == (
+        'is:pr author:@me archived:false updated:>=2026-10-02 sort:updated-desc')
+    assert pull_request.search_query(since, ['a', 'b']) == (
+        'is:pr author:@me archived:false org:a org:b updated:>=2026-10-02 sort:updated-desc')
