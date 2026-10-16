@@ -12,7 +12,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from herdr_project import claude, pull_request, slack, watch
+from herdr_project import claude, headless, linear, pull_request, slack, watch
 from herdr_project.herdr import ancestors, herdr, in_pane
 from herdr_project.match import clip, columns, spans, visible
 from herdr_project.notes import front_matter, notes, report_title, reported_role
@@ -385,13 +385,14 @@ def conversation(channel_id, thread_ts, last_ts, waiting=False, links=()):
             'links': list(links)}
 
 
-def test_reads_slack_conversations():
+def test_reads_structured_output():
     found = [conversation('C1', '1.5', '2.0')]
-    assert slack.conversations({'structured_output': {'conversations': found}}) == found
+    assert headless.structured({'structured_output': {'conversations': found}},
+                               'conversations') == found
     with pytest.raises(ValueError, match='denied'):
-        slack.conversations({'is_error': True, 'result': 'denied'})
+        headless.structured({'is_error': True, 'result': 'denied'}, 'conversations')
     with pytest.raises(ValueError):
-        slack.conversations({'result': 'no schema'})
+        headless.structured({'result': 'no schema'}, 'conversations')
 
 
 def test_finds_projects_of_slack_conversations():
@@ -449,3 +450,49 @@ def test_draws_watch_screen():
     at = datetime(2026, 10, 16, 15, 4)
     assert watch.screen([('PRs', at, ['a', 'b']), ('Slack', None, ['c'])]) == (
         'PRs at 15:04\na\nb\n\nSlack\nc')
+
+
+def issue(identifier, updated_at, waiting=False, links=(), state='Backlog'):
+    return {'identifier': identifier, 'title': f'Title {identifier}', 'state': state,
+            'url': f'https://linear.app/x/issue/{identifier}', 'updated_at': updated_at,
+            'summary': f'about {identifier}', 'waiting_on_me': waiting, 'links': list(links)}
+
+
+def test_finds_projects_of_linear_issues():
+    texts = [('/p/a', 'main', 'tracks ABC-123 and ABC-12'), ('/p/b', None, 'XABC-7 XYZ-45')]
+    pr_owners = {'https://github.com/o/r/pull/1': {'project': '/p/x', 'dir': None, 'role': None}}
+
+    def find(i):
+        return (linear.owner(i, texts, pr_owners) or {}).get('project')
+
+    assert find(issue('ABC-123', '')) == '/p/a'
+    assert find(issue('ABC-1', '')) is None
+    assert find(issue('ABC-7', '')) is None
+    assert find(issue('XYZ-45', '')) == '/p/b'
+    assert find(issue('ABC-9', '', links=['https://github.com/o/r/pull/1'])) == '/p/x'
+
+
+def test_polls_linear(tmp_path):
+    (tmp_path / 'a').mkdir()
+    texts = [(str(tmp_path / 'a'), 'main', 'ABC-2')]
+    runs = [[issue('ABC-1', '2026-10-15T00:00Z', waiting=True), issue('ABC-2', '2026-10-14T00:00Z')],
+            [issue('ABC-1', '2026-10-15T00:00Z', waiting=True),
+             issue('ABC-2', '2026-10-16T00:00Z', waiting=True, state='In Progress'),
+             issue('ABC-3', '2026-10-13T00:00Z')]]
+    calls = []
+    state = tmp_path / 'state/linear.json'
+
+    def fake_herdr(*args):
+        calls.append(args)
+        return {}
+
+    assert linear.poll(fake_herdr, texts, state, {}, fetch=lambda d: runs.pop(0)) == [
+        f'* ABC-1     Backlog     {"":<20} about ABC-1',
+        f'  ABC-2     Backlog     {"a":<20} about ABC-2']
+    assert calls == []
+    assert linear.poll(fake_herdr, texts, state, {}, fetch=lambda d: runs.pop(0)) == [
+        f'* ABC-2     In Progress {"a":<20} about ABC-2',
+        f'* ABC-1     Backlog     {"":<20} about ABC-1',
+        f'  ABC-3     Backlog     {"":<20} about ABC-3']
+    assert calls == [('notification', 'show', 'Linear ABC-2', '--body', 'about ABC-2 (a)',
+                      '--sound', 'request')]

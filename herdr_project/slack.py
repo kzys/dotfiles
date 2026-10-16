@@ -8,6 +8,7 @@ import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from herdr_project import headless, pull_request
 from herdr_project.notes import front_matter
 
 SCHEMA = {
@@ -61,24 +62,7 @@ def fetch(state_dir, days=3, command="claude"):
     the headless Claude session in state_dir reports them. Raises if it
     fails."""
     since = datetime.now() - timedelta(days=days)
-    out = subprocess.run(
-        [command, "-p", "--no-session-persistence", "--model", "sonnet",
-         "--output-format", "json", "--max-budget-usd", "2",
-         "--json-schema", json.dumps(SCHEMA), "--allowedTools", *TOOLS,
-         "--", prompt(since)],
-        cwd=state_dir, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL, text=True, check=True, timeout=900,
-    ).stdout
-    return conversations(json.loads(out))
-
-
-def conversations(result):
-    """Returns the conversations in result, the JSON output of claude
-    -p. Raises ValueError if Claude didn't produce them."""
-    found = (result.get("structured_output") or {}).get("conversations")
-    if result.get("is_error") or found is None:
-        raise ValueError(result.get("result") or "no conversations")
-    return found
+    return headless.ask(state_dir, prompt(since), SCHEMA, TOOLS, "conversations", command)
 
 
 def key(conversation):
@@ -87,28 +71,16 @@ def key(conversation):
 
 
 def owner(conversation, texts, pr_owners):
-    """Returns the project working on conversation, in the form of
-    pull_request.owner: the latest project whose notes in texts, as
-    (project, role, text) tuples, mention the thread, else the project
-    of a pull request it links to, from pr_owners by url. Returns None
-    if no project is."""
+    """Returns the project working on conversation, as
+    pull_request.project_of finds it from texts and pr_owners: the one
+    whose notes mention the thread or, for a DM, the channel, else that
+    of a pull request it links to."""
     ts = conversation["thread_ts"].replace(".", "")
     if ts:
         pattern = rf"(?<!\d)p?{ts}(?!\d)"
     else:
         pattern = rf"\b{re.escape(conversation['channel_id'])}\b"
-    found = None
-    for project, role, text in texts:
-        if re.search(pattern, text) and (
-                found is None or project > found["project"] or (
-                    project == found["project"] and role)):
-            found = {"project": project, "dir": None, "role": role}
-    if found:
-        return found
-    for url in conversation.get("links") or []:
-        if pr_owners.get(url):
-            return pr_owners[url]
-    return None
+    return pull_request.project_of(pattern, conversation.get("links"), texts, pr_owners)
 
 
 def events(old, conversations):

@@ -9,10 +9,10 @@ section of the agent in Herdr pane <pane>, whose notes file is named
 by the role token the agent reports, until the pane is gone.
 
 herdr-project --watch [<org>...] lists the user's open pull requests,
-in the given GitHub organizations if any, and active Slack
-conversations. It tells the user, and the agent working on each pull
+in the given GitHub organizations if any, active Slack conversations
+and Linear issues. It tells the user, and the agent working on each pull
 request, when its checks, review or state change, and the user when a
-conversation waits on them.
+conversation or issue waits on them.
 """
 
 import json

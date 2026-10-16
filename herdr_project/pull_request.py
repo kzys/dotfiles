@@ -165,6 +165,28 @@ def owner(pr, trees, texts):
     return found
 
 
+def project_of(pattern, links, texts, pr_owners):
+    """Returns the project, in the form of owner, working on something
+    that notes mention when they match regular expression pattern: the
+    latest project whose notes in texts, (project, role, text) tuples as
+    notes_texts returns them, do, preferring an agent's notes to
+    README.md. Without one it is the project of the first of links, pull
+    request URLs, in pr_owners, which maps them to projects. Returns None
+    if no project is."""
+    found = None
+    for project, role, text in texts:
+        if re.search(pattern, text) and (
+                found is None or project > found["project"] or (
+                    project == found["project"] and role)):
+            found = {"project": project, "dir": None, "role": role}
+    if found:
+        return found
+    for url in links or []:
+        if pr_owners.get(url):
+            return pr_owners[url]
+    return None
+
+
 def agent_pane(panes, found):
     """Returns the Herdr pane, from panes in herdr pane list's form,
     of the agent working on the pr that found, from owner, describes,

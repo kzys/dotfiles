@@ -1,5 +1,5 @@
-"""Watching the user's pull requests and Slack conversations together,
-each at its own pace, in one pane."""
+"""Watching the user's pull requests, Slack conversations and Linear
+issues together, each at its own pace, in one pane."""
 
 import os
 import subprocess
@@ -9,7 +9,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from herdr_project import pull_request, slack
+from herdr_project import linear, pull_request, slack
 
 ERRORS = (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError)
 
@@ -31,38 +31,40 @@ def screen(sections):
     return "\n".join(out).rstrip("\n")
 
 
-def watch(herdr, root, state, orgs=(), pr_interval=300, slack_interval=1800):
+def watch(herdr, root, state, orgs=(), pr_interval=300, queue_interval=1800):
     """Polls the pull requests in orgs, or all without orgs, every
-    pr_interval seconds and the Slack conversations every slack_interval
-    seconds, in the background since Claude takes a while, printing both
-    until interrupted. Failures show instead of their lines."""
+    pr_interval seconds, and the Slack conversations and Linear issues
+    every queue_interval seconds, those in the background since Claude
+    takes a while, printing them all until interrupted. Failures show
+    instead of their lines."""
     lock = threading.Lock()
     prs = ["Pull requests", None, ["Checking…"]]
-    convs = ["Slack", None, ["Checking…"]]
+    queues = [(slack, ["Slack", None, ["Checking…"]], "slack.json"),
+              (linear, ["Linear", None, ["Checking…"]], "linear.json")]
     pr_owners = {}
 
     def show():
         with lock:
-            text = screen([tuple(prs), tuple(convs)])
+            text = screen([tuple(prs), *(tuple(section) for _, section, _ in queues)])
         sys.stdout.write("\033[H\033[2J" + text)
         sys.stdout.flush()
 
-    def slack_loop():
+    def queue_loop(module, section, name):
         while True:
             with lock:
                 owners = dict(pr_owners)
             try:
-                lines = slack.poll(herdr, pull_request.notes_texts(root),
-                                   state / "slack.json", owners)
+                lines = module.poll(herdr, pull_request.notes_texts(root), state / name,
+                                    owners)
             except ERRORS as e:
-                lines = [f"Cannot check Slack: {e!r}"]
+                lines = [f"Cannot check {section[0]}: {e!r}"]
             with lock:
-                convs[1:] = [datetime.now(), lines]
+                section[1:] = [datetime.now(), lines]
             show()
-            time.sleep(slack_interval)
+            time.sleep(queue_interval)
 
-    # Slack starts after the first pull requests, whose projects it uses.
-    slack_thread = threading.Thread(target=slack_loop, daemon=True)
+    # The queues start after the first pull requests, whose projects they use.
+    threads = [threading.Thread(target=queue_loop, args=q, daemon=True) for q in queues]
     while True:
         try:
             lines, owners = pull_request.poll(herdr, root, state / "pull-requests.json",
@@ -73,14 +75,15 @@ def watch(herdr, root, state, orgs=(), pr_interval=300, slack_interval=1800):
             prs[1:] = [datetime.now(), lines]
             pr_owners.update(owners)
         show()
-        if slack_thread.ident is None:
-            slack_thread.start()
+        for t in threads:
+            if t.ident is None:
+                t.start()
         time.sleep(pr_interval)
 
 
 def main(herdr, orgs=()):
-    """Watches the pull requests in orgs, or all without orgs, and Slack
-    conversations of the projects under ~/project."""
+    """Watches the pull requests in orgs, or all without orgs, Slack
+    conversations and Linear issues of the projects under ~/project."""
     try:
         watch(herdr, Path.home() / "project", state_dir(os.environ), orgs)
     except KeyboardInterrupt:
