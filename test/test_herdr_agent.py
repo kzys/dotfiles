@@ -107,11 +107,39 @@ class TestAgent:
         listed = {'result': {'panes': [
             {'workspace_id': 'w', 'cwd': '/a', 'pane_id': 'shell', 'agent': None},
             {'workspace_id': 'w', 'cwd': '/b', 'pane_id': 'p', 'agent': 'codex',
-             'agent_session': {'value': 'id'}},
+             'agent_session': {'value': 'id'}, 'tokens': {'role': 'main'}},
         ]}}
         assert picker.pane_records(listed) == [
-            {'agent': None, 'workspace': 'w', 'cwd': '/a', 'pane': 'shell', 'session': ''},
-            {'agent': 'codex', 'workspace': 'w', 'cwd': '/b', 'pane': 'p', 'session': 'id'},
+            {'agent': None, 'workspace': 'w', 'cwd': '/a', 'pane': 'shell', 'session': '',
+             'role': ''},
+            {'agent': 'codex', 'workspace': 'w', 'cwd': '/b', 'pane': 'p', 'session': 'id',
+             'role': 'main'},
+        ]
+
+    def test_picker_lists_inbox(self):
+        picker = load('herdr_picker_inbox', ROOT / 'bin/herdr-project-picker')
+        old, new, idle = self.home / '20261001-a', self.home / '20261002-b', self.home / '20261003-c'
+        for d in (old, new, idle):
+            d.mkdir()
+        (old / 'README.md').write_text('---\ntitle: Old work\n---\n')
+        (old / 'AGENT-main.md').write_text('## Remaining\n- Offer: a follow-up\n- [you] Decide X\n')
+        (idle / 'AGENT-main.md').write_text('## Remaining\n- Write tests\n')
+        codex = [{'id': 's2', 'cwd': str(new)}, {'id': 's1', 'cwd': str(old)}]
+        panes = [{'agent': 'codex', 'workspace': 'w', 'cwd': str(new), 'pane': 'p',
+                  'session': 's2', 'role': 'main'}]
+        watched = [{'project': str(new), 'role': 'main', 'mark': 'pr', 'text': 'app#1 failed'},
+                   {'project': None, 'role': None, 'mark': 'slack', 'text': 'Slack #x: hi'},
+                   {'project': str(self.home / 'gone'), 'role': None, 'mark': 'linear',
+                    'text': 'ABC-1: moved'}]
+        rows = list(picker.inbox_choices(panes, 'codex', self.home, codex, watched))
+        assert rows == [
+            f'project\t{new}\t\t20261002-b  (no title)',
+            f'session\t{new}\ts2\t  ● pr     app#1 failed',
+            f'project\t{old}\t\t20261001-a  Old work',
+            f'session\t{old}\ts1\t    you    Decide X',
+            f'session\t{old}\ts1\t    maybe  Offer: a follow-up',
+            'new\t\t\t+ slack  Slack #x: hi',
+            'new\t\t\t+ linear ABC-1: moved',
         ]
 
     def test_picker_reuses_workspace_with_shell_pane(self):

@@ -8,6 +8,7 @@ import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from herdr_project import inbox
 from herdr_project.notes import front_matter
 
 QUERY = """
@@ -284,11 +285,32 @@ def table(prs, owners, panes_by_url):
     return [r for _, r in sorted(rows, key=lambda r: r[0])]
 
 
+def waiting_items(prs, owners):
+    """Returns inbox items for the open pull requests in prs that wait on
+    the user: those whose checks failed, that have changes requested, or
+    that are approved with passing checks, with projects from owners."""
+    items = []
+    for pr in prs:
+        if pr["state"] != "OPEN":
+            continue
+        if pr["checks"] in FAILED:
+            message = failure(pr)
+        elif pr["review"] == "CHANGES_REQUESTED":
+            message = "changes requested"
+        elif pr["review"] == "APPROVED" and pr["checks"] in ("SUCCESS", None) and not pr["draft"]:
+            message = "approved, ready to merge"
+        else:
+            continue
+        items.append(inbox.item(owners.get(pr["url"]), "pr",
+                                f"{label(pr)} {message}: {pr['title']}"))
+    return items
+
+
 def poll(herdr, root, path, gh="gh", orgs=()):
     """Checks the pull requests once: tells the user and their agents
     about changes since the state in path, saves the new state there,
-    and returns the lines of table and the projects of the pull requests
-    by url. herdr runs a herdr command and returns its parsed output.
+    and returns the lines of table, the projects of the pull requests
+    by url, and the inbox items of waiting_items. herdr runs a herdr command and returns its parsed output.
     The projects are under root. Only pull requests in orgs count, or
     all without orgs."""
     try:
@@ -317,5 +339,5 @@ def poll(herdr, root, path, gh="gh", orgs=()):
                 pass
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(remember(old, prs), indent=1))
-    return table(prs, owners, panes_by_url), owners
+    return table(prs, owners, panes_by_url), owners, waiting_items(prs, owners)
 

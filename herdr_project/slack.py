@@ -9,7 +9,7 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from herdr_project import headless, pull_request
+from herdr_project import headless, inbox, pull_request
 from herdr_project.notes import front_matter
 
 SCHEMA = {
@@ -138,7 +138,8 @@ def table(conversations, owners):
 def poll(herdr, texts, path, pr_owners, fetch=fetch):
     """Checks the Slack conversations once with fetch: tells the user
     about those newly waiting on them since the state in path, saves the
-    new state there, and returns the lines of table. herdr runs a herdr
+    new state there, and returns the lines of table and inbox items for
+    the conversations waiting on the user. herdr runs a herdr
     command. texts are the projects' notes, and pr_owners the projects
     of pull requests by url."""
     try:
@@ -157,4 +158,6 @@ def poll(herdr, texts, path, pr_owners, fetch=fetch):
         except (OSError, subprocess.CalledProcessError):
             pass
     path.write_text(json.dumps(remember(old, found, time.time()), indent=1))
-    return table(found, owners)
+    items = [inbox.item(owners.get(key(c)), "slack", f"Slack {c['channel']}: {c['summary']}")
+             for c in found if c["waiting_on_me"]]
+    return table(found, owners), items

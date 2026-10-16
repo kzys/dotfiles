@@ -58,6 +58,14 @@ width = "80%"
 height = "60%"
 
 [[keys.command]]
+key = "prefix+i"
+type = "popup"
+description = "what waits on me"
+command = '"$(dirname "$(readlink -f ~/.config/herdr/config.toml)")/../../bin/herdr-project-picker" --inbox'
+width = "80%"
+height = "60%"
+
+[[keys.command]]
 key = "prefix+c"
 type = "shell"
 description = "new tab where the agent is working"

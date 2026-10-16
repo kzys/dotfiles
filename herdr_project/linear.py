@@ -8,7 +8,7 @@ import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from herdr_project import headless, pull_request
+from herdr_project import headless, inbox, pull_request
 from herdr_project.notes import front_matter
 
 SCHEMA = {
@@ -132,7 +132,8 @@ def table(issues, owners):
 def poll(herdr, texts, path, pr_owners, fetch=fetch, now=None):
     """Checks the Linear issues once with fetch: tells the user about
     those newly waiting on them since the state in path, saves the new
-    state there, and returns the lines of table. herdr runs a herdr
+    state there, and returns the lines of table and inbox items for the
+    issues waiting on the user. herdr runs a herdr
     command. texts are the projects' notes, and pr_owners the projects
     of pull requests by url. now is the current time unless given."""
     try:
@@ -152,4 +153,7 @@ def poll(herdr, texts, path, pr_owners, fetch=fetch, now=None):
             pass
     now = now or datetime.now(UTC)
     path.write_text(json.dumps(remember(old, found, now), indent=1))
-    return table(found, owners)
+    items = [inbox.item(owners.get(i["identifier"]), "linear",
+                        f"{i['identifier']}: {i['summary']}")
+             for i in found if i["waiting_on_me"]]
+    return table(found, owners), items
