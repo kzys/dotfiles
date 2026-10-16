@@ -7,6 +7,12 @@ pane above it.
 herdr-project --remaining <pane> runs in that pane: it reprints the
 section of the agent in Herdr pane <pane>, whose notes file is named
 by the role token the agent reports, until the pane is gone.
+
+herdr-project --watch [<org>...] lists the user's open pull requests,
+in the given GitHub organizations if any, active Slack conversations
+and Linear issues. It tells the user, and the agent working on each pull
+request, when its checks, review or state change, and the user when a
+conversation or issue waits on them.
 """
 
 import json
@@ -20,7 +26,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from herdr_project.agent import agent
 from herdr_project.herdr import herdr
 from herdr_project.notes import report_title
-from herdr_project.remaining import follow_remaining
+from herdr_project import watch
+from herdr_project.remaining import follow_remaining, remember_follower
 
 SELF = Path(__file__).resolve()
 
@@ -58,6 +65,7 @@ def remaining_pane():
     except (OSError, subprocess.CalledProcessError):
         quiet("pane", "close", pane)
         raise
+    remember_follower(pane, env["HERDR_PANE_ID"], env)
     quiet("pane", "swap", "--source-pane", pane,
           "--target-pane", env["HERDR_PANE_ID"])
     quiet("pane", "focus", "--direction", "down", "--pane", pane)
@@ -74,6 +82,9 @@ def main(argv):
         except KeyboardInterrupt:
             pass
         return 0
+
+    if argv[:1] == ["--watch"]:
+        return watch.main(herdr, argv[1:])
 
     selected = agent()
 

@@ -78,6 +78,12 @@ alias tmuxa='tmux attach || tmux'
 # Default to Claude while preserving the selected agent in new panes.
 export HERDR_PROJECT_AGENT=${HERDR_PROJECT_AGENT:-claude}
 alias hp=herdr-project
+# Herdr restores herdr-project's "## Remaining" pane as a shell.
+remaining=${XDG_STATE_HOME:-$HOME/.local/state}/herdr-project/remaining/$HERDR_PANE_ID
+if [[ $HERDR_ENV == 1 && -n $HERDR_PANE_ID && -f $remaining ]]; then
+    exec herdr-project --remaining "$(<$remaining)"
+fi
+unset remaining
 
 # History
 HISTFILE=~/.zsh/history
