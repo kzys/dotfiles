@@ -459,6 +459,57 @@ def test_draws_watch_screen():
         'PRs at 15:04\na\nb\n\nSlack\nc')
 
 
+def test_starts_the_watcher_once(tmp_path):
+    env = {'HOME': str(tmp_path)}
+    panes = set()
+    workspaces = [{'label': '~'}]
+    calls = []
+
+    def fake_herdr(*args):
+        calls.append(args)
+        if args == ('workspace', 'list'):
+            return {'result': {'workspaces': workspaces}}
+        if args[:2] == ('pane', 'get'):
+            if args[2] == 'w8:p1':
+                raise subprocess.CalledProcessError(1, ['herdr', *args], output='')
+            if args[2] not in panes:
+                raise subprocess.CalledProcessError(
+                    1, ['herdr', *args], output='{"error":{"code":"pane_not_found"}}')
+            return {'result': {'pane': {'pane_id': args[2]}}}
+        panes.add('w2:p1')
+        return {'result': {'root_pane': {'pane_id': 'w2:p1'}}}
+
+    watch.remember_watcher('w9:p1', ['gone'], env)
+    assert watch.start(fake_herdr, env)
+    assert not watch.watcher_file('w9:p1', env).exists()
+    assert calls[-1] == ('workspace', 'create', '--label', 'watch', '--cwd', str(tmp_path),
+                         '--env', 'HERDR_PROJECT_WATCH=1', '--no-focus')
+    assert not watch.start(fake_herdr, env)
+
+    # A restored workspace counts before its pane is back.
+    watch.watcher_file('w2:p1', env).unlink()
+    workspaces.append({'label': 'watch'})
+    assert not watch.start(fake_herdr, env)
+
+    # Without a workspace, a failure that isn't pane_not_found keeps the record.
+    workspaces.pop()
+    watch.remember_watcher('w8:p1', [], env)
+    with pytest.raises(subprocess.CalledProcessError):
+        watch.start(fake_herdr, env)
+    assert watch.watcher_file('w8:p1', env).exists()
+    assert [c[:2] for c in calls].count(('workspace', 'create')) == 1
+
+
+@pytest.mark.skipif(shutil.which('zsh') is None, reason='zsh is not installed')
+def test_remembers_watcher_where_zshrc_looks(tmp_path):
+    watch.remember_watcher('w1:p2', ['org one', 'two'], {'HOME': str(tmp_path)})
+    found = subprocess.run(
+        ['zsh', '-c', 'print -rl -- ${(f)"$(cat ${XDG_STATE_HOME:-$HOME/.local/state}/herdr-project/watcher/$HERDR_PANE_ID)"}'],
+        env={'HOME': str(tmp_path), 'HERDR_PANE_ID': 'w1:p2'},
+        stdout=subprocess.PIPE, text=True, check=True).stdout
+    assert found == 'org one\ntwo\n'
+
+
 def issue(identifier, updated_at, waiting=False, links=(), state='Backlog'):
     return {'identifier': identifier, 'title': f'Title {identifier}', 'state': state,
             'url': f'https://linear.app/x/issue/{identifier}', 'updated_at': updated_at,

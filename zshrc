@@ -84,6 +84,17 @@ if [[ $HERDR_ENV == 1 && -n $HERDR_PANE_ID && -f $remaining ]]; then
     exec herdr-project --remaining "$(<$remaining)"
 fi
 unset remaining
+# Herdr restores herdr-project's watcher pane as a shell, and shells in
+# Herdr start the watcher in a workspace of its own if no pane has it.
+watcher=${XDG_STATE_HOME:-$HOME/.local/state}/herdr-project/watcher/$HERDR_PANE_ID
+if [[ $HERDR_ENV == 1 && -n $HERDR_PANE_ID ]]; then
+    if [[ -n $HERDR_PROJECT_WATCH || -f $watcher ]]; then
+        unset HERDR_PROJECT_WATCH
+        exec herdr-project --watch ${(f)"$(cat $watcher 2>/dev/null)"}
+    fi
+    herdr-project --start-watch &>/dev/null &!
+fi
+unset watcher
 
 # History
 HISTFILE=~/.zsh/history

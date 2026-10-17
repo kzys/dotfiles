@@ -13,6 +13,9 @@ in the given GitHub organizations if any, active Slack conversations
 and Linear issues. It tells the user, and the agent working on each pull
 request, when its checks, review or state change, and the user when a
 conversation or issue waits on them.
+
+herdr-project --start-watch starts the watcher in a new Herdr workspace
+named watch, unless a pane already has it.
 """
 
 import json
@@ -24,7 +27,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from herdr_project.agent import agent
-from herdr_project.herdr import herdr
+from herdr_project.herdr import ancestors, herdr, in_pane
 from herdr_project.notes import report_title
 from herdr_project import watch
 from herdr_project.remaining import follow_remaining, remember_follower
@@ -90,7 +93,15 @@ def main(argv):
         return 0
 
     if argv[:1] == ["--watch"]:
-        return watch.main(herdr, argv[1:])
+        pane = os.environ["HERDR_PANE_ID"] if in_pane(os.environ, ancestors()) else None
+        return watch.main(herdr, argv[1:], pane)
+
+    if argv == ["--start-watch"]:
+        try:
+            watch.start(lambda *args: herdr(*args, stderr=subprocess.DEVNULL), os.environ)
+        except (KeyError, OSError, subprocess.CalledProcessError):
+            return 1
+        return 0
 
     selected = agent()
 
