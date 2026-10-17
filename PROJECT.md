@@ -1,5 +1,8 @@
 # Project directory
 
+These instructions come from `$dotfiles/PROJECT.md`, followed by
+`$dotfiles/work/PROJECT.md` if it exists.
+
 Each task has a scratch directory under `~/project`; this task's is
 `$PWD`. Other agents may work in it too, sharing what they learn there:
 
