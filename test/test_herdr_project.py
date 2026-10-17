@@ -621,3 +621,22 @@ def test_guesses_what_waits_on_me():
         'Confirm the plan with the user']] == [
         '?', '?', '?', '?', '?', 'maybe', 'maybe', None, None,
         '?', None, '?', 'maybe', None, None, None, None, '?', '?']
+
+
+def test_closes_roles_and_then_the_project(tmp_path):
+    (tmp_path / 'AGENT-a.md').write_text(
+        'closed: https://x/pull/1\n\n## Remaining\n- [you] Stale\n\n## Findings\n- etcd needs 3\n')
+    (tmp_path / 'AGENT-b.md').write_text('## Remaining\n- None.\n')
+    (tmp_path / 'AGENT-c.md').write_text('## Remaining\n- [you] Decide X\n\n## Log\n- closed: no\n')
+    assert [(i['role'], i['mark'], i['text']) for i in inbox.project_items(tmp_path)] == [
+        ('c', 'you', 'Decide X'),
+        ('b', 'close', 'Nothing remaining for b; tell its agent its part is done to close it')]
+    # The watcher's items hold the suggestions back.
+    watched = [{'project': str(tmp_path), 'role': None, 'mark': 'pr', 'text': 'app#1 failed'}]
+    assert [i['mark'] for i in inbox.project_items(tmp_path, watched)] == ['you', 'pr']
+
+    (tmp_path / 'AGENT-c.md').write_text('closed: decided X\n\n## Remaining\n')
+    assert [i['text'] for i in inbox.project_items(tmp_path)] == [
+        'Nothing remaining; tell its agent the task is done to close it']
+    (tmp_path / 'AGENT-b.md').write_text('closed:\n\n## Remaining\n- None.\n')
+    assert not inbox.role_closed((tmp_path / 'AGENT-b.md').read_text())
