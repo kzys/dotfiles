@@ -4,15 +4,15 @@ from pathlib import Path
 
 
 def instructions(directory, dotfiles, now):
-    """Returns the instructions in bin/herdr-project.md of the dotfiles
-    checkout, followed by those in its work/herdr-project.md if it has
-    it, filling in the project's directory, now as the session's start
-    time and the checkout's directory. work/ is gitignored, so it can
-    hold rules that must stay private."""
+    """Returns the instructions in PROJECT.md of the dotfiles checkout,
+    followed by those in its work/PROJECT.md if it has it, filling
+    in the project's directory, now as the session's start time and the
+    checkout's directory. work/ is gitignored, so it can hold rules that
+    must stay private."""
     dotfiles = Path(dotfiles)
-    text = (dotfiles / "bin/herdr-project.md").read_text()
+    text = (dotfiles / "PROJECT.md").read_text()
     try:
-        text += "\n" + (dotfiles / "work/herdr-project.md").read_text()
+        text += "\n" + (dotfiles / "work/PROJECT.md").read_text()
     except OSError:
         pass
     start = now.strftime("%Y-%m-%d %H:%M %Z")

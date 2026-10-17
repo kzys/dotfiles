@@ -10,7 +10,7 @@ def test_instructions_fill_in_the_session():
     text = instructions('/p/x', ROOT, datetime(2026, 10, 16, 21, 5, tzinfo=UTC))
     assert '`/p/x`' in text
     assert '2026-10-16 21:05 UTC' in text
-    assert f'`{ROOT}`' in text
+    assert f'`{ROOT}/PROJECT.md`' in text
     assert '$PWD' not in text and '$start' not in text and '$dotfiles' not in text
 
 
