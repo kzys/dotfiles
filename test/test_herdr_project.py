@@ -483,6 +483,32 @@ def test_draws_watch_screen():
     at = datetime(2026, 10, 16, 15, 4, tzinfo=UTC)
     assert watch.screen([('PRs', at, ['a', 'b']), ('Slack', None, ['c'])]) == (
         'PRs at 15:04\na\nb\n\nSlack\nc')
+    assert watch.screen([('PRs', at, ['a']), ('Slack', None, None)]) == 'PRs at 15:04\na'
+
+
+def test_checks_only_sources_with_connectors():
+    listing = ('Checking MCP server health…\n\n'
+               'claude.ai Gmail: https://gmailmcp.googleapis.com/mcp/v1 - ✔ Connected\n'
+               'claude.ai Slack: https://mcp.slack.com/mcp - ! Needs authentication\n'
+               'claude.ai Linear: https://mcp.linear.app/mcp - ✔ Connected\n'
+               'local: npx server - ✔ Connected\n')
+    names = headless.connected(listing)
+    assert names == {'Gmail', 'Linear'}
+    polled = []
+
+    def poll():
+        polled.append(1)
+        return ['a conversation'], ['an item']
+
+    assert watch.check_queue(linear, names, poll) == (['a conversation'], ['an item'])
+    # Without the connector, nothing runs, and its section and items go.
+    assert watch.check_queue(slack, names, poll) == (None, [])
+    assert watch.check_queue(slack, set(), poll) == (None, [])
+    # Listing failed: say so and keep the last items.
+    assert watch.check_queue(slack, None, poll) == (
+        ['Cannot list the claude.ai connectors.'], None)
+    assert polled == [1]
+    assert headless.connectors(command='false') is None
 
 
 def test_starts_the_watcher_once(tmp_path):
@@ -498,6 +524,9 @@ def test_starts_the_watcher_once(tmp_path):
         if args[:2] == ('pane', 'get'):
             if args[2] == 'w8:p1':
                 raise subprocess.CalledProcessError(1, ['herdr', *args], output='')
+            if args[2] == 'w7:p1':
+                raise subprocess.CalledProcessError(
+                    1, ['herdr', *args], output='', stderr='{"error":{"code":"pane_not_found"}}')
             if args[2] not in panes:
                 raise subprocess.CalledProcessError(
                     1, ['herdr', *args], output='{"error":{"code":"pane_not_found"}}')
@@ -506,8 +535,10 @@ def test_starts_the_watcher_once(tmp_path):
         return {'result': {'root_pane': {'pane_id': 'w2:p1'}}}
 
     watch.remember_watcher('w9:p1', ['gone'], env)
+    watch.remember_watcher('w7:p1', [], env)  # Herdr says so on stderr.
     assert watch.start(fake_herdr, env)
     assert not watch.watcher_file('w9:p1', env).exists()
+    assert not watch.watcher_file('w7:p1', env).exists()
     assert calls[-1] == ('workspace', 'create', '--label', 'watch', '--cwd', str(tmp_path),
                          '--env', 'HERDR_PROJECT_WATCH=1', '--no-focus')
     assert not watch.start(fake_herdr, env)

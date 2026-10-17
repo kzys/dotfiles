@@ -20,6 +20,30 @@ def ask(state_dir, prompt, schema, tools, field, command="claude"):
     return structured(json.loads(out), field)
 
 
+def connected(listing):
+    """Returns the names of the claude.ai connectors that listing, the
+    output of claude mcp list, shows as connected, like Slack."""
+    names = set()
+    for line in listing.splitlines():
+        head, sep, status = line.rpartition(" - ")
+        if line.startswith("claude.ai ") and sep and "Connected" in status:
+            names.add(head[len("claude.ai "):].split(":", 1)[0])
+    return names
+
+
+def connectors(command="claude"):
+    """Returns the names of the user's connected claude.ai connectors,
+    as claude mcp list shows them, or None if it fails."""
+    try:
+        listing = subprocess.run(
+            [command, "mcp", "list"], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL, text=True, check=True, timeout=120,
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return connected(listing)
+
+
 def structured(result, field):
     """Returns field of the structured output in result, the JSON output
     of claude -p. Raises ValueError if Claude didn't produce it."""
