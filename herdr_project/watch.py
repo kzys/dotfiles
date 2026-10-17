@@ -1,5 +1,5 @@
-"""Watching the user's pull requests, Slack conversations and Linear
-issues together, each at its own pace, in one pane."""
+"""Watching the user's pull requests, Herdr panes, Slack conversations
+and Linear issues together, each at its own pace, in one pane."""
 
 import fcntl
 import os
@@ -10,7 +10,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from herdr_project import inbox, linear, pull_request, slack
+from herdr_project import headless, inbox, linear, panes, pull_request, slack
 
 
 def state_dir(env):
@@ -55,7 +55,7 @@ def start(herdr, env):
                 return False
             except subprocess.CalledProcessError as e:
                 # Other failures can't tell whether the pane is gone.
-                if '"pane_not_found"' not in (e.stdout or ""):
+                if '"pane_not_found"' not in (e.stdout or "") + (e.stderr or ""):
                     raise
                 path.unlink(missing_ok=True)
         created = herdr("workspace", "create", "--label", "watch", "--cwd", env["HOME"],
@@ -64,28 +64,67 @@ def start(herdr, env):
         return True
 
 
+def check_queue(module, names, poll):
+    """Returns the lines and inbox items of the source in module, which
+    a headless Claude session checks with its claude.ai connector, by
+    calling poll if the connector is among names, the connected ones.
+    Without the connector, there are no lines, hiding the source, and
+    no items. If names is None, as when listing the connectors failed,
+    the lines say so and the items are None, keeping the last ones."""
+    if names is None:
+        return ["Cannot list the claude.ai connectors."], None
+    if module.CONNECTOR not in names:
+        return None, []
+    return poll()
+
+
 def screen(sections):
     """Returns the text of the pane for sections, (title, time, lines)
-    tuples, where time is when the lines were made or None."""
+    tuples, where time is when the lines were made or None, leaving out
+    those whose lines are None."""
     out = []
     for title, at, lines in sections:
+        if lines is None:
+            continue
         stamp = f" at {at:%H:%M}" if at else ""
         out += [f"{title}{stamp}", *lines, ""]
     return "\n".join(out).rstrip("\n")
 
 
-def watch(herdr, root, state, orgs=(), pr_interval=300, queue_interval=1800):
-    """Polls the pull requests in orgs, or all without orgs, every
-    pr_interval seconds, and the Slack conversations and Linear issues
-    every queue_interval seconds, those in the background since Claude
-    takes a while, printing them all until interrupted and keeping what
-    waits on the user in inbox.json for the inbox. Failures show instead
-    of their lines, keeping their last inbox items."""
+def title(items):
+    """Returns the title for the watcher's workspace from items, the
+    inbox items by source: how many wait on the user from each."""
+    counts = [f"{source}: {len(found)}" for source, found in items.items()
+              if isinstance(found, list) and found]
+    return " · ".join(counts) or "Nothing waiting"
+
+
+def watch(herdr, root, state, orgs=(), pr_interval=300, queue_interval=1800,
+          connectors=headless.connectors, workspace=None):
+    """Polls the pull requests in orgs, or all without orgs, and the
+    Herdr panes every pr_interval seconds, and the Slack conversations
+    and Linear issues every queue_interval seconds, those in the
+    background since Claude takes a while, each only while its claude.ai
+    connector is among those connectors returns. It prints them all
+    until interrupted, keeps what waits on the user in inbox.json for
+    the inbox, and reports how much does as the title of Herdr workspace
+    workspace, if any. Failures show instead of their lines, keeping
+    their last inbox items."""
     lock = threading.Lock()
     prs = ["Pull requests", None, ["Checking…"]]
-    queues = [(slack, ["Slack", None, ["Checking…"]], "slack.json"),
-              (linear, ["Linear", None, ["Checking…"]], "linear.json")]
+    pane_section = ["Panes", None, ["Checking…"]]
+    queues = [(slack, ["Slack", None, None], "slack.json"),
+              (linear, ["Linear", None, None], "linear.json")]
     pr_owners = {}
+    # The queues start together; one listing serves both.
+    listing_lock, listing = threading.Lock(), []
+
+    def connected():
+        with listing_lock:
+            if not listing or time.monotonic() - listing[0] > 60:
+                listing[:] = [time.monotonic(), connectors()]
+            return listing[1]
+
     # Keep the last run's items until each source finds new ones.
     items = inbox.read_sources(state / "inbox.json")
 
@@ -96,10 +135,17 @@ def watch(herdr, root, state, orgs=(), pr_interval=300, queue_interval=1800):
             inbox.write_sources(state / "inbox.json", items)
         except OSError:
             pass  # The pane still shows them, and the next poll retries.
+        if workspace:
+            try:
+                herdr("workspace", "report-metadata", workspace, "--source", "watch",
+                      "--token", f"title={title(items)}")
+            except (OSError, subprocess.CalledProcessError):
+                pass
 
     def show():
         with lock:
-            text = screen([tuple(prs), *(tuple(section) for _, section, _ in queues)])
+            text = screen([tuple(prs), tuple(pane_section),
+                           *(tuple(section) for _, section, _ in queues)])
             sys.stdout.write("\033[H\033[2J" + text)
             sys.stdout.flush()
 
@@ -108,8 +154,8 @@ def watch(herdr, root, state, orgs=(), pr_interval=300, queue_interval=1800):
             with lock:
                 owners = dict(pr_owners)
             try:
-                lines, new = module.poll(herdr, pull_request.notes_texts(root),
-                                         state / name, owners)
+                lines, new = check_queue(module, connected(), lambda owners=owners: module.poll(
+                    herdr, pull_request.notes_texts(root), state / name, owners))
             except Exception as e:  # noqa: BLE001 - shown rather than ending the thread.
                 lines, new = [f"Cannot check {section[0]}: {e!r}"], None
             with lock:
@@ -132,11 +178,34 @@ def watch(herdr, root, state, orgs=(), pr_interval=300, queue_interval=1800):
             pr_owners.update(owners)
             if new is not None:
                 found(prs[0], new)
+        try:
+            lines, new = panes.poll(herdr, root, state / "panes.json",
+                                    datetime.now().astimezone())
+        except Exception as e:  # noqa: BLE001 - shown rather than ending the watcher.
+            lines, new = [f"Cannot check panes: {e!r}"], None
+        with lock:
+            pane_section[1:] = [datetime.now().astimezone(), lines]
+            if new is not None:
+                found(pane_section[0], new)
         show()
         for t in threads:
             if t.ident is None:
                 t.start()
         time.sleep(pr_interval)
+
+
+def watch_workspace(herdr, pane, env):
+    """Returns the id of the Herdr workspace named watch that pane, the
+    watcher's pane if any, is in, from env, or None. Only that one takes
+    the watcher's title."""
+    workspace = env.get("HERDR_WORKSPACE_ID")
+    if not pane or not workspace:
+        return None
+    try:
+        label = herdr("workspace", "get", workspace)["result"]["workspace"].get("label")
+    except (OSError, KeyError, TypeError, subprocess.CalledProcessError):
+        return None
+    return workspace if label == "watch" else None
 
 
 def main(herdr, orgs=(), pane=None):
@@ -150,7 +219,8 @@ def main(herdr, orgs=(), pane=None):
         except OSError:
             pass
     try:
-        watch(herdr, Path.home() / "project", state_dir(os.environ), orgs)
+        watch(herdr, Path.home() / "project", state_dir(os.environ), orgs,
+              workspace=watch_workspace(herdr, pane, os.environ))
     except KeyboardInterrupt:
         if pane:
             watcher_file(pane, os.environ).unlink(missing_ok=True)

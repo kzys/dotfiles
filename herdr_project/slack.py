@@ -12,6 +12,9 @@ from pathlib import Path
 from herdr_project import headless, inbox, pull_request
 from herdr_project.notes import front_matter
 
+# The claude.ai connector the headless session needs.
+CONNECTOR = "Slack"
+
 SCHEMA = {
     "type": "object",
     "required": ["conversations"],

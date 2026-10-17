@@ -31,6 +31,9 @@ SCHEMA = {
     }}},
 }
 
+# The claude.ai connector the headless session needs.
+CONNECTOR = "Linear"
+
 TOOLS = [
     "mcp__claude_ai_Linear__list_issues",
     "mcp__claude_ai_Linear__get_issue",
