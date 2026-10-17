@@ -91,16 +91,25 @@ def screen(sections):
     return "\n".join(out).rstrip("\n")
 
 
+def title(items):
+    """Returns the title for the watcher's workspace from items, the
+    inbox items by source: how many wait on the user from each."""
+    counts = [f"{source}: {len(found)}" for source, found in items.items()
+              if isinstance(found, list) and found]
+    return " · ".join(counts) or "Nothing waiting"
+
+
 def watch(herdr, root, state, orgs=(), pr_interval=300, queue_interval=1800,
-          connectors=headless.connectors):
+          connectors=headless.connectors, workspace=None):
     """Polls the pull requests in orgs, or all without orgs, and the
     Herdr panes every pr_interval seconds, and the Slack conversations
     and Linear issues every queue_interval seconds, those in the
     background since Claude takes a while, each only while its claude.ai
     connector is among those connectors returns. It prints them all
-    until interrupted and keeps what waits on the user in inbox.json for
-    the inbox. Failures show instead of their lines, keeping their last
-    inbox items."""
+    until interrupted, keeps what waits on the user in inbox.json for
+    the inbox, and reports how much does as the title of Herdr workspace
+    workspace, if any. Failures show instead of their lines, keeping
+    their last inbox items."""
     lock = threading.Lock()
     prs = ["Pull requests", None, ["Checking…"]]
     pane_section = ["Panes", None, ["Checking…"]]
@@ -126,6 +135,12 @@ def watch(herdr, root, state, orgs=(), pr_interval=300, queue_interval=1800,
             inbox.write_sources(state / "inbox.json", items)
         except OSError:
             pass  # The pane still shows them, and the next poll retries.
+        if workspace:
+            try:
+                herdr("workspace", "report-metadata", workspace, "--source", "watch",
+                      "--token", f"title={title(items)}")
+            except (OSError, subprocess.CalledProcessError):
+                pass
 
     def show():
         with lock:
@@ -179,6 +194,20 @@ def watch(herdr, root, state, orgs=(), pr_interval=300, queue_interval=1800,
         time.sleep(pr_interval)
 
 
+def watch_workspace(herdr, pane, env):
+    """Returns the id of the Herdr workspace named watch that pane, the
+    watcher's pane if any, is in, from env, or None. Only that one takes
+    the watcher's title."""
+    workspace = env.get("HERDR_WORKSPACE_ID")
+    if not pane or not workspace:
+        return None
+    try:
+        label = herdr("workspace", "get", workspace)["result"]["workspace"].get("label")
+    except (OSError, KeyError, TypeError, subprocess.CalledProcessError):
+        return None
+    return workspace if label == "watch" else None
+
+
 def main(herdr, orgs=(), pane=None):
     """Watches the pull requests in orgs, or all without orgs, Slack
     conversations and Linear issues of the projects under ~/project.
@@ -190,7 +219,8 @@ def main(herdr, orgs=(), pane=None):
         except OSError:
             pass
     try:
-        watch(herdr, Path.home() / "project", state_dir(os.environ), orgs)
+        watch(herdr, Path.home() / "project", state_dir(os.environ), orgs,
+              workspace=watch_workspace(herdr, pane, os.environ))
     except KeyboardInterrupt:
         if pane:
             watcher_file(pane, os.environ).unlink(missing_ok=True)
