@@ -2,17 +2,23 @@
 """Claude Code hook for every event, which it reads from the input.
 
 SessionStart: reports the session to the Herdr pane so that Herdr
-resumes it after a restart."""
+resumes it after a restart, and, when a session in a project under
+~/project resumes, prints herdr-project's instructions, since claude
+keeps the system prompt the session started with."""
 
 import json
 import os
 import subprocess
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from herdr_project.herdr import ancestors, herdr, in_pane
+from herdr_project.instructions import instructions, project_of
+
+DOTFILES = Path(__file__).resolve().parent.parent
 
 
 def session_start(data, seq):
@@ -33,16 +39,51 @@ def session_start(data, seq):
     return args
 
 
-def main():
-    data = json.load(sys.stdin)
-    if data.get("hook_event_name") != "SessionStart":
-        return
+def resumed_instructions(data, projects, now):
+    """Returns the instructions to add to the context of a main session
+    resuming in a project under projects, from the SessionStart data,
+    or None. now is when it resumed, which they give as its start."""
+    cwd = data.get("cwd")
+    if data.get("source") != "resume" or data.get("agent_id") or not isinstance(cwd, str):
+        return None
+    directory = project_of(cwd, projects)
+    if directory is None:
+        return None
+    return ("This session resumed. These instructions replace any earlier "
+            "copy of them, and give the time it resumed as its start; skip "
+            "the steps you already did, such as naming the workspace.\n\n"
+            + instructions(directory, DOTFILES, now))
+
+
+def report_session(data):
+    """Reports the session in the SessionStart data to the Herdr pane
+    it runs in, if any."""
     if not in_pane(os.environ, ancestors()):
         return
     args = session_start(data, time.time_ns())
     if args is not None:
         herdr("pane", "report-agent-session", os.environ["HERDR_PANE_ID"], *args,
               stderr=subprocess.DEVNULL)
+
+
+def print_instructions(data):
+    """Prints the instructions for a session resuming in a project, from
+    the SessionStart data, to add them to its context."""
+    text = resumed_instructions(data, Path.home() / "project", datetime.now().astimezone())
+    if text is not None:
+        print(text)
+
+
+def main():
+    data = json.load(sys.stdin)
+    if data.get("hook_event_name") != "SessionStart":
+        return
+    # Neither step may keep the other from running.
+    for step in (report_session, print_instructions):
+        try:
+            step(data)
+        except Exception:  # noqa: BLE001
+            pass
 
 
 if __name__ == "__main__":

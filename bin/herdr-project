@@ -29,26 +29,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from herdr_project.agent import agent
 from herdr_project.herdr import ancestors, herdr, in_pane
+from herdr_project.instructions import instructions
 from herdr_project.notes import report_title
 from herdr_project import watch
 from herdr_project.remaining import follow_remaining, remember_follower
 
 SELF = Path(__file__).resolve()
-
-
-def instructions():
-    """Returns the instructions in herdr-project.md, followed by those in
-    work/herdr-project.md if this checkout has it, filling in this
-    session's directory, its start time and this checkout's directory.
-    work/ is gitignored, so it can hold rules that must stay private."""
-    start = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M %Z")
-    text = (SELF.parent / "herdr-project.md").read_text()
-    try:
-        text += "\n" + (SELF.parent.parent / "work/herdr-project.md").read_text()
-    except OSError:
-        pass
-    return (text.replace("$PWD", os.getcwd()).replace("$start", start)
-            .replace("$dotfiles", str(SELF.parent.parent)))
 
 
 def remaining_pane():
@@ -129,6 +115,7 @@ def main(argv):
 def command(selected, argv):
     """Returns the program and arguments that start the selected agent,
     passing it argv, and the environment variables to set for it."""
+    text = instructions(os.getcwd(), SELF.parent.parent, datetime.now().astimezone())
     if selected == "codex":
         # --resume is the picker's common spelling; Codex uses a subcommand.
         if argv[:1] == ["--resume"]:
@@ -141,7 +128,7 @@ def command(selected, argv):
             # read-only permissions and rejects additional writable roots.
             "codex", "--sandbox", "workspace-write",
             "--add-dir", str(SELF.parent.parent),
-            "-c", "developer_instructions=" + json.dumps(rules + "\n\n" + instructions()),
+            "-c", "developer_instructions=" + json.dumps(rules + "\n\n" + text),
             *argv,
         ], {}
 
@@ -149,7 +136,7 @@ def command(selected, argv):
     # trip it up.
     return "claude", [
         "claude", "--add-dir", str(SELF.parent.parent),
-        "--append-system-prompt", instructions(), *argv,
+        "--append-system-prompt", text, *argv,
     ], {"CLAUDE_CODE_SHELL": "/bin/bash"}
 
 
