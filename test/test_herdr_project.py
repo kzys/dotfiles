@@ -394,6 +394,14 @@ def test_polls_pull_requests(tmp_path):
     assert json.loads(state.read_text())[url]['checks'] == 'FAILURE'
 
 
+def test_shows_why_gh_failed(tmp_path):
+    gh = tmp_path / 'gh'
+    gh.write_text('#!/bin/sh\necho "HTTP 502: Bad Gateway" >&2\nexit 1\n')
+    gh.chmod(0o755)
+    with pytest.raises(RuntimeError, match='^HTTP 502: Bad Gateway$'):
+        pull_request.fetch(str(gh))
+
+
 def test_searches_pull_requests_in_orgs():
     since = datetime(2026, 10, 2, tzinfo=UTC)
     assert pull_request.search_query(since) == (
