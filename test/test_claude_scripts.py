@@ -141,7 +141,7 @@ def test_hook_gives_instructions_on_resume(tmp_path):
 
     def hook(**env):
         return subprocess.run(
-            [ROOT / 'bin/claude-hook'], input=data, capture_output=True, text=True,
+            [ROOT / 'bin/claude-hook'], input=data, capture_output=True, text=True, check=False,
             env={**os.environ, 'HERDR_ENV': '1', 'HERDR_PANE_ID': 'p',
                  'HERDR_BIN_PATH': str(fake), 'HOME': str(tmp_path), **env})
 
