@@ -17,7 +17,7 @@ from herdr_project import claude, headless, inbox, linear, pull_request, slack, 
 from herdr_project.herdr import ancestors, herdr, in_pane
 from herdr_project.match import clip, columns, spans, visible
 from herdr_project.notes import front_matter, notes, report_title, reported_role
-from herdr_project.remaining import follow_remaining, remember_follower
+from herdr_project.remaining import fit, follow_remaining, remember_follower
 from herdr_project.screen import Loading, follow
 
 
@@ -109,6 +109,24 @@ def test_remaining_waits_for_role_and_ends_when_pane_exits(tmp_path, capsys):
     assert elapsed < 4
     assert 'Waiting for the agent to report its role.' in capsys.readouterr().out
     assert {'type': 'pane.exited'} in subscriptions
+
+
+def test_fits_remaining_pane():
+    def layout(top, ratio, direction='down'):
+        return {'area': {'height': 60},
+                'panes': [{'pane_id': top, 'rect': {'height': round(60 * ratio)}},
+                          {'pane_id': 'agent', 'rect': {'height': 60 - round(60 * ratio)}}],
+                'splits': [{'direction': direction, 'ratio': ratio}]}
+
+    # A 21-row pane shows 19 rows inside its frame.
+    assert fit(layout('r', 0.35), 'r', 4, 19) == ['--pane', 'r', '--direction', 'up',
+                                                  '--amount', '0.2500']
+    assert fit(layout('r', 0.25), 'r', 40, 13) == ['--pane', 'r', '--direction', 'down',
+                                                   '--amount', '0.2500']
+    assert fit(layout('r', 0.35), 'r', 1, 19)[-1] == '0.2500'
+    assert fit(layout('r', 0.1), 'r', 4, 4) == []
+    assert fit(layout('agent', 0.35), 'r', 4, 19) is None
+    assert fit(layout('r', 0.35, 'right'), 'r', 4, 19) is None
 
 
 @pytest.mark.skipif(shutil.which('zsh') is None, reason='zsh is not installed')
@@ -376,6 +394,14 @@ def test_polls_pull_requests(tmp_path):
     assert json.loads(state.read_text())[url]['checks'] == 'FAILURE'
 
 
+def test_shows_why_gh_failed(tmp_path):
+    gh = tmp_path / 'gh'
+    gh.write_text('#!/bin/sh\necho "HTTP 502: Bad Gateway" >&2\nexit 1\n')
+    gh.chmod(0o755)
+    with pytest.raises(RuntimeError, match='^HTTP 502: Bad Gateway$'):
+        pull_request.fetch(str(gh))
+
+
 def test_searches_pull_requests_in_orgs():
     since = datetime(2026, 10, 2, tzinfo=UTC)
     assert pull_request.search_query(since) == (
@@ -457,6 +483,57 @@ def test_draws_watch_screen():
     at = datetime(2026, 10, 16, 15, 4, tzinfo=UTC)
     assert watch.screen([('PRs', at, ['a', 'b']), ('Slack', None, ['c'])]) == (
         'PRs at 15:04\na\nb\n\nSlack\nc')
+
+
+def test_starts_the_watcher_once(tmp_path):
+    env = {'HOME': str(tmp_path)}
+    panes = set()
+    workspaces = [{'label': '~'}]
+    calls = []
+
+    def fake_herdr(*args):
+        calls.append(args)
+        if args == ('workspace', 'list'):
+            return {'result': {'workspaces': workspaces}}
+        if args[:2] == ('pane', 'get'):
+            if args[2] == 'w8:p1':
+                raise subprocess.CalledProcessError(1, ['herdr', *args], output='')
+            if args[2] not in panes:
+                raise subprocess.CalledProcessError(
+                    1, ['herdr', *args], output='{"error":{"code":"pane_not_found"}}')
+            return {'result': {'pane': {'pane_id': args[2]}}}
+        panes.add('w2:p1')
+        return {'result': {'root_pane': {'pane_id': 'w2:p1'}}}
+
+    watch.remember_watcher('w9:p1', ['gone'], env)
+    assert watch.start(fake_herdr, env)
+    assert not watch.watcher_file('w9:p1', env).exists()
+    assert calls[-1] == ('workspace', 'create', '--label', 'watch', '--cwd', str(tmp_path),
+                         '--env', 'HERDR_PROJECT_WATCH=1', '--no-focus')
+    assert not watch.start(fake_herdr, env)
+
+    # A restored workspace counts before its pane is back.
+    watch.watcher_file('w2:p1', env).unlink()
+    workspaces.append({'label': 'watch'})
+    assert not watch.start(fake_herdr, env)
+
+    # Without a workspace, a failure that isn't pane_not_found keeps the record.
+    workspaces.pop()
+    watch.remember_watcher('w8:p1', [], env)
+    with pytest.raises(subprocess.CalledProcessError):
+        watch.start(fake_herdr, env)
+    assert watch.watcher_file('w8:p1', env).exists()
+    assert [c[:2] for c in calls].count(('workspace', 'create')) == 1
+
+
+@pytest.mark.skipif(shutil.which('zsh') is None, reason='zsh is not installed')
+def test_remembers_watcher_where_zshrc_looks(tmp_path):
+    watch.remember_watcher('w1:p2', ['org one', 'two'], {'HOME': str(tmp_path)})
+    found = subprocess.run(
+        ['zsh', '-c', 'print -rl -- ${(f)"$(cat ${XDG_STATE_HOME:-$HOME/.local/state}/herdr-project/watcher/$HERDR_PANE_ID)"}'],
+        env={'HOME': str(tmp_path), 'HERDR_PANE_ID': 'w1:p2'},
+        stdout=subprocess.PIPE, text=True, check=True).stdout
+    assert found == 'org one\ntwo\n'
 
 
 def issue(identifier, updated_at, waiting=False, links=(), state='Backlog'):

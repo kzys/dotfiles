@@ -50,14 +50,16 @@ def fetch(command="gh", days=14, orgs=()):
     """Returns the user's pull requests updated in the last days days in
     any of orgs, or anywhere without orgs, most recently updated first,
     including merged and closed ones, as GitHub's GraphQL API returns
-    them. Raises if gh fails."""
+    them. Raises if gh fails, with its error rather than the query."""
     since = datetime.now().astimezone() - timedelta(days=days)
-    out = subprocess.run(
+    run = subprocess.run(
         [command, "api", "graphql", "-f", f"query={QUERY}",
          "-f", f"q={search_query(since, orgs)}"],
-        stdout=subprocess.PIPE, text=True, check=True,
-    ).stdout
-    return json.loads(out)
+        capture_output=True, text=True, check=False,
+    )
+    if run.returncode != 0:
+        raise RuntimeError(run.stderr.strip() or f"gh exited with {run.returncode}")
+    return json.loads(run.stdout)
 
 
 def pull_requests(data):

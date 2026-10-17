@@ -1,6 +1,7 @@
 """The pane that follows the "## Remaining" section of an agent's notes."""
 
 import json
+import math
 import os
 import select
 import shutil
@@ -33,6 +34,29 @@ def remaining_section(role):
         if in_section:
             out.append(line)
     return "\n".join(out) or f'No "## Remaining" section in {path} yet.'
+
+
+def fit(layout, pane, rows, shown):
+    """Returns the herdr pane resize arguments that make the terminal in
+    Herdr pane pane, now shown rows tall, rows tall, keeping the pane
+    between a tenth of its tab, the least Herdr allows, and half of it:
+    none if it is already, or None if the tab isn't split as
+    herdr-project splits it, with pane above another. layout is the
+    layout of herdr pane layout, whose heights include the pane's
+    frame."""
+    panes = layout["panes"]
+    splits = layout["splits"]
+    if (len(panes) != 2 or len(splits) != 1 or splits[0]["direction"] != "down"
+            or panes[0]["pane_id"] != pane):
+        return None
+    height = layout["area"]["height"]
+    frame = panes[0]["rect"]["height"] - shown
+    wanted = max(math.ceil(height / 10), min(rows + frame, height // 2))
+    if wanted == panes[0]["rect"]["height"]:
+        return []
+    amount = wanted / height - splits[0]["ratio"]
+    return ["--pane", pane, "--direction", "down" if amount > 0 else "up",
+            "--amount", f"{abs(amount):.4f}"]
 
 
 def follower_file(pane, env):
@@ -98,15 +122,17 @@ class PaneWatch:
         return False
 
 
-def follow_remaining(pane, herdr, socket_path=None):
+def follow_remaining(pane, herdr, socket_path=None, own=None):
     """Prints the "## Remaining" section of the agent in Herdr pane
     until the pane is gone, refreshing every few seconds. herdr runs a
     herdr command and returns its parsed output, or raises if it fails,
     which means the pane is gone. A failed read of the role shows as a
     message rather than ending the loop, since that would close the
     pane. Herdr's socket is at socket_path, by default
-    $HERDR_SOCKET_PATH."""
+    $HERDR_SOCKET_PATH. own is the Herdr pane this runs in, if any,
+    which fits its section whenever the section's length changes."""
     watch = PaneWatch(pane, socket_path)
+    fitted = None
     while True:
         try:
             info = herdr("pane", "get", pane)
@@ -125,6 +151,18 @@ def follow_remaining(pane, herdr, socket_path=None):
             wrapped += textwrap.wrap(
                 line, cols, drop_whitespace=False, replace_whitespace=False
             ) or [""]
+        # Only on changes, so that resizing by hand lasts until then.
+        if own and len(wrapped) != fitted:
+            try:
+                args = fit(herdr("pane", "layout", "--pane", own)["result"]["layout"],
+                           own, len(wrapped), rows)
+                # The pane may not be in place yet, so try again later.
+                if args is not None:
+                    if args:
+                        herdr("pane", "resize", *args)
+                    fitted = len(wrapped)
+            except Exception:  # noqa: BLE001, S110 - fitting must not close the pane.
+                pass
         sys.stdout.write("\033[H\033[2J" + "\n".join(wrapped[:rows]))
         sys.stdout.flush()
         if watch.closed(5):

@@ -78,9 +78,9 @@ directory can be deleted:
    or carried by what you close the project with.
 2. Keep what a later task would need to know, starting from every
    agent's "## Findings", such as how a system behaves, a fix that
-   worked or a step that is easy to get wrong, where the closing rules
-   below say, or else in the user's instructions after asking them.
-   Leave out this task's history.
+   worked or a step that is easy to get wrong. Append it to
+   ~/repos/kzys/LEARNINGS.md under a heading for the system or topic,
+   unless it is already there. Leave out this task's history.
 3. Follow the closing rules below, if any, then add a closed field to
    the front matter of README.md with a link to what carries the
    outcome and any remaining work, such as a pull request or a ticket,
