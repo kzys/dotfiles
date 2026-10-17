@@ -2,9 +2,10 @@
 """Claude Code hook for every event, which it reads from the input.
 
 SessionStart: reports the session to the Herdr pane so that Herdr
-resumes it after a restart, and, when a session in a project under
-~/project resumes, prints herdr-project's instructions, since claude
-keeps the system prompt the session started with."""
+resumes it after a restart, and, when a session resumes, reports the
+role it last reported to its new pane and, in a project under
+~/project, prints herdr-project's instructions, since claude keeps the
+system prompt the session started with."""
 
 import json
 import os
@@ -17,6 +18,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from herdr_project.herdr import ancestors, herdr, in_pane
 from herdr_project.instructions import instructions, project_dir
+from herdr_project.notes import reported_role
 
 DOTFILES = Path(__file__).resolve().parent.parent
 
@@ -44,7 +46,7 @@ def resumed_instructions(data, projects, now):
     resuming in a project under projects, from the SessionStart data,
     or None. now is when it resumed, which they give as its start."""
     cwd = data.get("cwd")
-    if data.get("source") != "resume" or data.get("agent_id") or not isinstance(cwd, str):
+    if not resuming(data) or not isinstance(cwd, str):
         return None
     directory = project_dir(cwd, projects)
     if directory is None:
@@ -53,6 +55,12 @@ def resumed_instructions(data, projects, now):
             "copy of them, and give the time it resumed as its start; skip "
             "the steps you already did, such as naming the workspace.\n\n"
             + instructions(directory, DOTFILES, now))
+
+
+def resuming(data):
+    """Reports whether the SessionStart data is of a main session
+    resuming."""
+    return data.get("source") == "resume" and not data.get("agent_id")
 
 
 def report_session(data):
@@ -64,6 +72,26 @@ def report_session(data):
     if args is not None:
         herdr("pane", "report-agent-session", os.environ["HERDR_PANE_ID"], *args,
               stderr=subprocess.DEVNULL)
+
+
+def report_role(data):
+    """Reports the role a session resuming, from the SessionStart data,
+    last reported in its transcript to the Herdr pane it runs in, if
+    any. A resumed session may run in a new pane, which has no role yet;
+    a pane that has one keeps it, saving the scan of the transcript."""
+    transcript = data.get("transcript_path")
+    if not resuming(data) or not isinstance(transcript, str):
+        return
+    if not in_pane(os.environ, ancestors()):
+        return
+    pane = os.environ["HERDR_PANE_ID"]
+    got = herdr("pane", "get", pane, stderr=subprocess.DEVNULL)
+    if ((got.get("result") or {}).get("pane") or {}).get("tokens", {}).get("role"):
+        return
+    role = reported_role(transcript)
+    if role is not None:
+        herdr("pane", "report-metadata", pane, "--source", "agent-notes",
+              "--token", f"role={role}", stderr=subprocess.DEVNULL)
 
 
 def print_instructions(data):
@@ -78,8 +106,8 @@ def main():
     data = json.load(sys.stdin)
     if data.get("hook_event_name") != "SessionStart":
         return
-    # Neither step may keep the other from running.
-    for step in (report_session, print_instructions):
+    # No step may keep another from running.
+    for step in (report_session, report_role, print_instructions):
         try:
             step(data)
         except Exception:  # noqa: BLE001

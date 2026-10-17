@@ -155,6 +155,45 @@ def test_hook_gives_instructions_on_resume(tmp_path):
     assert '## Remaining' in hook(FAIL='1').stdout
 
 
+def test_hook_reports_the_role_again_on_resume(tmp_path):
+    transcript = tmp_path / 's.jsonl'
+    report = ('herdr pane report-metadata "$HERDR_PANE_ID" --source agent-notes '
+              '--token role={}')
+    transcript.write_text('\n'.join(json.dumps({'message': {'content': [
+        {'type': 'tool_use', 'input': {'command': report.format(role)}}]}})
+        for role in ['first', 'main']) + '\n')
+    calls = tmp_path / 'calls'
+    fake = tmp_path / 'herdr'
+    got = tmp_path / 'pane.json'
+    got.write_text('{"result": {"pane": {"tokens": {}}}}')
+    fake.write_text(f'#!/bin/sh\necho "$@" >> {calls}\n[ "$1 $2" = "pane get" ] && cat {got}\n'
+                    'exit 0\n')
+    fake.chmod(0o755)
+    data = {'hook_event_name': 'SessionStart', 'session_id': 's', 'source': 'resume',
+            'cwd': str(tmp_path), 'transcript_path': str(transcript)}
+
+    def roles(env=None, **changed):
+        calls.unlink(missing_ok=True)
+        subprocess.run([ROOT / 'bin/claude-hook'], input=json.dumps({**data, **changed}),
+                       capture_output=True, text=True, check=False,
+                       env={**os.environ, 'HERDR_ENV': '1', 'HERDR_PANE_ID': 'p',
+                            'HERDR_BIN_PATH': str(fake), 'HOME': str(tmp_path),
+                            **(env or {})})
+        made = calls.read_text().splitlines() if calls.exists() else []
+        return [line for line in made if line.startswith('pane report-metadata')]
+
+    assert roles() == ['pane report-metadata p --source agent-notes --token role=main']
+    assert roles(source='startup') == []
+    assert roles(agent_id='a') == []
+    assert roles(env={'HERDR_ENV': ''}) == []
+    # A pane that has a role keeps it.
+    got.write_text('{"result": {"pane": {"tokens": {"role": "other"}}}}')
+    assert roles() == []
+    got.write_text('{"result": {"pane": {"tokens": {}}}}')
+    transcript.write_text('')
+    assert roles() == []
+
+
 def test_hook_gives_instructions_only_on_resume_in_a_project(tmp_path):
     (tmp_path / 'project' / 'x').mkdir(parents=True)
     data = {'hook_event_name': 'SessionStart', 'session_id': 's', 'source': 'resume',
