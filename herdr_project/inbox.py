@@ -2,6 +2,7 @@
 tagged [you], and what the watcher found waiting on them."""
 
 import re
+from dataclasses import dataclass
 from pathlib import Path
 
 from herdr_project.notes import front_matter
@@ -166,8 +167,17 @@ def watched_items(path):
             and isinstance(i.get("role"), (str, type(None)))]
 
 
+@dataclass(frozen=True)
+class Owner:
+    """Who works on something the watcher found: the project directory,
+    the worktree in it, if known, and the role of the agent, if known."""
+    project: str
+    dir: str | None = None
+    role: str | None = None
+
+
 def item(found, mark, text):
-    """Returns an inbox item for text with mark, belonging to the
-    project that found, in pull_request.owner's form or None, describes."""
-    return {"project": found["project"] if found else None,
-            "role": found["role"] if found else None, "mark": mark, "text": text}
+    """Returns an inbox item for text with mark, belonging to the Owner
+    found, or to no project if found is None."""
+    return {"project": found.project if found else None,
+            "role": found.role if found else None, "mark": mark, "text": text}

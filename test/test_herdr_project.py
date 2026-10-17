@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from herdr_project import claude, headless, inbox, linear, pull_request, slack, watch
 from herdr_project.herdr import ancestors, herdr, in_pane
+from herdr_project.inbox import Owner
 from herdr_project.match import clip, columns, spans, visible
 from herdr_project.notes import front_matter, notes, report_title, reported_role
 from herdr_project.remaining import fit, follow_remaining, remember_follower
@@ -304,13 +305,12 @@ def test_finds_projects_of_pull_requests(tmp_path):
     def found(n):
         return pull_request.owner(prs[n], trees, texts)
 
-    assert found(1) == {'project': str(tmp_path / '20261001-a'),
-                        'dir': str(tmp_path / '20261001-a/app'), 'role': None}
+    assert found(1) == Owner(str(tmp_path / '20261001-a'), str(tmp_path / '20261001-a/app'))
     # The checkout on me/two is of another repository.
     assert found(2) is None
-    assert found(3) == {'project': str(tmp_path / '20261002-b'), 'dir': None, 'role': 'prs'}
+    assert found(3) == Owner(str(tmp_path / '20261002-b'), role='prs')
     assert found(4) is None
-    assert found(5)['project'] == str(tmp_path / '20261003-c')
+    assert found(5).project == str(tmp_path / '20261003-c')
 
 
 def test_finds_agent_panes():
@@ -320,8 +320,8 @@ def test_finds_agent_panes():
 
     panes = [pane('shell', '/p/a/app', agent=None), pane('main', '/p/a', 'main'),
              pane('prs', '/p/a', 'prs'), pane('app', '/p/a/app/sub'), pane('b', '/p/ab')]
-    find = lambda **f: (pull_request.agent_pane(panes, {'project': '/p/a', 'dir': None,
-                                                       'role': None, **f}) or {}).get('pane_id')
+    find = lambda **f: (pull_request.agent_pane(panes, Owner(**{'project': '/p/a', **f}))
+                        or {}).get('pane_id')
     assert find(dir='/p/a/app') == 'app'
     assert find(role='prs') == 'prs'
     assert find(role='gone') == 'main'
@@ -376,7 +376,7 @@ def test_polls_pull_requests(tmp_path):
     state = tmp_path / 'state/pull-requests.json'
     lines, owners, items = pull_request.poll(fake_herdr, tmp_path / 'project', state, gh=str(gh))
     assert items == []
-    assert owners['https://github.com/org/app/pull/1']['project'] == str(
+    assert owners['https://github.com/org/app/pull/1'].project == str(
         tmp_path / 'project/20261001-a')
     assert lines == [f'… ● {"app#1":<24} {"one":<20} PR 1']
     assert calls == [('pane', 'list')]
@@ -431,10 +431,11 @@ def test_finds_projects_of_slack_conversations():
     texts = [('/p/a', 'main', 'Slack thread C1 p1700000000123456 asks for review'),
              ('/p/b', None, 'see C2 for context'),
              ('/p/c', 'dm', 'DM in D9 about the rollout')]
-    pr_owners = {'https://github.com/o/r/pull/1': {'project': '/p/x', 'dir': None, 'role': None}}
+    pr_owners = {'https://github.com/o/r/pull/1': Owner('/p/x')}
 
     def find(c):
-        return (slack.owner(c, texts, pr_owners) or {}).get('project')
+        found = slack.owner(c, texts, pr_owners)
+        return found.project if found else None
 
     assert find(conversation('C1', '1700000000123456.000000', '0')) is None
     assert find(conversation('C1', '1700000000.123456', '0')) == '/p/a'
@@ -592,10 +593,11 @@ def issue(identifier, updated_at, waiting=False, links=(), state='Backlog'):
 
 def test_finds_projects_of_linear_issues():
     texts = [('/p/a', 'main', 'tracks ABC-123 and ABC-12'), ('/p/b', None, 'XABC-7 XYZ-45')]
-    pr_owners = {'https://github.com/o/r/pull/1': {'project': '/p/x', 'dir': None, 'role': None}}
+    pr_owners = {'https://github.com/o/r/pull/1': Owner('/p/x')}
 
     def find(i):
-        return (linear.owner(i, texts, pr_owners) or {}).get('project')
+        found = linear.owner(i, texts, pr_owners)
+        return found.project if found else None
 
     assert find(issue('ABC-123', '')) == '/p/a'
     assert find(issue('ABC-1', '')) is None
@@ -651,7 +653,7 @@ def test_compares_times_however_claude_writes_them():
 
 def test_matches_odd_thread_ts_literally():
     texts = [('/p/a', None, 'p12(3')]
-    assert slack.owner(conversation('C1', '12(3', '0'), texts, {})['project'] == '/p/a'
+    assert slack.owner(conversation('C1', '12(3', '0'), texts, {}).project == '/p/a'
     assert slack.owner(conversation('C1', '1.2(', '0'), [], {}) is None
 
 
@@ -669,7 +671,7 @@ def test_needs_the_pull_requests_repo_in_the_worktree():
     pr = pull_request.pull_requests(search(pr_node(1, 'me/one', repo='Org/App')))[0]
     def tree(repo):
         return [{'project': '/p/a', 'dir': '/p/a/app', 'branch': 'me/one', 'repo': repo}]
-    assert pull_request.owner(pr, tree('org/app'), [])['dir'] == '/p/a/app'
+    assert pull_request.owner(pr, tree('org/app'), []).dir == '/p/a/app'
     assert pull_request.owner(pr, tree(None), []) is None
 
 
@@ -737,7 +739,7 @@ def test_lists_pull_requests_waiting_on_me():
         pr_node(4, 'd', checks='PENDING', review='APPROVED'),
         pr_node(5, 'e', state='MERGED', checks='FAILURE'),
         pr_node(6, 'f', checks='SUCCESS')))
-    owners = {prs[0]['url']: {'project': '/p/a', 'dir': '/p/a/app', 'role': None}}
+    owners = {prs[0]['url']: Owner('/p/a', '/p/a/app')}
     assert [(i['project'], i['text']) for i in pull_request.waiting_items(prs, owners)] == [
         ('/p/a', 'app#1 checks failed: test: PR 1'),
         (None, 'app#2 changes requested: PR 2'),

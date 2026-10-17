@@ -129,7 +129,7 @@ def table(conversations, owners):
     rows = []
     for c in conversations:
         found = owners.get(key(c))
-        name = project_name(found["project"]) if found else ""
+        name = project_name(found.project) if found else ""
         mark = "*" if c["waiting_on_me"] else " "
         rows.append((not c["waiting_on_me"],
                      f"{mark} {c['channel'][:26]:<26} {name:<20} {c['summary']}"))
@@ -149,7 +149,7 @@ def poll(herdr, texts, path, pr_owners, fetch=fetch):
     owners = {key(c): owner(c, texts, pr_owners) for c in found}
     for c in events(old, found):
         project = owners.get(key(c))
-        where = f" ({Path(project['project']).name})" if project else ""
+        where = f" ({Path(project.project).name})" if project else ""
         try:
             herdr("notification", "show", f"Slack {c['channel']}",
                   "--body", f"{c['summary']}{where}", "--sound", "request")

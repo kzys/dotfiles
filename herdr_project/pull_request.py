@@ -10,6 +10,7 @@ from pathlib import Path
 
 from herdr_project import inbox
 from herdr_project.herdr import pane_cwd
+from herdr_project.inbox import Owner
 from herdr_project.notes import project_name
 from herdr_project.state import load_state, save_state
 
@@ -152,36 +153,35 @@ def mentions(text, pr):
 
 
 def owner(pr, trees, texts):
-    """Returns the project working on pr as a dict with its project,
+    """Returns the project working on pr as an Owner with its project,
     the dir of the worktree on pr's branch or None, and the role whose
     notes mention pr or None. A worktree on the branch wins over notes.
     Returns None if no project is."""
     for t in trees:
         if t["branch"] == pr["branch"] and (t["repo"] or "").lower() == pr["repo"].lower():
-            return {"project": t["project"], "dir": t["dir"], "role": None}
+            return Owner(t["project"], t["dir"])
     found = None
     for project, role, text in texts:
         # Prefer the latest project, and an agent's notes over README.md.
-        if mentions(text, pr) and (found is None or project > found["project"] or (
-                project == found["project"] and role)):
-            found = {"project": project, "dir": None, "role": role}
+        if mentions(text, pr) and (found is None or project > found.project or (
+                project == found.project and role)):
+            found = Owner(project, role=role)
     return found
 
 
 def project_of(pattern, links, texts, pr_owners):
-    """Returns the project, in the form of owner, working on something
-    that notes mention when they match regular expression pattern: the
-    latest project whose notes in texts, (project, role, text) tuples as
-    notes_texts returns them, do, preferring an agent's notes to
-    README.md. Without one it is the project of the first of links, pull
-    request URLs, in pr_owners, which maps them to projects. Returns None
-    if no project is."""
+    """Returns the Owner of something that notes mention when they match
+    regular expression pattern: the latest project whose notes in texts,
+    (project, role, text) tuples as notes_texts returns them, do,
+    preferring an agent's notes to README.md. Without one it is the
+    project of the first of links, pull request URLs, in pr_owners,
+    which maps them to projects. Returns None if no project is."""
     found = None
     for project, role, text in texts:
         if re.search(pattern, text) and (
-                found is None or project > found["project"] or (
-                    project == found["project"] and role)):
-            found = {"project": project, "dir": None, "role": role}
+                found is None or project > found.project or (
+                    project == found.project and role)):
+            found = Owner(project, role=role)
     if found:
         return found
     for url in links or []:
@@ -192,20 +192,19 @@ def project_of(pattern, links, texts, pr_owners):
 
 def agent_pane(panes, found):
     """Returns the Herdr pane, from panes in herdr pane list's form,
-    of the agent working on the pr that found, from owner, describes,
-    or None. That is the agent in the worktree, else the one with the
+    of the agent working on the pr that Owner found describes, or None. That is the agent in the worktree, else the one with the
     role, else any agent in the project."""
     agents = [p for p in panes if p.get("agent")]
 
     def inside(path, d):
         return path == d or path.startswith(d.rstrip("/") + "/")
 
-    in_project = [p for p in agents if inside(pane_cwd(p), found["project"])]
+    in_project = [p for p in agents if inside(pane_cwd(p), found.project)]
     for p in in_project:
-        if found["dir"] and inside(pane_cwd(p), found["dir"]):
+        if found.dir and inside(pane_cwd(p), found.dir):
             return p
     for p in in_project:
-        if found["role"] and (p.get("tokens") or {}).get("role") == found["role"]:
+        if found.role and (p.get("tokens") or {}).get("role") == found.role:
             return p
     return in_project[0] if in_project else None
 
@@ -275,7 +274,7 @@ def table(prs, owners, panes_by_url):
         if pr["state"] != "OPEN":
             continue
         found = owners.get(pr["url"])
-        name = project_name(found["project"]) if found else ""
+        name = project_name(found.project) if found else ""
         mark = MARKS.get(pr["checks"], " ")
         agent = "●" if panes_by_url.get(pr["url"]) else " "
         draft = " (draft)" if pr["draft"] else ""
@@ -320,7 +319,7 @@ def poll(herdr, root, path, gh="gh", orgs=()):
     panes_by_url = {url: agent_pane(panes, f) for url, f in owners.items() if f}
     for pr, message, wake in events(old, prs):
         found = owners.get(pr["url"])
-        where = f" ({Path(found['project']).name})" if found else ""
+        where = f" ({Path(found.project).name})" if found else ""
         try:
             herdr("notification", "show", f"{label(pr)} {message}",
                   "--body", f"{pr['title']}{where}",

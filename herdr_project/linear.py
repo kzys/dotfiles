@@ -122,7 +122,7 @@ def table(issues, owners):
     rows = []
     for i in sorted(issues, key=lambda i: i["updated_at"], reverse=True):
         found = owners.get(i["identifier"])
-        name = project_name(found["project"]) if found else ""
+        name = project_name(found.project) if found else ""
         mark = "*" if i["waiting_on_me"] else " "
         rows.append((not i["waiting_on_me"], (f"{mark} {i['identifier']:<9} "
                                               f"{i['state'][:11]:<11} {name:<20} "
@@ -143,7 +143,7 @@ def poll(herdr, texts, path, pr_owners, fetch=fetch, now=None):
     owners = {i["identifier"]: owner(i, texts, pr_owners) for i in found}
     for i in events(old, found):
         project = owners.get(i["identifier"])
-        where = f" ({Path(project['project']).name})" if project else ""
+        where = f" ({Path(project.project).name})" if project else ""
         try:
             herdr("notification", "show", f"Linear {i['identifier']}",
                   "--body", f"{i['summary']}{where}", "--sound", "request")

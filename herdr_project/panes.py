@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 
 from herdr_project import inbox
 from herdr_project.herdr import pane_cwd
+from herdr_project.inbox import Owner
 from herdr_project.instructions import project_dir
 from herdr_project.notes import project_name
 from herdr_project.state import load_state, save_state
@@ -99,12 +100,12 @@ def full(panes):
 
 
 def owner(pane, root):
-    """Returns the project under root and role of the agent in pane, in
-    pull_request.owner's form, or None if it isn't in a project."""
+    """Returns the Owner of pane, with its project under root and the
+    role of its agent, or None if it isn't in a project."""
     project = project_dir(pane_cwd(pane), root)
     if project is None:
         return None
-    return {"project": str(project), "role": (pane.get("tokens") or {}).get("role")}
+    return Owner(str(project), role=(pane.get("tokens") or {}).get("role"))
 
 
 def wake_message(pane):
@@ -142,7 +143,7 @@ def poll(herdr, root, path, now, read=read_pane):
     lines, items = [], []
     for p in full(panes):
         found = owner(p, root)
-        where = project_name(found["project"]) if found else pane_cwd(p)
+        where = project_name(found.project) if found else pane_cwd(p)
         lines.append(f"{ctx(p):>3}% {p['pane_id']:<8} {where}")
         # Only agents in projects keep notes to restart from.
         if not found:
@@ -161,7 +162,7 @@ def poll(herdr, root, path, now, read=read_pane):
             save_state(path, state)
     for p, span in idle(state, panes, now):
         found = owner(p, root)
-        where = project_name(found["project"]) if found else pane_cwd(p)
+        where = project_name(found.project) if found else pane_cwd(p)
         lines.append(f"{days(span):>4} {p['pane_id']:<8} {where}")
         if found:
             items.append(inbox.item(found, "idle", f"shell pane {p['pane_id']} "
