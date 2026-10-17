@@ -63,20 +63,53 @@ def waiting(item):
     return "?" if LIKELY.search(item) else None
 
 
-def note_items(directory):
-    """Returns what waits on the user in the notes of the project in
-    directory, as dicts with its role, mark (as waiting returns it) and
-    text, the most pressing first."""
-    items = []
+def role_notes(directory):
+    """Returns the agents' notes in the project in directory as (role,
+    text) tuples."""
+    found = []
     for f in sorted(Path(directory).glob("AGENT-*.md")):
         try:
-            text = f.read_text(errors="replace")
+            found.append((f.stem[len("AGENT-"):], f.read_text(errors="replace")))
         except OSError:
+            pass
+    return found
+
+
+def role_closed(text):
+    """Reports whether the agent's notes text close its role, with a
+    line starting with "closed:" and a link or a few words, before the
+    first section."""
+    for line in text.splitlines():
+        if line.startswith("## "):
+            return False
+        if line.startswith("closed:") and line[len("closed:"):].strip():
+            return True
+    return False
+
+
+def settled(text):
+    """Reports whether the agent's notes text look finished: their
+    "## Remaining" section has items, all saying nothing is left or
+    ticked. An empty section may only not be written yet."""
+    if "## Remaining" not in text.splitlines():
+        return False
+    items = remaining_items(text)
+    return bool(items) and all(i.lower().startswith(SETTLED) for i in items)
+
+
+def note_items(directory, notes=None):
+    """Returns what waits on the user in the notes of the project in
+    directory, or in notes as role_notes returns them, skipping closed
+    roles, as dicts with its role, mark (as waiting returns it) and
+    text, the most pressing first."""
+    items = []
+    for role, text in role_notes(directory) if notes is None else notes:
+        if role_closed(text):
             continue
         for item in remaining_items(text):
             mark = waiting(item)
             if mark:
-                items.append({"role": f.stem[len("AGENT-"):], "mark": mark,
+                items.append({"role": role, "mark": mark,
                               "text": item[len("[you]"):].strip() if mark == "you" else item})
     return sorted(items, key=rank)
 
@@ -87,39 +120,26 @@ def rank(item):
     return ORDER.get(item["mark"], ORDER["?"])
 
 
-def settled(directory):
-    """Reports whether the project in directory looks finished: it has
-    agents' notes, each has a "## Remaining" section whose items all say
-    nothing is left or are ticked, and at least one has such an item,
-    since an empty section may only not be written yet."""
-    found = False
-    for f in Path(directory).glob("AGENT-*.md"):
-        try:
-            text = f.read_text(errors="replace")
-        except OSError:
-            continue
-        if "## Remaining" not in text.splitlines():
-            return False
-        items = remaining_items(text)
-        if not all(i.lower().startswith(SETTLED) for i in items):
-            return False
-        found = found or bool(items)
-    return found
-
-
 def project_items(directory, watched=()):
     """Returns what waits on the user in the project in directory, as
-    note_items does, followed by watched, the watcher's items for it, or
-    an item suggesting to close it if it looks finished and the watcher
-    found nothing. A closed project has none."""
+    note_items does, followed by watched, the watcher's items for it. If
+    the watcher found nothing, it also suggests closing the project when
+    every open role looks finished, or else each role that does. A
+    closed project has none."""
     if front_matter(directory, "closed"):
         return []
+    notes = role_notes(directory)
+    items = note_items(directory, notes) + list(watched)
     if watched:
-        return note_items(directory) + list(watched)
-    if settled(directory):
+        return items
+    roles = [(r, t) for r, t in notes if not role_closed(t)]
+    if notes and all(settled(t) for _, t in roles):
         return [{"role": None, "mark": "close",
                  "text": "Nothing remaining; tell its agent the task is done to close it"}]
-    return note_items(directory)
+    return items + [{"role": r, "mark": "close",
+                     "text": f"Nothing remaining for {r}; tell its agent its part is done "
+                             "to close it"}
+                    for r, t in roles if settled(t)]
 
 
 def read_sources(path):
