@@ -127,3 +127,38 @@ def test_hook_session_start():
     assert hook.session_start({'session_id': 's'}, 7)[-2:] == ['--agent-session-id', 's']
     assert hook.session_start({'session_id': 's', 'agent_id': 'a'}, 7) is None
     assert hook.session_start({}, 7) is None
+
+
+def test_hook_gives_instructions_on_resume(tmp_path):
+    project = tmp_path / 'project' / '20261016-x'
+    (project / 'repo').mkdir(parents=True)
+    calls = tmp_path / 'calls'
+    fake = tmp_path / 'herdr'
+    fake.write_text(f'#!/bin/sh\necho "$@" >> {calls}\nexit "${{FAIL:-0}}"\n')
+    fake.chmod(0o755)
+    data = json.dumps({'hook_event_name': 'SessionStart', 'session_id': 's',
+                       'source': 'resume', 'cwd': str(project / 'repo')})
+
+    def hook(**env):
+        return subprocess.run(
+            [ROOT / 'bin/claude-hook'], input=data, capture_output=True, text=True,
+            env={**os.environ, 'HERDR_ENV': '1', 'HERDR_PANE_ID': 'p',
+                 'HERDR_BIN_PATH': str(fake), 'HOME': str(tmp_path), **env})
+
+    got = hook()
+    assert got.returncode == 0
+    assert '## Remaining' in got.stdout
+    assert f'this task\'s is\n`{project}`' in got.stdout
+    assert 'pane report-agent-session p ' in calls.read_text()
+
+    # A failing report doesn't keep the instructions out.
+    assert '## Remaining' in hook(FAIL='1').stdout
+
+
+def test_hook_gives_instructions_only_on_resume_in_a_project(tmp_path):
+    (tmp_path / 'project' / 'x').mkdir(parents=True)
+    data = {'hook_event_name': 'SessionStart', 'session_id': 's', 'source': 'resume',
+            'cwd': str(tmp_path / 'project' / 'x')}
+    for changed in [{'source': 'startup'}, {'agent_id': 'a'}, {'cwd': str(tmp_path)}]:
+        got = run('claude-hook', json.dumps({**data, **changed}), tmp_path)
+        assert (got.returncode, got.stdout) == (0, ''), changed
