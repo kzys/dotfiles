@@ -1,5 +1,5 @@
-"""Watching the user's pull requests, Slack conversations and Linear
-issues together, each at its own pace, in one pane."""
+"""Watching the user's pull requests, Herdr panes, Slack conversations
+and Linear issues together, each at its own pace, in one pane."""
 
 import fcntl
 import os
@@ -10,7 +10,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from herdr_project import inbox, linear, pull_request, slack
+from herdr_project import inbox, linear, panes, pull_request, slack
 
 
 def state_dir(env):
@@ -75,14 +75,15 @@ def screen(sections):
 
 
 def watch(herdr, root, state, orgs=(), pr_interval=300, queue_interval=1800):
-    """Polls the pull requests in orgs, or all without orgs, every
-    pr_interval seconds, and the Slack conversations and Linear issues
+    """Polls the pull requests in orgs, or all without orgs, and the
+    Herdr panes every pr_interval seconds, and the Slack conversations and Linear issues
     every queue_interval seconds, those in the background since Claude
     takes a while, printing them all until interrupted and keeping what
     waits on the user in inbox.json for the inbox. Failures show instead
     of their lines, keeping their last inbox items."""
     lock = threading.Lock()
     prs = ["Pull requests", None, ["Checking…"]]
+    pane_section = ["Panes", None, ["Checking…"]]
     queues = [(slack, ["Slack", None, ["Checking…"]], "slack.json"),
               (linear, ["Linear", None, ["Checking…"]], "linear.json")]
     pr_owners = {}
@@ -99,7 +100,8 @@ def watch(herdr, root, state, orgs=(), pr_interval=300, queue_interval=1800):
 
     def show():
         with lock:
-            text = screen([tuple(prs), *(tuple(section) for _, section, _ in queues)])
+            text = screen([tuple(prs), tuple(pane_section),
+                           *(tuple(section) for _, section, _ in queues)])
             sys.stdout.write("\033[H\033[2J" + text)
             sys.stdout.flush()
 
@@ -132,6 +134,15 @@ def watch(herdr, root, state, orgs=(), pr_interval=300, queue_interval=1800):
             pr_owners.update(owners)
             if new is not None:
                 found(prs[0], new)
+        try:
+            lines, new = panes.poll(herdr, root, state / "panes.json",
+                                    datetime.now().astimezone())
+        except Exception as e:  # noqa: BLE001 - shown rather than ending the watcher.
+            lines, new = [f"Cannot check panes: {e!r}"], None
+        with lock:
+            pane_section[1:] = [datetime.now().astimezone(), lines]
+            if new is not None:
+                found(pane_section[0], new)
         show()
         for t in threads:
             if t.ident is None:

@@ -13,7 +13,9 @@ herdr-project --watch [<org>...] lists the user's open pull requests,
 in the given GitHub organizations if any, active Slack conversations
 and Linear issues. It tells the user, and the agent working on each pull
 request, when its checks, review or state change, and the user when a
-conversation or issue waits on them.
+conversation or issue waits on them. It also lists agents whose context
+is nearly full, asking each once to update its notes, and shell panes
+idle for a day.
 
 herdr-project --start-watch starts the watcher in a new Herdr workspace
 named watch, unless a pane already has it.

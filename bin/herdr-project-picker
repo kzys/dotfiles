@@ -137,7 +137,7 @@ def choices(panes, selected, projects, codex):
 
 # How inbox rows show where an item comes from.
 SOURCES = {"you": "you", "?": "you?", "maybe": "maybe", "close": "close?", "pr": "pr",
-           "slack": "slack", "linear": "linear"}
+           "slack": "slack", "linear": "linear", "ctx": "ctx", "idle": "idle"}
 
 
 def session_for(directory, role, panes, selected, codex):
