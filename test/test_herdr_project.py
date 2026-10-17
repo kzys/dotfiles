@@ -17,7 +17,7 @@ from herdr_project import claude, headless, inbox, linear, pull_request, slack, 
 from herdr_project.herdr import ancestors, herdr, in_pane
 from herdr_project.match import clip, columns, spans, visible
 from herdr_project.notes import front_matter, notes, report_title, reported_role
-from herdr_project.remaining import follow_remaining, remember_follower
+from herdr_project.remaining import fit, follow_remaining, remember_follower
 from herdr_project.screen import Loading, follow
 
 
@@ -109,6 +109,24 @@ def test_remaining_waits_for_role_and_ends_when_pane_exits(tmp_path, capsys):
     assert elapsed < 4
     assert 'Waiting for the agent to report its role.' in capsys.readouterr().out
     assert {'type': 'pane.exited'} in subscriptions
+
+
+def test_fits_remaining_pane():
+    def layout(top, ratio, direction='down'):
+        return {'area': {'height': 60},
+                'panes': [{'pane_id': top, 'rect': {'height': round(60 * ratio)}},
+                          {'pane_id': 'agent', 'rect': {'height': 60 - round(60 * ratio)}}],
+                'splits': [{'direction': direction, 'ratio': ratio}]}
+
+    # A 21-row pane shows 19 rows inside its frame.
+    assert fit(layout('r', 0.35), 'r', 4, 19) == ['--pane', 'r', '--direction', 'up',
+                                                  '--amount', '0.2500']
+    assert fit(layout('r', 0.25), 'r', 40, 13) == ['--pane', 'r', '--direction', 'down',
+                                                   '--amount', '0.2500']
+    assert fit(layout('r', 0.35), 'r', 1, 19)[-1] == '0.2500'
+    assert fit(layout('r', 0.1), 'r', 4, 4) == []
+    assert fit(layout('agent', 0.35), 'r', 4, 19) is None
+    assert fit(layout('r', 0.35, 'right'), 'r', 4, 19) is None
 
 
 @pytest.mark.skipif(shutil.which('zsh') is None, reason='zsh is not installed')

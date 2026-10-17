@@ -6,7 +6,8 @@ pane above it.
 
 herdr-project --remaining <pane> runs in that pane: it reprints the
 section of the agent in Herdr pane <pane>, whose notes file is named
-by the role token the agent reports, until the pane is gone.
+by the role token the agent reports, until the pane is gone, and fits
+its own pane to the section.
 
 herdr-project --watch [<org>...] lists the user's open pull requests,
 in the given GitHub organizations if any, active Slack conversations
@@ -87,7 +88,8 @@ def main(argv):
             return 2
         try:
             follow_remaining(
-                argv[1], lambda *args: herdr(*args, stderr=subprocess.DEVNULL))
+                argv[1], lambda *args: herdr(*args, stderr=subprocess.DEVNULL),
+                own=os.environ.get("HERDR_PANE_ID"))
         except KeyboardInterrupt:
             pass
         return 0
