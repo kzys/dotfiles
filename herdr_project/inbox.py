@@ -1,12 +1,12 @@
 """What waits on the user across projects: items in the agents' notes
 tagged [you], and what the watcher found waiting on them."""
 
-import json
-import os
 import re
+from dataclasses import dataclass
 from pathlib import Path
 
 from herdr_project.notes import front_matter
+from herdr_project.state import load_state, save_state
 
 # Untagged items that likely wait on the user, in notes written before
 # agents were told to tag them.
@@ -145,19 +145,14 @@ def project_items(directory, watched=()):
 def read_sources(path):
     """Returns the inbox items the watcher kept in path by source, or {}
     if it hasn't run."""
-    try:
-        sources = json.loads(path.read_text())
-    except (OSError, ValueError):
-        return {}
+    sources = load_state(path)
     return sources if isinstance(sources, dict) else {}
 
 
 def write_sources(path, sources):
     """Keeps the inbox items in sources, by source, in path, replacing
     it whole so that readers never see half of it."""
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(sources, indent=1))
-    os.replace(tmp, path)
+    save_state(path, sources)
 
 
 def watched_items(path):
@@ -172,8 +167,17 @@ def watched_items(path):
             and isinstance(i.get("role"), (str, type(None)))]
 
 
+@dataclass(frozen=True)
+class Owner:
+    """Who works on something the watcher found: the project directory,
+    the worktree in it, if known, and the role of the agent, if known."""
+    project: str
+    dir: str | None = None
+    role: str | None = None
+
+
 def item(found, mark, text):
-    """Returns an inbox item for text with mark, belonging to the
-    project that found, in pull_request.owner's form or None, describes."""
-    return {"project": found["project"] if found else None,
-            "role": found["role"] if found else None, "mark": mark, "text": text}
+    """Returns an inbox item for text with mark, belonging to the Owner
+    found, or to no project if found is None."""
+    return {"project": found.project if found else None,
+            "role": found.role if found else None, "mark": mark, "text": text}

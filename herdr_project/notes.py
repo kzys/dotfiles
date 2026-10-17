@@ -31,6 +31,12 @@ def front_matter(directory, key):
     return ""
 
 
+def project_name(directory):
+    """Returns the short name of the project in directory: the name in
+    the front matter of its README.md, else the directory's name."""
+    return front_matter(directory, "name") or Path(directory).name
+
+
 def report_title(workspace, directory, herdr):
     """Reports the title in the front matter of README.md in directory as
     the $title token of Herdr workspace, for the Spaces panel, if there is

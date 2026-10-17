@@ -20,7 +20,7 @@ def instructions(directory, dotfiles, now):
             .replace("$dotfiles", str(dotfiles)))
 
 
-def project_of(cwd, projects):
+def project_dir(cwd, projects):
     """Returns the project directory directly under projects that holds
     cwd, or None if cwd isn't in one. Symlinks in either path don't
     matter."""

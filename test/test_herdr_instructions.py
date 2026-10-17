@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from pathlib import Path
 
-from herdr_project.instructions import instructions, project_of
+from herdr_project.instructions import instructions, project_dir
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -14,8 +14,8 @@ def test_instructions_fill_in_the_session():
     assert '$PWD' not in text and '$start' not in text and '$dotfiles' not in text
 
 
-def test_project_of():
-    assert project_of('/h/project/a/repo/sub', '/h/project') == Path('/h/project/a')
-    assert project_of('/h/project/a', '/h/project') == Path('/h/project/a')
-    assert project_of('/h/project', '/h/project') is None
-    assert project_of('/h/other', '/h/project') is None
+def test_project_dir():
+    assert project_dir('/h/project/a/repo/sub', '/h/project') == Path('/h/project/a')
+    assert project_dir('/h/project/a', '/h/project') == Path('/h/project/a')
+    assert project_dir('/h/project', '/h/project') is None
+    assert project_dir('/h/other', '/h/project') is None

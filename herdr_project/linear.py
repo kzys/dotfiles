@@ -2,14 +2,14 @@
 session that has the Linear connector, and telling the user when one
 starts waiting on them."""
 
-import json
 import re
 import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from herdr_project import headless, inbox, pull_request
-from herdr_project.notes import front_matter
+from herdr_project.notes import project_name
+from herdr_project.state import load_state, save_state
 
 SCHEMA = {
     "type": "object",
@@ -122,9 +122,7 @@ def table(issues, owners):
     rows = []
     for i in sorted(issues, key=lambda i: i["updated_at"], reverse=True):
         found = owners.get(i["identifier"])
-        name = ""
-        if found:
-            name = front_matter(found["project"], "name") or Path(found["project"]).name
+        name = project_name(found.project) if found else ""
         mark = "*" if i["waiting_on_me"] else " "
         rows.append((not i["waiting_on_me"], (f"{mark} {i['identifier']:<9} "
                                               f"{i['state'][:11]:<11} {name:<20} "
@@ -139,23 +137,20 @@ def poll(herdr, texts, path, pr_owners, fetch=fetch, now=None):
     issues waiting on the user. herdr runs a herdr
     command. texts are the projects' notes, and pr_owners the projects
     of pull requests by url. now is the current time unless given."""
-    try:
-        old = json.loads(path.read_text())
-    except (OSError, ValueError):
-        old = None
+    old = load_state(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     found = fetch(path.parent)
     owners = {i["identifier"]: owner(i, texts, pr_owners) for i in found}
     for i in events(old, found):
         project = owners.get(i["identifier"])
-        where = f" ({Path(project['project']).name})" if project else ""
+        where = f" ({Path(project.project).name})" if project else ""
         try:
             herdr("notification", "show", f"Linear {i['identifier']}",
                   "--body", f"{i['summary']}{where}", "--sound", "request")
         except (OSError, subprocess.CalledProcessError):
             pass
     now = now or datetime.now(UTC)
-    path.write_text(json.dumps(remember(old, found, now), indent=1))
+    save_state(path, remember(old, found, now))
     items = [inbox.item(owners.get(i["identifier"]), "linear",
                         f"{i['identifier']}: {i['summary']}")
              for i in found if i["waiting_on_me"]]
