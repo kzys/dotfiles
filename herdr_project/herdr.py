@@ -20,6 +20,12 @@ def herdr(*args, stderr=None, command=None):
         return {}
 
 
+def pane_cwd(pane):
+    """Returns the directory pane, in herdr pane list's form, works in:
+    the cwd its agent reports, else Herdr's, else ""."""
+    return (pane.get("tokens") or {}).get("cwd") or pane.get("cwd") or ""
+
+
 def in_pane(env, ancestors):
     """Reports whether a process runs in a Herdr pane, from its
     environment env and its ancestors' command lines.

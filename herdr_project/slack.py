@@ -2,7 +2,6 @@
 Claude session that has the Slack connector, and telling the user when
 one starts waiting on them."""
 
-import json
 import re
 import subprocess
 import time
@@ -10,7 +9,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from herdr_project import headless, inbox, pull_request
-from herdr_project.notes import front_matter
+from herdr_project.notes import project_name
+from herdr_project.state import load_state, save_state
 
 # The claude.ai connector the headless session needs.
 CONNECTOR = "Slack"
@@ -129,9 +129,7 @@ def table(conversations, owners):
     rows = []
     for c in conversations:
         found = owners.get(key(c))
-        name = ""
-        if found:
-            name = front_matter(found["project"], "name") or Path(found["project"]).name
+        name = project_name(found["project"]) if found else ""
         mark = "*" if c["waiting_on_me"] else " "
         rows.append((not c["waiting_on_me"],
                      f"{mark} {c['channel'][:26]:<26} {name:<20} {c['summary']}"))
@@ -145,10 +143,7 @@ def poll(herdr, texts, path, pr_owners, fetch=fetch):
     the conversations waiting on the user. herdr runs a herdr
     command. texts are the projects' notes, and pr_owners the projects
     of pull requests by url."""
-    try:
-        old = json.loads(path.read_text())
-    except (OSError, ValueError):
-        old = None
+    old = load_state(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     found = fetch(path.parent)
     owners = {key(c): owner(c, texts, pr_owners) for c in found}
@@ -160,7 +155,7 @@ def poll(herdr, texts, path, pr_owners, fetch=fetch):
                   "--body", f"{c['summary']}{where}", "--sound", "request")
         except (OSError, subprocess.CalledProcessError):
             pass
-    path.write_text(json.dumps(remember(old, found, time.time()), indent=1))
+    save_state(path, remember(old, found, time.time()))
     items = [inbox.item(owners.get(key(c)), "slack", f"Slack {c['channel']}: {c['summary']}")
              for c in found if c["waiting_on_me"]]
     return table(found, owners), items

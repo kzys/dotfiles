@@ -2,15 +2,15 @@
 shell panes that have long been idle."""
 
 import hashlib
-import json
 import os
 import subprocess
 from datetime import datetime, timedelta
-from pathlib import Path
 
 from herdr_project import inbox
-from herdr_project.instructions import project_of
-from herdr_project.notes import front_matter
+from herdr_project.herdr import pane_cwd
+from herdr_project.instructions import project_dir
+from herdr_project.notes import project_name
+from herdr_project.state import load_state, save_state
 
 # How full an agent's context is when it should hand over to a new
 # session, in percent.
@@ -34,11 +34,6 @@ def ctx(pane):
         return int(text.rstrip("%"))
     except ValueError:
         return None
-
-
-def cwd(pane):
-    """Returns the directory pane works in."""
-    return (pane.get("tokens") or {}).get("cwd") or pane.get("cwd") or ""
 
 
 def shells(panes):
@@ -106,17 +101,10 @@ def full(panes):
 def owner(pane, root):
     """Returns the project under root and role of the agent in pane, in
     pull_request.owner's form, or None if it isn't in a project."""
-    project = project_of(cwd(pane), root)
+    project = project_dir(pane_cwd(pane), root)
     if project is None:
         return None
     return {"project": str(project), "role": (pane.get("tokens") or {}).get("role")}
-
-
-def name(found):
-    """Returns the short name of the project that found describes, or ""."""
-    if not found:
-        return ""
-    return front_matter(found["project"], "name") or Path(found["project"]).name
 
 
 def wake_message(pane):
@@ -131,15 +119,6 @@ def days(span):
     return f"{hours // 24}d" if hours >= 24 else f"{hours}h"
 
 
-def save(path, state):
-    """Keeps state in path, replacing it whole so that a failed write
-    never leaves half of it."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(state, indent=1))
-    os.replace(tmp, path)
-
-
 def poll(herdr, root, path, now, read=read_pane):
     """Checks the panes once: tells each agent whose context became full
     since the state in path to update its notes, if it is idle or done,
@@ -148,10 +127,7 @@ def poll(herdr, root, path, now, read=read_pane):
     in projects are told. herdr runs a herdr command and returns its
     parsed output, and read returns a pane's text by its id. Projects
     are under root."""
-    try:
-        old = json.loads(path.read_text())
-    except (OSError, ValueError):
-        old = {}
+    old = load_state(path)
     if not isinstance(old, dict):
         old = {}
     panes = herdr("pane", "list")["result"]["panes"]
@@ -162,11 +138,11 @@ def poll(herdr, root, path, now, read=read_pane):
         except (OSError, subprocess.CalledProcessError):
             pass  # Unknown, so it starts over as not idle.
     state = remember(old, panes, texts, now)
-    save(path, state)
+    save_state(path, state)
     lines, items = [], []
     for p in full(panes):
         found = owner(p, root)
-        where = name(found) or cwd(p)
+        where = project_name(found["project"]) if found else pane_cwd(p)
         lines.append(f"{ctx(p):>3}% {p['pane_id']:<8} {where}")
         # Only agents in projects keep notes to restart from.
         if not found:
@@ -177,15 +153,15 @@ def poll(herdr, root, path, now, read=read_pane):
             continue
         # Keep it told before telling, so a failed save can't tell it again.
         state["told"].append(p["pane_id"])
-        save(path, state)
+        save_state(path, state)
         try:
             herdr("pane", "run", p["pane_id"], wake_message(p))
         except (OSError, subprocess.CalledProcessError):
             state["told"].remove(p["pane_id"])
-            save(path, state)
+            save_state(path, state)
     for p, span in idle(state, panes, now):
         found = owner(p, root)
-        where = name(found) or cwd(p)
+        where = project_name(found["project"]) if found else pane_cwd(p)
         lines.append(f"{days(span):>4} {p['pane_id']:<8} {where}")
         if found:
             items.append(inbox.item(found, "idle", f"shell pane {p['pane_id']} "

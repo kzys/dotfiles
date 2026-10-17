@@ -19,6 +19,7 @@ from herdr_project.match import clip, columns, spans, visible
 from herdr_project.notes import front_matter, notes, report_title, reported_role
 from herdr_project.remaining import fit, follow_remaining, remember_follower
 from herdr_project.screen import Loading, follow
+from herdr_project.state import load_state, save_state
 
 
 def test_filters_sessions_by_project():
@@ -699,6 +700,16 @@ def test_finds_what_waits_on_me_in_notes(tmp_path):
         {'role': 'main', 'mark': '?', 'text': 'Base image commit reviewed, not pushed'},
         {'role': 'main', 'mark': 'maybe',
          'text': 'Optional: post findings to the thread if the user asks'}]
+
+
+def test_keeps_state(tmp_path):
+    path = tmp_path / 'state/x.json'
+    assert load_state(path) is None
+    save_state(path, {'a': [1]})
+    assert load_state(path) == {'a': [1]}
+    assert [p.name for p in path.parent.iterdir()] == ['x.json']
+    path.write_text('{"a": ')
+    assert load_state(path) is None
 
 
 def test_keeps_watched_items(tmp_path):

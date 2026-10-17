@@ -9,7 +9,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from herdr_project import inbox
-from herdr_project.notes import front_matter
+from herdr_project.herdr import pane_cwd
+from herdr_project.notes import project_name
+from herdr_project.state import load_state, save_state
 
 QUERY = """
 query($q: String!) {
@@ -195,15 +197,12 @@ def agent_pane(panes, found):
     role, else any agent in the project."""
     agents = [p for p in panes if p.get("agent")]
 
-    def cwd(p):
-        return (p.get("tokens") or {}).get("cwd") or p.get("cwd") or ""
-
     def inside(path, d):
         return path == d or path.startswith(d.rstrip("/") + "/")
 
-    in_project = [p for p in agents if inside(cwd(p), found["project"])]
+    in_project = [p for p in agents if inside(pane_cwd(p), found["project"])]
     for p in in_project:
-        if found["dir"] and inside(cwd(p), found["dir"]):
+        if found["dir"] and inside(pane_cwd(p), found["dir"]):
             return p
     for p in in_project:
         if found["role"] and (p.get("tokens") or {}).get("role") == found["role"]:
@@ -276,9 +275,7 @@ def table(prs, owners, panes_by_url):
         if pr["state"] != "OPEN":
             continue
         found = owners.get(pr["url"])
-        name = ""
-        if found:
-            name = front_matter(found["project"], "name") or Path(found["project"]).name
+        name = project_name(found["project"]) if found else ""
         mark = MARKS.get(pr["checks"], " ")
         agent = "●" if panes_by_url.get(pr["url"]) else " "
         draft = " (draft)" if pr["draft"] else ""
@@ -315,10 +312,7 @@ def poll(herdr, root, path, gh="gh", orgs=()):
     by url, and the inbox items of waiting_items. herdr runs a herdr command and returns its parsed output.
     The projects are under root. Only pull requests in orgs count, or
     all without orgs."""
-    try:
-        old = json.loads(path.read_text())
-    except (OSError, ValueError):
-        old = None
+    old = load_state(path)
     prs = pull_requests(fetch(gh, orgs=orgs))
     trees, texts = worktrees(root), notes_texts(root)
     panes = herdr("pane", "list")["result"]["panes"]
@@ -339,7 +333,6 @@ def poll(herdr, root, path, gh="gh", orgs=()):
                 herdr("pane", "run", pane["pane_id"], wake_message(pr, message))
             except (OSError, subprocess.CalledProcessError):
                 pass
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(remember(old, prs), indent=1))
+    save_state(path, remember(old, prs))
     return table(prs, owners, panes_by_url), owners, waiting_items(prs, owners)
 

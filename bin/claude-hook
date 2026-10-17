@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from herdr_project.herdr import ancestors, herdr, in_pane
-from herdr_project.instructions import instructions, project_of
+from herdr_project.instructions import instructions, project_dir
 
 DOTFILES = Path(__file__).resolve().parent.parent
 
@@ -46,7 +46,7 @@ def resumed_instructions(data, projects, now):
     cwd = data.get("cwd")
     if data.get("source") != "resume" or data.get("agent_id") or not isinstance(cwd, str):
         return None
-    directory = project_of(cwd, projects)
+    directory = project_dir(cwd, projects)
     if directory is None:
         return None
     return ("This session resumed. These instructions replace any earlier "

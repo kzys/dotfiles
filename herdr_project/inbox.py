@@ -1,12 +1,11 @@
 """What waits on the user across projects: items in the agents' notes
 tagged [you], and what the watcher found waiting on them."""
 
-import json
-import os
 import re
 from pathlib import Path
 
 from herdr_project.notes import front_matter
+from herdr_project.state import load_state, save_state
 
 # Untagged items that likely wait on the user, in notes written before
 # agents were told to tag them.
@@ -145,19 +144,14 @@ def project_items(directory, watched=()):
 def read_sources(path):
     """Returns the inbox items the watcher kept in path by source, or {}
     if it hasn't run."""
-    try:
-        sources = json.loads(path.read_text())
-    except (OSError, ValueError):
-        return {}
+    sources = load_state(path)
     return sources if isinstance(sources, dict) else {}
 
 
 def write_sources(path, sources):
     """Keeps the inbox items in sources, by source, in path, replacing
     it whole so that readers never see half of it."""
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(sources, indent=1))
-    os.replace(tmp, path)
+    save_state(path, sources)
 
 
 def watched_items(path):
