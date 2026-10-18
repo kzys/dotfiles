@@ -1,8 +1,9 @@
 // The page's view of the worktrees in the projects and their diffs.
 
-import { useEffect, useMemo, useRef, useState } from "preact/hooks";
-import { type DiffLine, type FileDiff, filePath, parseDiff, splitRows } from "./diff.ts";
-import type { Summary, WorktreeDiff } from "./worktrees.ts";
+import { useEffect, useRef, useState } from "preact/hooks";
+import { type DiffLine, type FileDiff, filePath, splitRows } from "./diff.ts";
+import type { HighlightedDiff } from "./highlight.ts";
+import type { Summary } from "./worktrees.ts";
 
 // Files with more lines than this start folded.
 const FOLD_LINES = 400;
@@ -171,6 +172,16 @@ const STATUS: Record<FileDiff["status"], string> = {
   renamed: "renamed",
 };
 
+/** Returns line's text, in its tokens' colours where it has them. */
+function Code({ line }: { line: DiffLine }) {
+  if (!line.tokens) return <>{line.text}</>;
+  return (
+    <>
+      {line.tokens.map(([text, color], i) => (color ? <span key={i} style={{ color }}>{text}</span> : text))}
+    </>
+  );
+}
+
 /** Returns the cells of one side of a split row: line's number in the
  * file of that side, and its text. */
 function Side({ line, side }: { line: DiffLine | null; side: "old" | "new" }) {
@@ -178,7 +189,9 @@ function Side({ line, side }: { line: DiffLine | null; side: "old" | "new" }) {
   return (
     <>
       <td class={`ln line-${line.kind}`}>{line[side]}</td>
-      <td class={`code line-${line.kind}`}>{line.text}</td>
+      <td class={`code line-${line.kind}`}>
+        <Code line={line} />
+      </td>
     </>
   );
 }
@@ -238,7 +251,9 @@ function FileView({ file, id, layout }: { file: FileDiff; id: string; layout: La
                         <tr key={j} class={`line line-${l.kind}`}>
                           <td class="ln">{l.old}</td>
                           <td class="ln">{l.new}</td>
-                          <td class="code">{l.text}</td>
+                          <td class="code">
+                            <Code line={l} />
+                          </td>
                         </tr>
                       ))}
                 </tbody>
@@ -254,8 +269,8 @@ function FileView({ file, id, layout }: { file: FileDiff; id: string; layout: La
  * started, with its files matching query. */
 export function WorktreeDiffView({ dir, query }: { dir: string; query: string }) {
   const [layout, setLayout] = useLayout();
-  const [wt, error, at, refresh] = useFetched<WorktreeDiff>(`/api/diff?dir=${encodeURIComponent(dir)}`);
-  const files = useMemo(() => (wt ? parseDiff(wt.diff) : []), [wt]);
+  const [wt, error, at, refresh] = useFetched<HighlightedDiff>(`/api/diff?dir=${encodeURIComponent(dir)}`);
+  const files = wt?.fileDiffs ?? [];
   const shown = files.filter((f) => [f.from, f.to].some((p) => p?.toLowerCase().includes(query)));
   const added = files.reduce((n, f) => n + f.added, 0);
   const removed = files.reduce((n, f) => n + f.removed, 0);

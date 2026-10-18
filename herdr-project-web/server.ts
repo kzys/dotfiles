@@ -9,6 +9,7 @@ import { extname, join, relative } from "node:path";
 import { promisify } from "node:util";
 import { build } from "esbuild";
 import { HerdrEvents } from "./events.ts";
+import { highlightDiff } from "./highlight.ts";
 import { frontMatter } from "./inbox.ts";
 import { type Herdr, openProjects, projectDirs, readState } from "./state.ts";
 import { checkoutDirs, summarize, worktreeDiff, worktreeDirs } from "./worktrees.ts";
@@ -181,6 +182,7 @@ const server = createServer((req, res) => {
     if (!projectWorktrees().some((p) => p.worktrees.includes(dir ?? ""))) json(res, 404, { error: "no such worktree" });
     else
       worktreeDiff(dir!)
+        .then(highlightDiff)
         .then((diff) => json(res, 200, diff))
         .catch((e) => json(res, 500, { error: e.message }));
   } else if (assets[path]) {

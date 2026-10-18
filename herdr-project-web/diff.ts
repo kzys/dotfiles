@@ -1,11 +1,17 @@
 // Reading git's unified diffs into files, hunks and lines for the page.
 
+// A run of a line's text and its colour, or no colour for the page's
+// own.
+export type Token = [text: string, color?: string];
+
 export type DiffLine = {
   kind: "add" | "del" | "ctx" | "note";
   text: string;
   // The line's numbers in the old and new file, where it has one.
   old: number | null;
   new: number | null;
+  // The line's text as highlighted, where it is.
+  tokens?: Token[];
 };
 
 export type Hunk = { header: string; lines: DiffLine[] };
@@ -131,6 +137,37 @@ export function parseDiff(text: string): FileDiff[] {
 /** Returns the path the page names file by: where it is now, or where
  * it was if deleted. */
 export const filePath = (file: FileDiff) => file.to ?? file.from ?? "";
+
+/** Returns the texts of hunk's lines in the old file and in the new
+ * one, in order, for highlighting each side whole. */
+export function hunkSides(hunk: Hunk): [string[], string[]] {
+  const old: string[] = [];
+  const now: string[] = [];
+  for (const l of hunk.lines) {
+    if (l.kind !== "add" && l.kind !== "note") old.push(l.text);
+    if (l.kind !== "del" && l.kind !== "note") now.push(l.text);
+  }
+  return [old, now];
+}
+
+/** Returns hunk with its lines' tokens from old and now, the tokens of
+ * each line of its sides as hunkSides returns them. Context lines take
+ * the new side's. Sides whose lines don't match are left plain. */
+export function withTokens(hunk: Hunk, old: Token[][], now: Token[][]): Hunk {
+  const [oldTexts, nowTexts] = hunkSides(hunk);
+  const oldOk = old.length === oldTexts.length;
+  const nowOk = now.length === nowTexts.length;
+  let i = 0;
+  let j = 0;
+  const lines = hunk.lines.map((l) => {
+    if (l.kind === "note") return l;
+    const tokens = l.kind === "del" ? (oldOk ? old[i] : undefined) : nowOk ? now[j] : undefined;
+    if (l.kind !== "add") i++;
+    if (l.kind !== "del") j++;
+    return tokens ? { ...l, tokens } : l;
+  });
+  return { ...hunk, lines };
+}
 
 /** Returns hunk's lines as rows of a side-by-side view: the old file's
  * line on the left and the new file's on the right, with each run of
