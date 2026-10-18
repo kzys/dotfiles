@@ -9,12 +9,15 @@ import { extname, join, relative } from "node:path";
 import { promisify } from "node:util";
 import { build } from "esbuild";
 import { HerdrEvents } from "./events.ts";
-import { type Herdr, projectDirs, readState } from "./state.ts";
+import { frontMatter } from "./inbox.ts";
+import { type Herdr, openProjects, projectDirs, readState } from "./state.ts";
+import { checkoutDirs, summarize, worktreeDiff, worktreeDirs } from "./worktrees.ts";
 
 const here = import.meta.dirname;
 const home = homedir();
 const stateDir = join(process.env.XDG_STATE_HOME || join(home, ".local/state"), "herdr-project");
 const projectRoot = join(home, "project");
+const reposRoot = join(home, "repos");
 const port = Number(process.env.PORT || 9000);
 
 // Bundle the page, its styles and fonts once at start; they are small
@@ -130,12 +133,32 @@ rewatch();
 // Catch what the watches miss, such as the state directory appearing.
 setInterval(changed, 30_000);
 
+/** Returns the open projects with worktrees in them, each with their
+ * directories, followed by the checkouts in ~/repos, where some tasks
+ * work on their branches. */
+function projectWorktrees() {
+  return [
+    ...openProjects(projectRoot).map(([dir, readme]) => ({
+      dir,
+      name: (readme && frontMatter(readme, "name")) || dir.split("/").pop()!,
+      title: (readme && frontMatter(readme, "title")) || "(no title)",
+      worktrees: worktreeDirs(dir),
+    })),
+    { dir: reposRoot, name: "repos", title: "Checkouts in ~/repos", worktrees: checkoutDirs(reposRoot) },
+  ].filter((p) => p.worktrees.length);
+}
+
+function json(res: ServerResponse, status: number, body: unknown) {
+  res.writeHead(status, { "Content-Type": "application/json" }).end(JSON.stringify(body));
+}
+
 // Other names for this address come from DNS rebinding, which would let
 // any site read the page.
 const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
 
 const server = createServer((req, res) => {
-  const path = new URL(req.url ?? "/", "http://localhost").pathname;
+  const url = new URL(req.url ?? "/", "http://localhost");
+  const path = url.pathname;
   if (!hosts.has(req.headers.host ?? "")) {
     res.writeHead(403).end();
   } else if (path === "/api/state") {
@@ -145,6 +168,21 @@ const server = createServer((req, res) => {
     res.write(`data: ${last}\n\n`);
     clients.add(res);
     req.on("close", () => clients.delete(res));
+  } else if (path === "/api/worktrees") {
+    // Worktrees aren't watched, so git is asked each time.
+    Promise.all(
+      projectWorktrees().map(async (p) => ({ ...p, worktrees: await Promise.all(p.worktrees.map(summarize)) })),
+    )
+      .then((projects) => json(res, 200, projects))
+      .catch((e) => json(res, 500, { error: e.message }));
+  } else if (path === "/api/diff") {
+    // Only the worktrees the page lists, not any directory asked for.
+    const dir = url.searchParams.get("dir");
+    if (!projectWorktrees().some((p) => p.worktrees.includes(dir ?? ""))) json(res, 404, { error: "no such worktree" });
+    else
+      worktreeDiff(dir!)
+        .then((diff) => json(res, 200, diff))
+        .catch((e) => json(res, 500, { error: e.message }));
   } else if (assets[path]) {
     const [type, body] = assets[path];
     res.writeHead(200, { "Content-Type": type }).end(body);

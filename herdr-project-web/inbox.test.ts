@@ -1,14 +1,17 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { parseDiff, splitRows, unquote } from "./diff.ts";
 import { HerdrEvents, subscriptions } from "./events.ts";
 import { halMessage } from "./hal.ts";
 import { linkParts, projectItems, uniqueKeys, waiting, watchedItems } from "./inbox.ts";
 import { agentState, readiness } from "./pulls.ts";
 import { type PullRequest, agentStates, pullRequestLinks, readState, workspaceLabels } from "./state.ts";
+import { checkoutDirs, summarize, worktreeDiff, worktreeDirs } from "./worktrees.ts";
 
 test("guesses what waits on me as inbox.py does", () => {
   assert.deepEqual(
@@ -271,4 +274,110 @@ test("reads Herdr again on its events, and subscribes again when they fail", asy
     events.close();
     server.close();
   }
+});
+
+test("reads git's diffs into files and lines", () => {
+  const text = [
+    "diff --git a/a.txt b/a.txt",
+    "index 1..2 100644",
+    "--- a/a.txt",
+    "+++ b/a.txt",
+    "@@ -1,3 +1,2 @@ heading",
+    " one",
+    "--- two",
+    "-three",
+    "\\ No newline at end of file",
+    "+three",
+    "diff --git a/old b/new",
+    "similarity index 100%",
+    "rename from old",
+    "rename to new",
+    "diff --git \"a/sp ace\" \"b/sp ace\"",
+    "new file mode 100644",
+    "Binary files /dev/null and \"b/sp ace\" differ",
+    "",
+  ].join("\n");
+  const [a, renamed, binary] = parseDiff(text);
+  assert.deepEqual([a.from, a.to, a.status, a.added, a.removed], ["a.txt", "a.txt", "modified", 1, 2]);
+  assert.deepEqual(a.hunks[0].lines.map((l) => [l.kind, l.old, l.new, l.text]), [
+    ["ctx", 1, 1, "one"],
+    ["del", 2, null, "-- two"],
+    ["del", 3, null, "three"],
+    ["note", null, null, "No newline at end of file"],
+    ["add", null, 2, "three"],
+  ]);
+  assert.deepEqual([renamed.from, renamed.to, renamed.status, renamed.hunks], ["old", "new", "renamed", []]);
+  assert.deepEqual([binary.from, binary.to, binary.status, binary.binary], [null, "sp ace", "added", true]);
+  assert.equal(unquote(String.raw`"caf\303\251\t\"x\""`), 'caf\u00e9\t"x"');
+  assert.equal(unquote("plain"), "plain");
+});
+
+test("diffs a worktree from where its branch left the remote's default", async () => {
+  const root = mkdtempSync(join(tmpdir(), "herdr-project-web-"));
+  const git = (dir: string, ...args: string[]) =>
+    execFileSync("git", ["-C", dir, "-c", "user.name=t", "-c", "user.email=t@t", ...args], { stdio: "pipe" });
+  const origin = join(root, "origin");
+  mkdirSync(origin);
+  git(origin, "init", "-q", "-b", "main");
+  writeFileSync(join(origin, "kept.txt"), "a\nb\n");
+  writeFileSync(join(origin, "gone.txt"), "x\n");
+  git(origin, "add", ".");
+  git(origin, "commit", "-q", "-m", "Start");
+
+  const project = join(root, "project");
+  const wt = join(project, "wt");
+  mkdirSync(join(project, "notes"), { recursive: true });
+  git(root, "clone", "-q", origin, wt);
+  git(wt, "switch", "-q", "-c", "feature");
+  git(wt, "rm", "-q", "gone.txt");
+  git(wt, "commit", "-q", "-m", "Drop gone.txt");
+  writeFileSync(join(wt, "kept.txt"), "a\nB\n");
+  writeFileSync(join(wt, "new.txt"), "n\n");
+  writeFileSync(join(wt, "empty"), "");
+  git(wt, "config", "diff.mnemonicPrefix", "true");
+  // The remote moving on doesn't show in the branch's diff.
+  writeFileSync(join(origin, "later.txt"), "l\n");
+  git(origin, "add", ".");
+  git(origin, "commit", "-q", "-m", "Later");
+  git(wt, "fetch", "-q");
+
+  assert.deepEqual(worktreeDirs(project), [wt]);
+  assert.deepEqual(checkoutDirs(root), [wt]);
+  assert.deepEqual(await summarize(wt), {
+    dir: wt, branch: "feature", base: "origin/main", ahead: 1,
+    files: 2, added: 1, removed: 2, untracked: 2, error: null,
+  });
+  const diff = await worktreeDiff(wt);
+  assert.deepEqual(diff.commits.map((c) => c.subject), ["Drop gone.txt"]);
+  assert.deepEqual(parseDiff(diff.diff).map((f) => [f.from, f.to, f.status, f.added, f.removed]), [
+    ["gone.txt", null, "deleted", 0, 1],
+    ["kept.txt", "kept.txt", "modified", 1, 1],
+    [null, "empty", "added", 0, 0],
+    [null, "new.txt", "added", 1, 0],
+  ]);
+  assert.equal(diff.omitted, 0);
+
+  // Without a remote, it shows what changed since HEAD.
+  git(wt, "remote", "remove", "origin");
+  assert.equal((await summarize(wt)).base, null);
+  assert.equal((await summarize(wt)).files, 1);
+
+  const broken = join(project, "broken");
+  mkdirSync(broken);
+  writeFileSync(join(broken, ".git"), "gitdir: /nonexistent\n");
+  assert.match((await summarize(broken)).error ?? "", /not a git repository/);
+});
+
+test("puts removed lines beside the added lines after them", () => {
+  const [file] = parseDiff([
+    "diff --git a/f b/f", "--- a/f", "+++ b/f",
+    "@@ -1,6 +1,5 @@", " a", "-b", "-c", "+B", " d", "-e", "+E", "+F", "\\ No newline at end of file",
+    "-g", "\\ No newline at end of file",
+    "",
+  ].join("\n"));
+  const text = (l: { text: string } | null) => l?.text ?? null;
+  assert.deepEqual(splitRows(file.hunks[0]).map(([o, n]) => [text(o), text(n)]), [
+    ["a", "a"], ["b", "B"], ["c", null], ["d", "d"], ["e", "E"], [null, "F"],
+    [null, "No newline at end of file"], ["g", null], ["No newline at end of file", null],
+  ]);
 });
