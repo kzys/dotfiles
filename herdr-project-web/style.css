@@ -257,14 +257,17 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
   height: 7px;
   margin-right: 6px;
   border-radius: 50%;
+  background: var(--faint);
+  vertical-align: 1px;
+}
+/* Only an agent at work, or waiting on the user, lights up red. */
+.agent-working::before, .agent-blocked::before {
   background: var(--red);
   box-shadow: 0 0 6px var(--red-glow);
-  vertical-align: 1px;
 }
 .agent-working::before { animation: pulse 1.4s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: 0.25; box-shadow: none; } }
 .agent-blocked { color: var(--red); font-weight: 600; }
-.agent-idle::before { background: var(--faint); box-shadow: none; }
 @media (prefers-reduced-motion: reduce) { .agent-working::before { animation: none; } }
 .pr-failed { color: var(--red); }
 
