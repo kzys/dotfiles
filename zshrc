@@ -43,6 +43,7 @@ path=(
     ~/ws/sandbox/bin(N)
     $dotfiles/bin(N)
     ~/bin(N)
+    ~/repos/kzys/homelab/bin(N)
 
     # ./configure --prefix=$HOME/local
     ~/local/bin(N)
