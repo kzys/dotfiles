@@ -3,8 +3,8 @@ import { test } from "node:test";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { projectItems, waiting, watchedItems } from "./inbox.ts";
-import { readState, workspaceLabels } from "./state.ts";
+import { linkParts, projectItems, waiting, watchedItems } from "./inbox.ts";
+import { pullRequestLinks, readState, workspaceLabels } from "./state.ts";
 
 test("guesses what waits on me as inbox.py does", () => {
   assert.deepEqual(
@@ -92,7 +92,7 @@ test("reads the watcher's files and the projects' notes", () => {
   assert.deepEqual(s.unowned.map((i) => i.text), ["hi", "dm", "c#1 failed"]);
 
   assert.deepEqual(readState(join(root, "none"), join(root, "none")), {
-    sections: null, watchedAt: null, projects: [], unowned: [],
+    sections: null, watchedAt: null, projects: [], unowned: [], links: {},
   });
 });
 
@@ -105,4 +105,34 @@ test("names the workspaces with panes in a project", () => {
   };
   assert.deepEqual(workspaceLabels("/p/a", herdr), ["custom", "w2"]);
   assert.deepEqual(workspaceLabels("/p/a", null), []);
+});
+
+test("links pull requests by their labels", () => {
+  const links = pullRequestLinks({
+    "https://github.com/kzys/dotfiles/pull/80": { state: "OPEN" },
+    "https://github.com/kzys/containerd/pull/12": { state: "OPEN" },
+    "https://github.com/containerd/containerd/pull/12": { state: "OPEN" },
+    "https://example.com/x": {},
+  });
+  assert.deepEqual(links, {
+    "kzys/dotfiles#80": "https://github.com/kzys/dotfiles/pull/80",
+    "dotfiles#80": "https://github.com/kzys/dotfiles/pull/80",
+    "kzys/containerd#12": "https://github.com/kzys/containerd/pull/12",
+    "containerd/containerd#12": "https://github.com/containerd/containerd/pull/12",
+  });
+  assert.deepEqual(pullRequestLinks(null), {});
+
+  assert.deepEqual(linkParts("✓ ● dotfiles#80     dotfiles   Add it", links), [
+    ["✓ ● "], ["dotfiles#80", "https://github.com/kzys/dotfiles/pull/80"],
+    ["     dotfiles   Add it"]]);
+  // A label two pull requests share links only with its owner.
+  assert.deepEqual(linkParts("containerd#12 and containerd/containerd#12", links), [
+    ["containerd#12"], [" and "],
+    ["containerd/containerd#12", "https://github.com/containerd/containerd/pull/12"]]);
+  // Another owner's pull request with the same name isn't this one.
+  assert.deepEqual(linkParts("other/dotfiles#80 is done", links), [
+    ["other/dotfiles#80"], [" is done"]]);
+  assert.deepEqual(linkParts("see https://x.test/pull/1#c-2) or x#1", links), [
+    ["see "], ["https://x.test/pull/1#c-2", "https://x.test/pull/1#c-2"], [") or "], ["x#1"]]);
+  assert.deepEqual(linkParts("__proto__#1 constructor", links), [["__proto__#1"], [" constructor"]]);
 });

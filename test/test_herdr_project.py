@@ -374,14 +374,17 @@ def test_polls_pull_requests(tmp_path):
         return {}
 
     state = tmp_path / 'state/pull-requests.json'
-    lines, owners, items = pull_request.poll(fake_herdr, tmp_path / 'project', state, gh=str(gh))
+    lines, owners, items, rows = pull_request.poll(
+        fake_herdr, tmp_path / 'project', state, gh=str(gh))
     assert items == []
+    assert [(r['label'], r['project'], r['agent'], r['checks']) for r in rows] == [
+        ('app#1', 'one', True, 'PENDING')]
     assert owners['https://github.com/org/app/pull/1'].project == str(
         tmp_path / 'project/20261001-a')
     assert lines == [f'… ● {"app#1":<24} {"one":<20} PR 1']
     assert calls == [('pane', 'list')]
     calls.clear()
-    lines, _, items = pull_request.poll(fake_herdr, tmp_path / 'project', state, gh=str(gh))
+    lines, _, items, _ = pull_request.poll(fake_herdr, tmp_path / 'project', state, gh=str(gh))
     assert items == [{'project': str(tmp_path / 'project/20261001-a'), 'role': None,
                       'mark': 'pr', 'text': 'app#1 checks failed: test: PR 1'}]
     assert lines[0].startswith('✗ ● app#1')
@@ -490,10 +493,12 @@ def test_draws_watch_screen():
 
 def test_keeps_watch_screen_for_other_viewers():
     at = datetime(2026, 10, 16, 15, 4, tzinfo=UTC)
-    assert watch.screen_state([('PRs', at, ['a']), ('Slack', None, None),
-                               ('Panes', None, [])]) == [
-        {'title': 'PRs', 'at': '2026-10-16T15:04:00+00:00', 'lines': ['a']},
-        {'title': 'Panes', 'at': None, 'lines': []}]
+    assert watch.screen_state([('PRs', at, ['a'], [{'label': 'app#1'}]), ('Slack', None, None),
+                               ('Panes', None, []), ('Failed', None, ['x'], None)]) == [
+        {'title': 'PRs', 'at': '2026-10-16T15:04:00+00:00', 'lines': ['a'],
+         'pullRequests': [{'label': 'app#1'}]},
+        {'title': 'Panes', 'at': None, 'lines': []},
+        {'title': 'Failed', 'at': None, 'lines': ['x']}]
 
 
 def test_checks_only_sources_with_connectors():
@@ -591,6 +596,21 @@ def test_remembers_watcher_where_zshrc_looks(tmp_path):
         env={'HOME': str(tmp_path), 'HERDR_PANE_ID': 'w1:p2'},
         stdout=subprocess.PIPE, text=True, check=True).stdout
     assert found == 'org one\ntwo\n'
+
+
+def test_runs_the_web_page_only_once_installed(tmp_path):
+    assert watch.web_command(tmp_path) is None
+    (tmp_path / 'node_modules').mkdir()
+    assert watch.web_command(tmp_path)[-1] == str(tmp_path / 'server.ts')
+
+
+def test_starts_the_web_page_with_its_output_in_a_log(tmp_path):
+    log = tmp_path / 'state/web.log'
+    web = watch.start_web([sys.executable, '-c', 'print("on 9000")'], log)
+    assert web.wait(timeout=10) == 0
+    assert log.read_text() == 'on 9000\n'
+    assert watch.start_web(None, log) is None
+    assert watch.start_web([str(tmp_path / 'missing')], log) is None
 
 
 def issue(identifier, updated_at, waiting=False, links=(), state='Backlog'):

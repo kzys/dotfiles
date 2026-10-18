@@ -149,3 +149,15 @@ export function watchedItems(sources: unknown): Item[] {
       typeof i.mark === "string" && strOrNull(i.project) && strOrNull(i.role))
     .map((i) => ({ ...i, project: i.project ?? null, role: i.role ?? null }));
 }
+
+/** Returns text in parts, each with the URL it links to, if any: the
+ * URLs in it, and the pull request labels in links. */
+export function linkParts(text: string, links: Record<string, string>): [string, string?][] {
+  return text
+    .split(/(https?:\/\/[^\s)]+|[\w.-]+\/[\w.-]+#\d+|[\w.-]+#\d+)/g)
+    .filter((p) => p)
+    .map((p) => {
+      if (/^https?:\/\//.test(p)) return [p, p];
+      return Object.hasOwn(links, p) ? [p, links[p]] : [p];
+    });
+}

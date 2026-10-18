@@ -3,6 +3,7 @@ and Linear issues together, each at its own pace, in one pane."""
 
 import fcntl
 import os
+import signal
 import subprocess
 import sys
 import threading
@@ -80,11 +81,11 @@ def check_queue(module, names, poll):
 
 
 def screen(sections):
-    """Returns the text of the pane for sections, (title, time, lines)
-    tuples, where time is when the lines were made or None, leaving out
-    those whose lines are None."""
+    """Returns the text of the pane for sections, (title, time, lines,
+    ...) tuples, where time is when the lines were made or None, leaving
+    out those whose lines are None."""
     out = []
-    for title, at, lines in sections:
+    for title, at, lines, *_ in sections:
         if lines is None:
             continue
         stamp = f" at {at:%H:%M}" if at else ""
@@ -95,9 +96,17 @@ def screen(sections):
 def screen_state(sections):
     """Returns sections, (title, time, lines) tuples, as screen shows
     them, in the form kept in screen.json for other viewers: a list of
-    dicts with the title, the time in ISO 8601 or None, and the lines."""
-    return [{"title": t, "at": at.isoformat() if at else None, "lines": lines}
-            for t, at, lines in sections if lines is not None]
+    dicts with the title, the time in ISO 8601 or None, and the lines.
+    A section may have a fourth item, the pull requests it lists, as
+    pull_request.listed returns them, kept as pullRequests unless None."""
+    out = []
+    for title, at, lines, *rest in sections:
+        if lines is None:
+            continue
+        out.append({"title": title, "at": at.isoformat() if at else None, "lines": lines})
+        if rest and rest[0] is not None:
+            out[-1]["pullRequests"] = rest[0]
+    return out
 
 
 def title(items):
@@ -120,7 +129,7 @@ def watch(herdr, root, state, orgs=(), pr_interval=300, queue_interval=1800,
     workspace, if any. Failures show instead of their lines, keeping
     their last inbox items."""
     lock = threading.Lock()
-    prs = ["Pull requests", None, ["Checking…"]]
+    prs = ["Pull requests", None, ["Checking…"], None]
     pane_section = ["Panes", None, ["Checking…"]]
     queues = [(slack, ["Slack", None, None], "slack.json"),
               (linear, ["Linear", None, None], "linear.json")]
@@ -182,12 +191,12 @@ def watch(herdr, root, state, orgs=(), pr_interval=300, queue_interval=1800,
     threads = [threading.Thread(target=queue_loop, args=q, daemon=True) for q in queues]
     while True:
         try:
-            lines, owners, new = pull_request.poll(
+            lines, owners, new, rows = pull_request.poll(
                 herdr, root, state / "pull-requests.json", orgs=orgs)
         except Exception as e:  # noqa: BLE001 - shown rather than ending the watcher.
-            lines, owners, new = [f"Cannot check pull requests: {e!r}"], {}, None
+            lines, owners, new, rows = [f"Cannot check pull requests: {e!r}"], {}, None, None
         with lock:
-            prs[1:] = [datetime.now().astimezone(), lines]
+            prs[1:] = [datetime.now().astimezone(), lines, rows]
             pr_owners.update(owners)
             if new is not None:
                 found(prs[0], new)
@@ -221,20 +230,54 @@ def watch_workspace(herdr, pane, env):
     return workspace if label == "watch" else None
 
 
+def web_command(web):
+    """Returns the command that runs herdr-project-web from directory
+    web, or None if its packages aren't installed."""
+    if not (web / "node_modules").is_dir():
+        return None
+    return ["node", "--experimental-strip-types", "--disable-warning=ExperimentalWarning",
+            str(web / "server.ts")]
+
+
+def start_web(command, log):
+    """Starts command, if any, writing its output to the file log, and
+    returns its process, or None if it can't start. It stays in the
+    watcher's process group, so that Ctrl-C reaches it too."""
+    if not command:
+        return None
+    try:
+        log.parent.mkdir(parents=True, exist_ok=True)
+        with open(log, "w") as out:
+            return subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=out,
+                                    stderr=subprocess.STDOUT)
+    except OSError:
+        return None
+
+
 def main(herdr, orgs=(), pane=None):
     """Watches the pull requests in orgs, or all without orgs, Slack
-    conversations and Linear issues of the projects under ~/project.
-    pane is the Herdr pane it runs in, if any, where zshrc resumes it
-    after Herdr restores the session, unless it was interrupted."""
+    conversations and Linear issues of the projects under ~/project,
+    serving them with herdr-project-web while it runs. pane is the Herdr
+    pane it runs in, if any, where zshrc resumes it after Herdr restores
+    the session, unless it was interrupted."""
     if pane:
         try:
             remember_watcher(pane, orgs, os.environ)
         except OSError:
             pass
+    web = start_web(web_command(Path(__file__).resolve().parent.parent / "herdr-project-web"),
+                    state_dir(os.environ) / "web.log")
+    # Stop the page too when the watcher is killed or its pane closes,
+    # or it keeps the port from the next watcher's.
+    for sig in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(sig, lambda *_: sys.exit(0))
     try:
         watch(herdr, Path.home() / "project", state_dir(os.environ), orgs,
               workspace=watch_workspace(herdr, pane, os.environ))
     except KeyboardInterrupt:
         if pane:
             watcher_file(pane, os.environ).unlink(missing_ok=True)
+    finally:
+        if web:
+            web.terminate()
     return 0

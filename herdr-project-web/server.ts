@@ -14,7 +14,7 @@ const here = import.meta.dirname;
 const home = homedir();
 const stateDir = join(process.env.XDG_STATE_HOME || join(home, ".local/state"), "herdr-project");
 const projectRoot = join(home, "project");
-const port = Number(process.env.PORT || 7317);
+const port = Number(process.env.PORT || 9000);
 
 // Bundle the page once at start; it is small enough to keep in memory.
 const bundle = await build({
