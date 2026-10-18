@@ -151,8 +151,10 @@ def test_hook_gives_instructions_on_resume(tmp_path):
     assert f'this task\'s is\n`{project}`' in got.stdout
     assert 'pane report-agent-session p ' in calls.read_text()
 
-    # A failing report doesn't keep the instructions out.
-    assert '## Remaining' in hook(FAIL='1').stdout
+    # A failing report exits 1 but doesn't keep the instructions out.
+    got = hook(FAIL='1')
+    assert got.returncode == 1
+    assert '## Remaining' in got.stdout
 
 
 def test_hook_reports_the_role_again_on_resume(tmp_path):
@@ -202,10 +204,3 @@ def test_hook_gives_instructions_only_on_resume_in_a_project(tmp_path):
         got = run('claude-hook', json.dumps({**data, **changed}), tmp_path)
         assert (got.returncode, got.stdout) == (0, ''), changed
 
-
-def test_hook_fails_when_a_step_fails(tmp_path):
-    data = {'hook_event_name': 'SessionStart', 'session_id': '\ud800', 'source': 'resume',
-            'cwd': str(tmp_path), 'transcript_path': str(tmp_path / 't.jsonl')}
-    got = run('claude-hook', json.dumps(data), tmp_path)
-    assert got.returncode == 1
-    assert 'UnicodeEncodeError' in got.stderr
