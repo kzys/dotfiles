@@ -265,22 +265,28 @@ def wake_message(pr, message):
             f"by the change, and update your notes.")
 
 
-def table(prs, owners, panes_by_url):
-    """Returns lines listing the open pull requests in prs with their
-    checks, project name from owners (by url) and whether an agent
-    pane works on them, those with projects first."""
+def listed(prs, owners, panes_by_url):
+    """Returns the open pull requests in prs, those with projects first,
+    as dicts with the fields pull_requests gives them, their label, the
+    name of their project from owners (by url) or None, and whether an
+    agent pane works on them."""
     rows = []
     for pr in prs:
         if pr["state"] != "OPEN":
             continue
         found = owners.get(pr["url"])
-        name = project_name(found.project) if found else ""
-        mark = MARKS.get(pr["checks"], " ")
-        agent = "●" if panes_by_url.get(pr["url"]) else " "
-        draft = " (draft)" if pr["draft"] else ""
-        rows.append((found is None, (f"{mark} {agent} {label(pr):<24} {name:<20} "
-                                     f"{pr['title']}{draft}")))
-    return [r for _, r in sorted(rows, key=lambda r: r[0])]
+        rows.append({**pr, "label": label(pr),
+                     "project": project_name(found.project) if found else None,
+                     "agent": bool(panes_by_url.get(pr["url"]))})
+    return sorted(rows, key=lambda r: r["project"] is None)
+
+
+def table(rows):
+    """Returns lines listing rows, the pull requests listed returns, with
+    their checks, project and whether an agent pane works on them."""
+    return [f"{MARKS.get(r['checks'], ' ')} {'●' if r['agent'] else ' '} {r['label']:<24} "
+            f"{r['project'] or '':<20} {r['title']}{' (draft)' if r['draft'] else ''}"
+            for r in rows]
 
 
 def waiting_items(prs, owners):
@@ -308,7 +314,8 @@ def poll(herdr, root, path, gh="gh", orgs=()):
     """Checks the pull requests once: tells the user and their agents
     about changes since the state in path, saves the new state there,
     and returns the lines of table, the projects of the pull requests
-    by url, and the inbox items of waiting_items. herdr runs a herdr command and returns its parsed output.
+    by url, the inbox items of waiting_items, and the pull requests as
+    listed returns them. herdr runs a herdr command and returns its parsed output.
     The projects are under root. Only pull requests in orgs count, or
     all without orgs."""
     old = load_state(path)
@@ -333,5 +340,6 @@ def poll(herdr, root, path, gh="gh", orgs=()):
             except (OSError, subprocess.CalledProcessError):
                 pass
     save_state(path, remember(old, prs))
-    return table(prs, owners, panes_by_url), owners, waiting_items(prs, owners)
+    rows = listed(prs, owners, panes_by_url)
+    return table(rows), owners, waiting_items(prs, owners), rows
 

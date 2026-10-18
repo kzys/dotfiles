@@ -81,11 +81,11 @@ def check_queue(module, names, poll):
 
 
 def screen(sections):
-    """Returns the text of the pane for sections, (title, time, lines)
-    tuples, where time is when the lines were made or None, leaving out
-    those whose lines are None."""
+    """Returns the text of the pane for sections, (title, time, lines,
+    ...) tuples, where time is when the lines were made or None, leaving
+    out those whose lines are None."""
     out = []
-    for title, at, lines in sections:
+    for title, at, lines, *_ in sections:
         if lines is None:
             continue
         stamp = f" at {at:%H:%M}" if at else ""
@@ -96,9 +96,17 @@ def screen(sections):
 def screen_state(sections):
     """Returns sections, (title, time, lines) tuples, as screen shows
     them, in the form kept in screen.json for other viewers: a list of
-    dicts with the title, the time in ISO 8601 or None, and the lines."""
-    return [{"title": t, "at": at.isoformat() if at else None, "lines": lines}
-            for t, at, lines in sections if lines is not None]
+    dicts with the title, the time in ISO 8601 or None, and the lines.
+    A section may have a fourth item, the pull requests it lists, as
+    pull_request.listed returns them, kept as pullRequests unless None."""
+    out = []
+    for title, at, lines, *rest in sections:
+        if lines is None:
+            continue
+        out.append({"title": title, "at": at.isoformat() if at else None, "lines": lines})
+        if rest and rest[0] is not None:
+            out[-1]["pullRequests"] = rest[0]
+    return out
 
 
 def title(items):
@@ -121,7 +129,7 @@ def watch(herdr, root, state, orgs=(), pr_interval=300, queue_interval=1800,
     workspace, if any. Failures show instead of their lines, keeping
     their last inbox items."""
     lock = threading.Lock()
-    prs = ["Pull requests", None, ["Checking…"]]
+    prs = ["Pull requests", None, ["Checking…"], None]
     pane_section = ["Panes", None, ["Checking…"]]
     queues = [(slack, ["Slack", None, None], "slack.json"),
               (linear, ["Linear", None, None], "linear.json")]
@@ -183,12 +191,12 @@ def watch(herdr, root, state, orgs=(), pr_interval=300, queue_interval=1800,
     threads = [threading.Thread(target=queue_loop, args=q, daemon=True) for q in queues]
     while True:
         try:
-            lines, owners, new = pull_request.poll(
+            lines, owners, new, rows = pull_request.poll(
                 herdr, root, state / "pull-requests.json", orgs=orgs)
         except Exception as e:  # noqa: BLE001 - shown rather than ending the watcher.
-            lines, owners, new = [f"Cannot check pull requests: {e!r}"], {}, None
+            lines, owners, new, rows = [f"Cannot check pull requests: {e!r}"], {}, None, None
         with lock:
-            prs[1:] = [datetime.now().astimezone(), lines]
+            prs[1:] = [datetime.now().astimezone(), lines, rows]
             pr_owners.update(owners)
             if new is not None:
                 found(prs[0], new)

@@ -5,7 +5,29 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { type Item, frontMatter, projectItems, watchedItems } from "./inbox.ts";
 
-export type Section = { title: string; at: string | null; lines: string[] };
+// An open pull request as the watcher lists it.
+export type PullRequest = {
+  url: string;
+  repo: string;
+  number: number;
+  label: string;
+  title: string;
+  draft: boolean;
+  // The rollup state of its checks, like SUCCESS, or null without any.
+  checks: string | null;
+  failed: string[];
+  review: string | null;
+  project: string | null;
+  agent: boolean;
+};
+
+export type Section = {
+  title: string;
+  at: string | null;
+  lines: string[];
+  // The pull requests the lines list, if the section is about them.
+  pullRequests?: PullRequest[];
+};
 
 export type Project = {
   dir: string;
