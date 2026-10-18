@@ -43,6 +43,7 @@ path=(
     ~/ws/sandbox/bin(N)
     $dotfiles/bin(N)
     ~/bin(N)
+    ~/repos/kzys/homelab/bin(N)
 
     # ./configure --prefix=$HOME/local
     ~/local/bin(N)
@@ -107,11 +108,6 @@ dotfiles_private=$HOME/src/dotfiles-private
 if [ -e $dotfiles_private/zshrc ]; then
     . $dotfiles_private/zshrc
     PATH=$dotfiles_private/bin:$PATH
-fi
-
-# Homelab
-if [ -d ~/repos/kzys/homelab/bin ]; then
-    PATH=~/repos/kzys/homelab/bin:$PATH
 fi
 
 # Completion
