@@ -202,7 +202,6 @@ function Readout({ text }: { text: string }) {
   }, [text]);
   return (
     <p class="readout">
-      <span class="readout-name">HAL 9000</span>
       <span class="readout-text" aria-hidden="true">
         {text.slice(0, shown)}
       </span>
@@ -295,6 +294,13 @@ function App() {
   }, [waiting]);
 
   const stale = state?.watchedAt ? now - Date.parse(state.watchedAt) > STALE_MS : true;
+  // HAL's eye says how things stand: lit while live, dimmed while the
+  // watcher is quiet, dark without the server.
+  const eyeTitle = [
+    connected ? "Live" : "Reconnecting",
+    state?.sections ? `watcher updated ${ago(state.watchedAt, now)}` : "watcher not running",
+    "click to talk to HAL",
+  ].join(" · ");
   const [quote, setQuote] = useState<string | null>(null);
   const message =
     quote ??
@@ -320,15 +326,10 @@ function App() {
       <div class={booting ? "page booting" : "page"}>
         <header class="top">
           <button
-            class={`status ${connected ? "on" : "off"}`}
+            class={`status ${!connected || !state ? "off" : stale ? "stale" : "on"}`}
             onClick={askHal}
-            title="Talk to HAL"
-          >
-            {connected ? "live" : "reconnecting"}
-          </button>
-          <span class={`watcher ${stale ? "stale" : ""}`}>
-            watcher {state?.sections ? ago(state.watchedAt, now) : "not running"}
-          </span>
+            title={eyeTitle}
+          />
           <Readout text={message} />
           <input
             ref={filter}
