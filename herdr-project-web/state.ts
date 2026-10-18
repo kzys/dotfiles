@@ -2,8 +2,10 @@
 // for the page.
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { type Item, frontMatter, projectItems, watchedItems } from "./inbox.ts";
+import { isCheckout, worktreeDirs } from "./worktrees.ts";
 
 // A check of a pull request's latest commit.
 export type Run = {
@@ -48,6 +50,9 @@ export type Project = {
   title: string;
   // The labels of the Herdr workspaces with panes in dir.
   workspaces: string[];
+  // The git worktrees and checkouts directly in dir, followed by the
+  // checkouts in ~/repos it works in.
+  worktrees: string[];
   items: Item[];
 };
 
@@ -156,6 +161,18 @@ function roleNotes(directory: string): [string, string][] {
     });
 }
 
+/** Returns the checkouts in home's ~/repos, laid out as
+ * repos/<org>/<repo>, that text names as ~/repos/<org>/<repo> or by
+ * their full paths, each once, in the order it names them. */
+export function namedCheckouts(text: string, home: string): string[] {
+  const at = home.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const dirs = [...text.matchAll(new RegExp(String.raw`(?:~|${at})/repos/([\w.-]+)/([\w.-]+)`, "g"))]
+    .map((m) => [m[1], m[2].replace(/\.+$/, "")])
+    .filter((names) => names.every((n) => n && !n.startsWith(".")))
+    .map(([org, repo]) => join(home, "repos", org, repo));
+  return [...new Set(dirs)];
+}
+
 /** Returns the labels of the workspaces in herdr with a pane in dir or
  * under it, in the order herdr lists them. */
 export function workspaceLabels(dir: string, herdr: Herdr | null): string[] {
@@ -181,8 +198,15 @@ export function agentStates(herdr: Herdr | null): Record<string, string> | null 
 /** Returns the state for the page from the watcher's files in stateDir
  * and the projects under projectRoot, keeping only projects with
  * something waiting on the user, and naming their workspaces in herdr,
- * if known. */
-export function readState(stateDir: string, projectRoot: string, herdr: Herdr | null = null): State {
+ * if known. The checkouts a project works in are those in home's
+ * ~/repos that the "repositories" field of its README.md names, or else
+ * that it or its notes name. */
+export function readState(
+  stateDir: string,
+  projectRoot: string,
+  herdr: Herdr | null = null,
+  home: string = homedir(),
+): State {
   const raw = readJSON(join(stateDir, "screen.json"));
   const sections = Array.isArray(raw) ? (raw as Section[]) : null;
   let watchedAt: string | null = null;
@@ -202,13 +226,17 @@ export function readState(stateDir: string, projectRoot: string, herdr: Herdr | 
 
   const projects: Project[] = [];
   for (const [dir, readme] of open) {
-    const items = projectItems(dir, readme, roleNotes(dir), byProject.get(dir) ?? []);
+    const notes = roleNotes(dir);
+    const items = projectItems(dir, readme, notes, byProject.get(dir) ?? []);
     if (!items.length) continue;
+    const named =
+      (readme && frontMatter(readme, "repositories")) || [readme ?? "", ...notes.map(([, t]) => t)].join("\n");
     projects.push({
       dir,
       name: (readme && frontMatter(readme, "name")) || dir.split("/").pop()!,
       title: (readme && frontMatter(readme, "title")) || "(no title)",
       workspaces: workspaceLabels(dir, herdr),
+      worktrees: [...worktreeDirs(dir), ...namedCheckouts(named, home).filter(isCheckout)],
       items,
     });
   }

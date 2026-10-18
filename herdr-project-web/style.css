@@ -182,6 +182,17 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
 .copy:hover { color: var(--red); border-color: var(--red); }
 
 .card ul { margin: 0; padding: 6px 0; list-style: none; }
+/* A project's worktrees, each linked to its diff. */
+.wt-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  padding: 8px 18px;
+  border-bottom: 1px solid var(--panel-edge);
+  font: 12px var(--mono);
+}
+.wt-links a { color: var(--muted); border-bottom: 1px solid var(--faint); }
+.wt-links a:hover { color: var(--red); border-color: var(--red); }
 .item { display: flex; gap: 12px; align-items: baseline; padding: 6px 18px; }
 .item .role {
   font-size: 11px;
