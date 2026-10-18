@@ -33,6 +33,11 @@ name: <name>
 
 - `title`: the task, in at most 60 characters.
 - `name`: a short name for the task, in at most 20 characters.
+- `repositories`: added only when the task works in checkouts under
+  `~/repos` directly rather than in worktrees here, as
+  `repositories: ~/repos/<org>/<repo>`, separated by spaces if more
+  than one. Without it, the checkouts are those this directory's notes
+  name.
 - `closed`: added only when the project is closed, as `closed: <link>`.
   A link to what carries the outcome and any remaining work, such as a
   pull request or a ticket, or a few words on the outcome if nothing

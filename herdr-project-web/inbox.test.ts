@@ -10,7 +10,9 @@ import { HerdrEvents, subscriptions } from "./events.ts";
 import { halMessage } from "./hal.ts";
 import { linkParts, projectItems, uniqueKeys, waiting, watchedItems } from "./inbox.ts";
 import { agentState, readiness } from "./pulls.ts";
-import { type PullRequest, agentStates, pullRequestLinks, readState, workspaceLabels } from "./state.ts";
+import {
+  type PullRequest, agentStates, namedCheckouts, pullRequestLinks, readState, workspaceLabels,
+} from "./state.ts";
 import { checkoutDirs, summarize, worktreeDiff, worktreeDirs } from "./worktrees.ts";
 
 test("guesses what waits on me as inbox.py does", () => {
@@ -104,6 +106,37 @@ test("reads the watcher's files and the projects' notes", () => {
   assert.deepEqual(readState(join(root, "none"), join(root, "none")), {
     sections: null, watchedAt: null, projects: [], unowned: [], links: {}, agents: null,
   });
+});
+
+test("finds the checkouts that notes name", () => {
+  assert.deepEqual(
+    namedCheckouts(
+      "Work in ~/repos/kzys/dotfiles. See /home/u/repos/a/b-c/sub and ~/repos/kzys/dotfiles/x.\n" +
+        "Not ~/repos/<org>/<repo>, ~/repos/a/.. or /other/repos/x/y.",
+      "/home/u",
+    ),
+    ["/home/u/repos/kzys/dotfiles", "/home/u/repos/a/b-c"],
+  );
+});
+
+test("lists the checkouts a project works in after its worktrees", () => {
+  const root = mkdtempSync(join(tmpdir(), "herdr-project-web-"));
+  const projects = join(root, "project");
+  const [p1, p2] = [join(projects, "20261018-a"), join(projects, "20261017-b")];
+  for (const d of [join(p1, "wt"), p2, join(root, "repos/o/r1"), join(root, "repos/o/r2")])
+    mkdirSync(d, { recursive: true });
+  for (const d of [join(p1, "wt"), join(root, "repos/o/r1"), join(root, "repos/o/r2")])
+    writeFileSync(join(d, ".git"), "gitdir: elsewhere\n");
+  // The field wins over what the notes name.
+  writeFileSync(join(p1, "README.md"), "---\nrepositories: ~/repos/o/r2 ~/repos/o/gone\n---\nIn ~/repos/o/r1.\n");
+  writeFileSync(join(p1, "AGENT-main.md"), "## Remaining\n- [you] Pick one\n");
+  writeFileSync(join(p2, "AGENT-main.md"), "## Remaining\n- [you] Check ~/repos/o/r1\n");
+
+  const s = readState(join(root, "state"), projects, null, root);
+  assert.deepEqual(s.projects.map((p) => p.worktrees), [
+    [join(p1, "wt"), join(root, "repos/o/r2")],
+    [join(root, "repos/o/r1")],
+  ]);
 });
 
 test("names the workspaces with panes in a project", () => {

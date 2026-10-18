@@ -36,6 +36,15 @@ export type WorktreeDiff = Summary & {
   omitted: number;
 };
 
+/** Reports whether dir is a git worktree or checkout. */
+export function isCheckout(dir: string): boolean {
+  try {
+    return statSync(dir).isDirectory() && !!statSync(join(dir, ".git"), { throwIfNoEntry: false });
+  } catch {
+    return false;
+  }
+}
+
 /** Returns the git worktrees and checkouts directly in projectDir. */
 export function worktreeDirs(projectDir: string): string[] {
   let names: string[];
@@ -47,13 +56,7 @@ export function worktreeDirs(projectDir: string): string[] {
   return names
     .filter((n) => !n.startsWith("."))
     .map((n) => join(projectDir, n))
-    .filter((d) => {
-      try {
-        return statSync(d).isDirectory() && !!statSync(join(d, ".git"), { throwIfNoEntry: false });
-      } catch {
-        return false;
-      }
-    })
+    .filter(isCheckout)
     .sort();
 }
 
