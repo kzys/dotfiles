@@ -358,7 +358,7 @@ def test_wakes_the_agent_in_the_checkout_over_one_in_the_project(tmp_path):
 
     state = tmp_path / 'state/pull-requests.json'
     _, _, _, rows = pull_request.poll(fake_herdr, tmp_path / 'project', state, gh=str(gh))
-    assert [(r['project'], r['agent']) for r in rows] == [('20261001-a', True)]
+    assert [(r['project'], r['agent'], r['pane']) for r in rows] == [('20261001-a', True, 'w2:p1')]
     pull_request.poll(fake_herdr, tmp_path / 'project', state, gh=str(gh))
     assert [c[2] for c in calls if c[:2] == ('pane', 'run')] == ['w2:p1']
 
@@ -452,8 +452,10 @@ def test_polls_pull_requests(tmp_path):
     lines, owners, items, rows = pull_request.poll(
         fake_herdr, tmp_path / 'project', state, gh=str(gh))
     assert items == []
-    assert [(r['label'], r['project'], r['agent'], r['checks']) for r in rows] == [
-        ('app#1', 'one', True, 'PENDING')]
+    # The agent is in the project but not the checkout, so may be busy
+    # with something else.
+    assert [(r['label'], r['project'], r['agent'], r['pane'], r['checks']) for r in rows] == [
+        ('app#1', 'one', True, None, 'PENDING')]
     assert owners['https://github.com/org/app/pull/1'].project == str(
         tmp_path / 'project/20261001-a')
     assert lines == [f'… ● {"app#1":<24} {"one":<20} PR 1']

@@ -320,19 +320,23 @@ def wake_message(pr, message):
             f"by the change, and update your notes.")
 
 
-def listed(prs, owners, panes_by_url):
+def listed(prs, owners, panes_by_url, checkouts=None):
     """Returns the open pull requests in prs, those with projects first,
     as dicts with the fields pull_requests gives them, their label, the
-    name of their project from owners (by url) or None, and whether an
-    agent pane works on them."""
+    name of their project from owners (by url) or None, whether an agent
+    pane works on them, and the id of the pane in their checkout, from
+    checkouts (by url), or None. Only that pane surely works on them;
+    others may be any agent in their project."""
     rows = []
     for pr in prs:
         if pr["state"] != "OPEN":
             continue
         found = owners.get(pr["url"])
+        sure = (checkouts or {}).get(pr["url"])
         rows.append({**pr, "label": label(pr),
                      "project": project_name(found.project) if found else None,
-                     "agent": bool(panes_by_url.get(pr["url"]))})
+                     "agent": bool(panes_by_url.get(pr["url"])),
+                     "pane": sure["pane_id"] if sure else None})
     return sorted(rows, key=lambda r: r["project"] is None)
 
 
@@ -382,7 +386,8 @@ def poll(herdr, root, path, gh="gh", orgs=()):
     # on the pull request; one in its project only may.
     open_prs = [pr for pr in prs if pr["state"] == "OPEN"]
     panes_by_url = {url: agent_pane(panes, f) for url, f in owners.items() if f}
-    panes_by_url.update(checkout_panes(panes, open_prs))
+    checkouts = checkout_panes(panes, open_prs)
+    panes_by_url.update(checkouts)
     for pr, message, wake in events(old, prs):
         found = owners.get(pr["url"])
         where = f" ({Path(found.project).name})" if found else ""
@@ -399,6 +404,6 @@ def poll(herdr, root, path, gh="gh", orgs=()):
             except (OSError, subprocess.CalledProcessError):
                 pass
     save_state(path, remember(old, prs))
-    rows = listed(prs, owners, panes_by_url)
+    rows = listed(prs, owners, panes_by_url, checkouts)
     return table(rows), owners, waiting_items(prs, owners), rows
 

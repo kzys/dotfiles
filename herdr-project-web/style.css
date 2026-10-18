@@ -261,6 +261,11 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
   box-shadow: 0 0 6px var(--red-glow);
   vertical-align: 1px;
 }
+.agent-working::before { animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.25; box-shadow: none; } }
+.agent-blocked { color: var(--red); font-weight: 600; }
+.agent-idle::before { background: var(--faint); box-shadow: none; }
+@media (prefers-reduced-motion: reduce) { .agent-working::before { animation: none; } }
 .pr-failed { color: var(--red); }
 
 /* The state of a pull request's checks, as an indicator lamp. */

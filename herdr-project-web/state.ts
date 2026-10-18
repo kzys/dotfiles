@@ -28,6 +28,8 @@ export type PullRequest = {
   review: string | null;
   project: string | null;
   agent: boolean;
+  // The agent's pane, from watchers that keep it.
+  pane?: string | null;
 };
 
 export type Section = {
@@ -50,7 +52,14 @@ export type Project = {
 // What herdr workspace list and herdr pane list say, in part.
 export type Herdr = {
   workspaces: { workspace_id: string; label?: string }[];
-  panes: { workspace_id: string; cwd?: string; foreground_cwd?: string }[];
+  panes: {
+    pane_id: string;
+    workspace_id: string;
+    cwd?: string;
+    foreground_cwd?: string;
+    agent?: string | null;
+    agent_status?: string;
+  }[];
 };
 
 export type State = {
@@ -63,6 +72,9 @@ export type State = {
   unowned: Item[];
   // The URLs of the open pull requests by their labels, like name#N.
   links: Record<string, string>;
+  // What each agent pane in Herdr is doing, like working or idle, by id,
+  // or null if Herdr couldn't be asked.
+  agents: Record<string, string> | null;
 };
 
 function read(path: string): string | null {
@@ -146,6 +158,15 @@ export function workspaceLabels(dir: string, herdr: Herdr | null): string[] {
     .map((w) => w.label || w.workspace_id);
 }
 
+/** Returns what each agent pane in herdr is doing, by id, or null if
+ * herdr is. Other panes have none. */
+export function agentStates(herdr: Herdr | null): Record<string, string> | null {
+  if (!herdr) return null;
+  const agents: Record<string, string> = {};
+  for (const p of herdr.panes) if (p.agent && p.agent_status) agents[p.pane_id] = p.agent_status;
+  return agents;
+}
+
 /** Returns the state for the page from the watcher's files in stateDir
  * and the projects under projectRoot, keeping only projects with
  * something waiting on the user, and naming their workspaces in herdr,
@@ -184,5 +205,5 @@ export function readState(stateDir: string, projectRoot: string, herdr: Herdr | 
     });
   }
   const links = pullRequestLinks(readJSON(join(stateDir, "pull-requests.json")));
-  return { sections, watchedAt, projects, unowned, links };
+  return { sections, watchedAt, projects, unowned, links, agents: agentStates(herdr) };
 }
