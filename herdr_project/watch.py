@@ -11,6 +11,7 @@ from datetime import datetime
 from pathlib import Path
 
 from herdr_project import headless, inbox, linear, panes, pull_request, slack
+from herdr_project.state import save_state
 
 
 def state_dir(env):
@@ -91,6 +92,14 @@ def screen(sections):
     return "\n".join(out).rstrip("\n")
 
 
+def screen_state(sections):
+    """Returns sections, (title, time, lines) tuples, as screen shows
+    them, in the form kept in screen.json for other viewers: a list of
+    dicts with the title, the time in ISO 8601 or None, and the lines."""
+    return [{"title": t, "at": at.isoformat() if at else None, "lines": lines}
+            for t, at, lines in sections if lines is not None]
+
+
 def title(items):
     """Returns the title for the watcher's workspace from items, the
     inbox items by source: how many wait on the user from each."""
@@ -144,10 +153,14 @@ def watch(herdr, root, state, orgs=(), pr_interval=300, queue_interval=1800,
 
     def show():
         with lock:
-            text = screen([tuple(prs), tuple(pane_section),
-                           *(tuple(section) for _, section, _ in queues)])
-            sys.stdout.write("\033[H\033[2J" + text)
+            sections = [tuple(prs), tuple(pane_section),
+                        *(tuple(section) for _, section, _ in queues)]
+            sys.stdout.write("\033[H\033[2J" + screen(sections))
             sys.stdout.flush()
+            try:
+                save_state(state / "screen.json", screen_state(sections))
+            except OSError:
+                pass  # The pane still shows them.
 
     def queue_loop(module, section, name):
         while True:

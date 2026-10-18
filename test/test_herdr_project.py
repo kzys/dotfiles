@@ -488,6 +488,14 @@ def test_draws_watch_screen():
     assert watch.screen([('PRs', at, ['a']), ('Slack', None, None)]) == 'PRs at 15:04\na'
 
 
+def test_keeps_watch_screen_for_other_viewers():
+    at = datetime(2026, 10, 16, 15, 4, tzinfo=UTC)
+    assert watch.screen_state([('PRs', at, ['a']), ('Slack', None, None),
+                               ('Panes', None, [])]) == [
+        {'title': 'PRs', 'at': '2026-10-16T15:04:00+00:00', 'lines': ['a']},
+        {'title': 'Panes', 'at': None, 'lines': []}]
+
+
 def test_checks_only_sources_with_connectors():
     listing = ('Checking MCP server health…\n\n'
                'claude.ai Gmail: https://gmailmcp.googleapis.com/mcp/v1 - ✔ Connected\n'

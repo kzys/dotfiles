@@ -1,0 +1,21 @@
+{
+  "name": "herdr-project-web",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.6"
+  },
+  "scripts": {
+    "start": "node --experimental-strip-types --disable-warning=ExperimentalWarning server.ts",
+    "test": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test inbox.test.ts",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "esbuild": "0.25.5",
+    "preact": "11.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.30",
+    "typescript": "5.8.3"
+  }
+}

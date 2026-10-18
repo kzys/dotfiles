@@ -1,0 +1,170 @@
+:root {
+  --bg: #f7f7f5;
+  --card: #ffffff;
+  --fg: #1d1d1b;
+  --muted: #74746e;
+  --line: #e4e4df;
+  --accent: #2f6fdb;
+  --you: #d9480f;
+  --likely: #b08900;
+  --maybe: #74746e;
+  --close: #2b8a3e;
+  --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #151514;
+    --card: #1e1e1c;
+    --fg: #e8e8e3;
+    --muted: #94948c;
+    --line: #2e2e2b;
+    --accent: #7aa7ff;
+    --you: #ff8a4c;
+    --likely: #e0b93a;
+    --maybe: #94948c;
+    --close: #69c47f;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.page { max-width: 1400px; margin: 0 auto; padding: 0 16px 32px; }
+
+.top {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+.top h1 { margin: 0; font-size: 16px; font-weight: 650; }
+.top input {
+  margin-left: auto;
+  width: min(260px, 40vw);
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--fg);
+  font: inherit;
+}
+
+.status, .watcher { font-size: 12px; color: var(--muted); }
+.status::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.status.on::before { background: var(--close); }
+.watcher.stale { color: var(--you); }
+
+main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+  margin-top: 16px;
+}
+@media (max-width: 900px) { main { grid-template-columns: minmax(0, 1fr); } }
+
+h2 {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.count { color: var(--fg); }
+
+.card, .watch {
+  margin-bottom: 10px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.card header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.card .name { font-weight: 600; }
+.card .workspace {
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--line);
+  font: 600 12px/20px var(--mono);
+}
+.card .workspace + .name { font-weight: 400; color: var(--muted); }
+.card .workspace + .name::before { content: "· "; }
+.card .title { flex: 1; min-width: 0; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.copy {
+  padding: 1px 7px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: none;
+  color: var(--muted);
+  font: 11px var(--mono);
+  cursor: pointer;
+}
+.copy:hover { color: var(--fg); }
+
+.card ul { margin: 0; padding: 4px 0; list-style: none; }
+.item { display: flex; gap: 8px; align-items: baseline; padding: 4px 12px; }
+.item .role { font: 12px var(--mono); color: var(--muted); }
+.item .text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+
+.mark {
+  flex: none;
+  min-width: 54px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font: 600 11px/18px var(--mono);
+  text-align: center;
+  color: var(--muted);
+  border: 1px solid currentColor;
+}
+.mark-you { color: var(--you); }
+.mark-likely { color: var(--likely); }
+.mark-close { color: var(--close); }
+
+.watch h3 {
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--line);
+}
+.watch time { font-weight: 400; color: var(--muted); font-family: var(--mono); font-size: 12px; }
+.watch pre {
+  margin: 0;
+  padding: 8px 12px;
+  overflow-x: auto;
+  font: 12px/1.6 var(--mono);
+}
+.watch .empty { padding: 8px 12px; }
+
+.empty { margin: 0; color: var(--muted); }
+code { font-family: var(--mono); }

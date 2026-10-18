@@ -73,3 +73,14 @@ into `~/.codex/config.toml` (or `$CODEX_HOME/config.toml`), preserving app setti
 and local state. Run `./install_codex.py --config-only` to apply just preferences.
 Auto-review handles approval requests with a reviewer agent; workspace writes
 stay sandboxed. Restart Codex to load the preferences.
+
+## herdr-project-web
+
+A localhost-only page showing what `herdr-project --watch` found and the
+`[you]` items from the agents' notes under `~/project`, updated as their
+files change. The watcher keeps its sections in
+`~/.local/state/herdr-project/screen.json` for it.
+
+```
+cd herdr-project-web && npm install && npm start   # http://127.0.0.1:7317/
+```
