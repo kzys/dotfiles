@@ -3,7 +3,8 @@ import { test } from "node:test";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { linkParts, projectItems, waiting, watchedItems } from "./inbox.ts";
+import { halMessage } from "./hal.ts";
+import { linkParts, projectItems, uniqueKeys, waiting, watchedItems } from "./inbox.ts";
 import { pullRequestLinks, readState, workspaceLabels } from "./state.ts";
 
 test("guesses what waits on me as inbox.py does", () => {
@@ -135,4 +136,18 @@ test("links pull requests by their labels", () => {
   assert.deepEqual(linkParts("see https://x.test/pull/1#c-2) or x#1", links), [
     ["see "], ["https://x.test/pull/1#c-2", "https://x.test/pull/1#c-2"], [") or "], ["x#1"]]);
   assert.deepEqual(linkParts("__proto__#1 constructor", links), [["__proto__#1"], [" constructor"]]);
+});
+
+test("has HAL say what needs attention first", () => {
+  const ok = { connected: true, running: true, stale: false, waiting: 0, hour: 9 };
+  assert.equal(halMessage(ok), "Good morning. All systems functional. Nothing requires your attention.");
+  assert.equal(halMessage({ ...ok, waiting: 1, hour: 20 }), "Good evening. One matter requires your attention.");
+  assert.equal(halMessage({ ...ok, waiting: 3, hour: 2 }), "Working late. 3 matters require your attention.");
+  assert.match(halMessage({ ...ok, stale: true, waiting: 3 }), /stopped reporting/);
+  assert.match(halMessage({ ...ok, running: false, stale: true }), /isn't running/);
+  assert.match(halMessage({ ...ok, connected: false, running: false }), /lost contact/);
+});
+
+test("numbers repeated keys", () => {
+  assert.deepEqual(uniqueKeys(["a", "b", "a", "a"]), ["a", "b", "a#1", "a#2"]);
 });

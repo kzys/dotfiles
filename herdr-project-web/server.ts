@@ -5,7 +5,7 @@ import { execFile } from "node:child_process";
 import { type FSWatcher, readFileSync, watch } from "node:fs";
 import { type ServerResponse, createServer } from "node:http";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { extname, join, relative } from "node:path";
 import { promisify } from "node:util";
 import { build } from "esbuild";
 import { type Herdr, projectDirs, readState } from "./state.ts";
@@ -16,21 +16,33 @@ const stateDir = join(process.env.XDG_STATE_HOME || join(home, ".local/state"), 
 const projectRoot = join(home, "project");
 const port = Number(process.env.PORT || 9000);
 
-// Bundle the page once at start; it is small enough to keep in memory.
+// Bundle the page, its styles and fonts once at start; they are small
+// enough to keep in memory.
+const outdir = join(here, "out");
 const bundle = await build({
   entryPoints: [join(here, "app.tsx")],
+  outdir,
   bundle: true,
   format: "esm",
   minify: true,
   write: false,
   jsx: "automatic",
   jsxImportSource: "preact",
+  loader: { ".woff2": "file", ".woff": "file" },
+  assetNames: "fonts/[name]",
+  publicPath: "/",
 });
+const types: Record<string, string> = {
+  ".js": "text/javascript",
+  ".css": "text/css",
+  ".woff2": "font/woff2",
+  ".woff": "font/woff",
+};
 const assets: Record<string, [string, string | Uint8Array]> = {
   "/": ["text/html; charset=utf-8", readFileSync(join(here, "index.html"))],
-  "/app.js": ["text/javascript", bundle.outputFiles[0].contents],
-  "/style.css": ["text/css", readFileSync(join(here, "style.css"))],
 };
+for (const f of bundle.outputFiles)
+  assets[`/${relative(outdir, f.path)}`] = [types[extname(f.path)] ?? "application/octet-stream", f.contents];
 
 const clients = new Set<ServerResponse>();
 let herdr: Herdr | null = null;

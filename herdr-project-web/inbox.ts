@@ -161,3 +161,13 @@ export function linkParts(text: string, links: Record<string, string>): [string,
       return Object.hasOwn(links, p) ? [p, links[p]] : [p];
     });
 }
+
+/** Returns keys, made unique by numbering the repeats of each. */
+export function uniqueKeys(keys: string[]): string[] {
+  const count = new Map<string, number>();
+  return keys.map((k) => {
+    const n = count.get(k) ?? 0;
+    count.set(k, n + 1);
+    return n ? `${k}#${n}` : k;
+  });
+}
