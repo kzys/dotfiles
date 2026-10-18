@@ -9,7 +9,7 @@ import { createContext, render } from "preact";
 import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 import { QUOTES, halMessage } from "./hal.ts";
 import { type Item, linkParts, uniqueKeys } from "./inbox.ts";
-import { readiness, runsByState } from "./pulls.ts";
+import { type AgentState, agentState, readiness, runsByState } from "./pulls.ts";
 import type { Project, PullRequest, Run, Section, State } from "./state.ts";
 
 // The watcher writes at least every five minutes while it runs.
@@ -188,9 +188,25 @@ function Checks({ pr }: { pr: PullRequest }) {
   );
 }
 
-function PullRequestRow({ pr }: { pr: PullRequest }) {
+const AGENT_LABELS: Record<AgentState, string> = {
+  working: "agent working",
+  blocked: "agent needs you",
+  idle: "agent idle",
+  unknown: "agent on it",
+};
+
+function PullRequestRow({
+  pr,
+  agents,
+}: {
+  pr: PullRequest;
+  agents: Record<string, string> | null;
+}) {
   const [state, label] = checksState(pr.checks);
-  const [ready, kind] = readiness(pr);
+  const agent = agentState(pr, agents);
+  const [ready, kind] = readiness(pr, agent);
+  // When the agent decides the pill, the pill says what it does.
+  const agentInPill = ready !== readiness(pr)[0];
   return (
     <li class="pr">
       <span class={`checks checks-${state}`} title={label} aria-label={label} />
@@ -204,7 +220,9 @@ function PullRequestRow({ pr }: { pr: PullRequest }) {
             {pr.repo}#{pr.number}
           </span>
           {pr.project && <span class="workspace">{pr.project}</span>}
-          {pr.agent && <span class="pr-agent">agent on it</span>}
+          {agent && !agentInPill && (
+            <span class={`pr-agent agent-${agent}`}>{AGENT_LABELS[agent]}</span>
+          )}
           {!pr.runs && pr.failed.length > 0 && (
             <span class="pr-failed">failed: {pr.failed.join(", ")}</span>
           )}
@@ -215,21 +233,50 @@ function PullRequestRow({ pr }: { pr: PullRequest }) {
   );
 }
 
-function WatchSection({ section, query }: { section: Section; query: string }) {
-  const at = section.at ? new Date(section.at) : null;
+function WatchSection({
+  section,
+  query,
+  agents,
+  now,
+}: {
+  section: Section;
+  query: string;
+  agents: Record<string, string> | null;
+  now: number;
+}) {
+  const hhmm = (iso?: string | null) =>
+    iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : null;
+  const at = hhmm(section.at);
+  // Past its next check, the section is being checked, which may take a
+  // while, as for those that ask Claude.
+  const due = section.next ? Date.parse(section.next) <= now : false;
+  const next = hhmm(section.next);
   const prs = section.pullRequests?.filter((pr) =>
     matches(query, pr.title, pr.repo, pr.label, pr.project));
   return (
     <section class="watch">
       <h3>
         {section.title}
-        {at && <time>{at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>}
+        {at && (
+          <span class="checked">
+            <time dateTime={section.at!}>{at}</time>
+            {next &&
+              (due ? (
+                " · checking…"
+              ) : (
+                <>
+                  {" · next "}
+                  <time dateTime={section.next!}>{next}</time>
+                </>
+              ))}
+          </span>
+        )}
       </h3>
       {prs ? (
         prs.length ? (
           <ul class="prs">
             {prs.map((pr) => (
-              <PullRequestRow key={pr.url} pr={pr} />
+              <PullRequestRow key={pr.url} pr={pr} agents={agents} />
             ))}
           </ul>
         ) : (
@@ -429,7 +476,15 @@ function App() {
             <div class="column">
               <h2>Watcher</h2>
               {state.sections ? (
-                state.sections.map((s) => <WatchSection key={s.title} section={s} query={q} />)
+                state.sections.map((s) => (
+                  <WatchSection
+                    key={s.title}
+                    section={s}
+                    query={q}
+                    agents={state.agents ?? null}
+                    now={now}
+                  />
+                ))
               ) : (
                 <p class="empty">
                   No screen.json yet. Run <code>herdr-project --watch</code>.

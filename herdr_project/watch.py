@@ -8,7 +8,7 @@ import subprocess
 import sys
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from herdr_project import headless, inbox, linear, panes, pull_request, slack
@@ -93,17 +93,21 @@ def screen(sections):
     return "\n".join(out).rstrip("\n")
 
 
-def screen_state(sections):
+def screen_state(sections, nexts=None):
     """Returns sections, (title, time, lines) tuples, as screen shows
     them, in the form kept in screen.json for other viewers: a list of
-    dicts with the title, the time in ISO 8601 or None, and the lines.
-    A section may have a fourth item, the pull requests it lists, as
-    pull_request.listed returns them, kept as pullRequests unless None."""
+    dicts with the title, the time in ISO 8601 or None, when the section
+    is checked again, from nexts, those times by title, or None, and the
+    lines. A section may have a fourth item, the pull requests it lists,
+    as pull_request.listed returns them, kept as pullRequests unless
+    None."""
     out = []
     for title, at, lines, *rest in sections:
         if lines is None:
             continue
-        out.append({"title": title, "at": at.isoformat() if at else None, "lines": lines})
+        upcoming = (nexts or {}).get(title)
+        out.append({"title": title, "at": at.isoformat() if at else None,
+                    "next": upcoming.isoformat() if upcoming else None, "lines": lines})
         if rest and rest[0] is not None:
             out[-1]["pullRequests"] = rest[0]
     return out
@@ -160,6 +164,17 @@ def watch(herdr, root, state, orgs=(), pr_interval=300, queue_interval=1800,
             except (OSError, subprocess.CalledProcessError):
                 pass
 
+    # When each section is checked again, by title, set as its loop
+    # goes to sleep.
+    nexts = {}
+
+    def sleep(seconds, *titles):
+        with lock:
+            for t in titles:
+                nexts[t] = datetime.now().astimezone() + timedelta(seconds=seconds)
+        show()
+        time.sleep(seconds)
+
     def show():
         with lock:
             sections = [tuple(prs), tuple(pane_section),
@@ -167,7 +182,7 @@ def watch(herdr, root, state, orgs=(), pr_interval=300, queue_interval=1800,
             sys.stdout.write("\033[H\033[2J" + screen(sections))
             sys.stdout.flush()
             try:
-                save_state(state / "screen.json", screen_state(sections))
+                save_state(state / "screen.json", screen_state(sections, nexts))
             except OSError:
                 pass  # The pane still shows them.
 
@@ -184,8 +199,7 @@ def watch(herdr, root, state, orgs=(), pr_interval=300, queue_interval=1800,
                 section[1:] = [datetime.now().astimezone(), lines]
                 if new is not None:
                     found(section[0], new)
-            show()
-            time.sleep(queue_interval)
+            sleep(queue_interval, section[0])
 
     # The queues start after the first pull requests, whose projects they use.
     threads = [threading.Thread(target=queue_loop, args=q, daemon=True) for q in queues]
@@ -209,11 +223,11 @@ def watch(herdr, root, state, orgs=(), pr_interval=300, queue_interval=1800,
             pane_section[1:] = [datetime.now().astimezone(), lines]
             if new is not None:
                 found(pane_section[0], new)
-        show()
         for t in threads:
             if t.ident is None:
                 t.start()
-        time.sleep(pr_interval)
+        # The panes are checked right after the pull requests.
+        sleep(pr_interval, prs[0], pane_section[0])
 
 
 def watch_workspace(herdr, pane, env):

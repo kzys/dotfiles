@@ -21,6 +21,7 @@ query($q: String!) {
       ... on PullRequest {
         number title url state isDraft headRefName reviewDecision
         repository { nameWithOwner }
+        headRepository { nameWithOwner }
         commits(last: 1) { nodes { commit { statusCheckRollup {
           state
           contexts(first: 100) { nodes {
@@ -82,7 +83,8 @@ def fetch(command="gh", days=14, orgs=()):
 
 def pull_requests(data):
     """Returns the pull requests in data, a response from fetch, as
-    dicts with their url, repo ("owner/name"), number, title, branch,
+    dicts with their url, repo ("owner/name"), the repo their branch is
+    in (head, the same unless from a fork), number, title, branch,
     state (OPEN, MERGED or CLOSED), draft flag, checks (the rollup
     state, or None without checks), the names of failed checks, each
     check as runs returns them, and review decision."""
@@ -100,6 +102,7 @@ def pull_requests(data):
         prs.append({
             "url": node["url"],
             "repo": node["repository"]["nameWithOwner"],
+            "head": (node.get("headRepository") or node["repository"])["nameWithOwner"],
             "number": node["number"],
             "title": node["title"],
             "branch": node["headRefName"],
@@ -121,16 +124,52 @@ def repo_name(url):
     return m.group(1) if m else None
 
 
+def git(d, *args):
+    """Returns what git with args prints in directory d, stripped, or ""
+    if it fails or takes over 10 seconds, as on a stuck mount."""
+    try:
+        return subprocess.run(
+            ["git", "-C", str(d), *args], stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL, text=True, check=False, timeout=10,
+        ).stdout.strip()
+    except subprocess.TimeoutExpired:
+        return ""
+
+
+def checkout(d):
+    """Returns the git checkout directory d is in as a dict with its
+    branch and repo ("owner/name" of origin, or None), or None if it
+    isn't in one or is on no branch."""
+    branch = git(d, "branch", "--show-current")
+    if not branch:
+        return None
+    return {"branch": branch, "repo": repo_name(git(d, "remote", "get-url", "origin"))}
+
+
+def checkout_panes(panes, prs):
+    """Returns the agent panes, from panes in herdr pane list's form, that
+    work in a checkout of a pull request in prs on its branch, by the
+    pull request's url, the first pane for each. The checkout's origin
+    must be the repository the branch is in, so that a fork's branch
+    doesn't match the upstream's branch of the same name."""
+    found, seen = {}, {}
+    for p in panes:
+        d = pane_cwd(p)
+        if not p.get("agent") or not d:
+            continue
+        if d not in seen:
+            seen[d] = checkout(d)
+        c = seen[d]
+        for pr in prs if c else ():
+            if c["branch"] == pr["branch"] and (c["repo"] or "").lower() == pr["head"].lower():
+                found.setdefault(pr["url"], p)
+    return found
+
+
 def worktrees(root):
     """Returns the git checkouts directly in the projects under root as
     dicts with their project, dir, branch and repo ("owner/name" of
     origin, or None)."""
-    def git(d, *args):
-        return subprocess.run(
-            ["git", "-C", str(d), *args], stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL, text=True, check=False,
-        ).stdout.strip()
-
     trees = []
     for d in sorted(Path(root).glob("*/*/.git")):
         d = d.parent
@@ -281,19 +320,23 @@ def wake_message(pr, message):
             f"by the change, and update your notes.")
 
 
-def listed(prs, owners, panes_by_url):
+def listed(prs, owners, panes_by_url, checkouts=None):
     """Returns the open pull requests in prs, those with projects first,
     as dicts with the fields pull_requests gives them, their label, the
-    name of their project from owners (by url) or None, and whether an
-    agent pane works on them."""
+    name of their project from owners (by url) or None, whether an agent
+    pane works on them, and the id of the pane in their checkout, from
+    checkouts (by url), or None. Only that pane surely works on them;
+    others may be any agent in their project."""
     rows = []
     for pr in prs:
         if pr["state"] != "OPEN":
             continue
         found = owners.get(pr["url"])
+        sure = (checkouts or {}).get(pr["url"])
         rows.append({**pr, "label": label(pr),
                      "project": project_name(found.project) if found else None,
-                     "agent": bool(panes_by_url.get(pr["url"]))})
+                     "agent": bool(panes_by_url.get(pr["url"])),
+                     "pane": sure["pane_id"] if sure else None})
     return sorted(rows, key=lambda r: r["project"] is None)
 
 
@@ -339,7 +382,12 @@ def poll(herdr, root, path, gh="gh", orgs=()):
     trees, texts = worktrees(root), notes_texts(root)
     panes = herdr("pane", "list")["result"]["panes"]
     owners = {pr["url"]: owner(pr, trees, texts) for pr in prs}
+    # An agent in a checkout on the branch, wherever it is, surely works
+    # on the pull request; one in its project only may.
+    open_prs = [pr for pr in prs if pr["state"] == "OPEN"]
     panes_by_url = {url: agent_pane(panes, f) for url, f in owners.items() if f}
+    checkouts = checkout_panes(panes, open_prs)
+    panes_by_url.update(checkouts)
     for pr, message, wake in events(old, prs):
         found = owners.get(pr["url"])
         where = f" ({Path(found.project).name})" if found else ""
@@ -356,6 +404,6 @@ def poll(herdr, root, path, gh="gh", orgs=()):
             except (OSError, subprocess.CalledProcessError):
                 pass
     save_state(path, remember(old, prs))
-    rows = listed(prs, owners, panes_by_url)
+    rows = listed(prs, owners, panes_by_url, checkouts)
     return table(rows), owners, waiting_items(prs, owners), rows
 

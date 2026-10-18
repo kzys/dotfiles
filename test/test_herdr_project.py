@@ -6,7 +6,7 @@ import subprocess
 import sys
 import threading
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -248,7 +248,7 @@ def test_ancestors_walks_up_from_pid():
 
 
 def pr_node(number, branch, state='OPEN', checks=None, failed=(), review=None,
-            repo='org/app'):
+            repo='org/app', head=None):
     contexts = [{'__typename': 'CheckRun', 'name': n, 'conclusion': 'FAILURE'} for n in failed]
     contexts.append({'__typename': 'StatusContext', 'context': 'ok', 'state': 'SUCCESS'})
     rollup = {'state': checks, 'contexts': {'nodes': contexts}} if checks else None
@@ -256,6 +256,7 @@ def pr_node(number, branch, state='OPEN', checks=None, failed=(), review=None,
             'url': f'https://github.com/{repo}/pull/{number}', 'state': state,
             'isDraft': False, 'headRefName': branch, 'reviewDecision': review,
             'repository': {'nameWithOwner': repo},
+            'headRepository': {'nameWithOwner': head or repo},
             'commits': {'nodes': [{'commit': {'statusCheckRollup': rollup}}]}}
 
 
@@ -305,6 +306,61 @@ def git_checkout(path, branch, remote='git@github.com:org/app.git'):
                                        stdout=subprocess.DEVNULL)
     run('init', '-q', '-b', branch)
     run('remote', 'add', 'origin', remote)
+
+
+def test_finds_agents_in_checkouts_of_pull_requests(tmp_path):
+    git_checkout(tmp_path / 'repos/org/app', 'me/one')
+    (tmp_path / 'repos/org/app/sub').mkdir()
+    git_checkout(tmp_path / 'repos/org/other', 'me/one', 'git@github.com:org/other.git')
+    git_checkout(tmp_path / 'repos/me/app', 'main', 'git@github.com:me/app.git')
+    prs = pull_request.pull_requests(search(
+        pr_node(1, 'me/one'), pr_node(2, 'me/two'),
+        # From a fork's main, which the upstream's main isn't.
+        pr_node(3, 'main', head='me/app')))
+    panes = [
+        {'pane_id': 'w1:p1', 'agent': None, 'cwd': str(tmp_path / 'repos/org/app')},
+        {'pane_id': 'w1:p2', 'agent': 'claude', 'cwd': str(tmp_path / 'repos/org/other')},
+        {'pane_id': 'w1:p3', 'agent': 'claude', 'cwd': str(tmp_path / 'repos/org/app/sub')},
+        {'pane_id': 'w1:p4', 'agent': 'codex', 'cwd': str(tmp_path / 'repos/org/app')},
+        {'pane_id': 'w1:p5', 'agent': 'claude', 'cwd': str(tmp_path / 'gone')},
+        {'pane_id': 'w1:p6', 'agent': 'claude', 'cwd': str(tmp_path / 'repos/me/app')},
+    ]
+    found = pull_request.checkout_panes(panes, prs)
+    assert {url: p['pane_id'] for url, p in found.items()} == {
+        'https://github.com/org/app/pull/1': 'w1:p3',
+        'https://github.com/org/app/pull/3': 'w1:p6'}
+
+
+def test_wakes_the_agent_in_the_checkout_over_one_in_the_project(tmp_path):
+    # Only GitHub is replaced; git, the notes and the state file are real.
+    (tmp_path / 'project/20261001-a').mkdir(parents=True)
+    (tmp_path / 'project/20261001-a/AGENT-main.md').write_text('- watch app#1\n')
+    git_checkout(tmp_path / 'repos/org/app', 'me/one')
+    responses = tmp_path / 'responses'
+    responses.mkdir()
+    gh = tmp_path / 'gh'
+    gh.write_text(f'#!/bin/sh\nf=$(ls {responses} | head -1)\ncat {responses}/$f\n'
+                  f'[ $(ls {responses} | wc -l) -gt 1 ] && rm {responses}/$f\nexit 0\n')
+    gh.chmod(0o755)
+    (responses / '1').write_text(json.dumps(search(pr_node(1, 'me/one', checks='PENDING'))))
+    (responses / '2').write_text(json.dumps(search(pr_node(1, 'me/one', checks='FAILURE'))))
+    calls = []
+
+    def fake_herdr(*args):
+        calls.append(args)
+        if args[:2] == ('pane', 'list'):
+            return {'result': {'panes': [
+                {'pane_id': 'w1:p1', 'agent': 'claude', 'agent_status': 'idle',
+                 'cwd': str(tmp_path / 'project/20261001-a'), 'tokens': {}},
+                {'pane_id': 'w2:p1', 'agent': 'claude', 'agent_status': 'idle',
+                 'cwd': str(tmp_path / 'repos/org/app'), 'tokens': {}}]}}
+        return {}
+
+    state = tmp_path / 'state/pull-requests.json'
+    _, _, _, rows = pull_request.poll(fake_herdr, tmp_path / 'project', state, gh=str(gh))
+    assert [(r['project'], r['agent'], r['pane']) for r in rows] == [('20261001-a', True, 'w2:p1')]
+    pull_request.poll(fake_herdr, tmp_path / 'project', state, gh=str(gh))
+    assert [c[2] for c in calls if c[:2] == ('pane', 'run')] == ['w2:p1']
 
 
 def test_finds_projects_of_pull_requests(tmp_path):
@@ -396,8 +452,10 @@ def test_polls_pull_requests(tmp_path):
     lines, owners, items, rows = pull_request.poll(
         fake_herdr, tmp_path / 'project', state, gh=str(gh))
     assert items == []
-    assert [(r['label'], r['project'], r['agent'], r['checks']) for r in rows] == [
-        ('app#1', 'one', True, 'PENDING')]
+    # The agent is in the project but not the checkout, so may be busy
+    # with something else.
+    assert [(r['label'], r['project'], r['agent'], r['pane'], r['checks']) for r in rows] == [
+        ('app#1', 'one', True, None, 'PENDING')]
     assert owners['https://github.com/org/app/pull/1'].project == str(
         tmp_path / 'project/20261001-a')
     assert lines == [f'… ● {"app#1":<24} {"one":<20} PR 1']
@@ -513,11 +571,12 @@ def test_draws_watch_screen():
 def test_keeps_watch_screen_for_other_viewers():
     at = datetime(2026, 10, 16, 15, 4, tzinfo=UTC)
     assert watch.screen_state([('PRs', at, ['a'], [{'label': 'app#1'}]), ('Slack', None, None),
-                               ('Panes', None, []), ('Failed', None, ['x'], None)]) == [
-        {'title': 'PRs', 'at': '2026-10-16T15:04:00+00:00', 'lines': ['a'],
-         'pullRequests': [{'label': 'app#1'}]},
-        {'title': 'Panes', 'at': None, 'lines': []},
-        {'title': 'Failed', 'at': None, 'lines': ['x']}]
+                               ('Panes', None, []), ('Failed', at, ['x'], None)],
+                              {'PRs': at + timedelta(minutes=5)}) == [
+        {'title': 'PRs', 'at': '2026-10-16T15:04:00+00:00', 'next': '2026-10-16T15:09:00+00:00',
+         'lines': ['a'], 'pullRequests': [{'label': 'app#1'}]},
+        {'title': 'Panes', 'at': None, 'next': None, 'lines': []},
+        {'title': 'Failed', 'at': '2026-10-16T15:04:00+00:00', 'next': None, 'lines': ['x']}]
 
 
 def test_checks_only_sources_with_connectors():
