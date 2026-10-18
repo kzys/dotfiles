@@ -81,7 +81,7 @@ A localhost-only page showing what `herdr-project --watch` found and the
 files change. The watcher keeps its sections in
 `~/.local/state/herdr-project/screen.json` for it.
 
-The watcher serves it at http://127.0.0.1:7317/ once its packages are
+The watcher serves it at http://127.0.0.1:9000/ once its packages are
 installed, with Node 22.6 or later. If the page doesn't come up, look in
 `~/.local/state/herdr-project/web.log`.
 

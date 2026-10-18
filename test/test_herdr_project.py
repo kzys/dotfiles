@@ -601,9 +601,9 @@ def test_runs_the_web_page_only_once_installed(tmp_path):
 
 def test_starts_the_web_page_with_its_output_in_a_log(tmp_path):
     log = tmp_path / 'state/web.log'
-    web = watch.start_web([sys.executable, '-c', 'print("on 7317")'], log)
+    web = watch.start_web([sys.executable, '-c', 'print("on 9000")'], log)
     assert web.wait(timeout=10) == 0
-    assert log.read_text() == 'on 7317\n'
+    assert log.read_text() == 'on 9000\n'
     assert watch.start_web(None, log) is None
     assert watch.start_web([str(tmp_path / 'missing')], log) is None
 
