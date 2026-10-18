@@ -201,3 +201,13 @@ def test_hook_gives_instructions_only_on_resume_in_a_project(tmp_path):
     for changed in [{'source': 'startup'}, {'agent_id': 'a'}, {'cwd': str(tmp_path)}]:
         got = run('claude-hook', json.dumps({**data, **changed}), tmp_path)
         assert (got.returncode, got.stdout) == (0, ''), changed
+
+
+def test_hook_logs_a_resume_and_a_failed_step(tmp_path):
+    data = {'hook_event_name': 'SessionStart', 'session_id': '\ud800', 'source': 'resume',
+            'cwd': str(tmp_path), 'transcript_path': str(tmp_path / 't.jsonl')}
+    got = run('claude-hook', json.dumps(data), tmp_path)
+    log = (tmp_path / '.cache' / 'claude-hook.log').read_text()
+    assert got.returncode == 0
+    assert 'source=resume' in log and 'report_session failed' in log
+    assert '\\ud800' in log
