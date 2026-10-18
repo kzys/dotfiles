@@ -28,7 +28,6 @@ import os
 import shlex
 import subprocess
 import sys
-import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -36,6 +35,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from herdr_project import claude, inbox
 from herdr_project.agent import agent, codex_context, codex_sessions
 from herdr_project.herdr import herdr
+from herdr_project.instructions import new_project
 from herdr_project.notes import front_matter, notes, report_title, reported_role
 from herdr_project.screen import pick
 from herdr_project.watch import state_dir
@@ -233,9 +233,7 @@ def open_picked(picked, panes, selected, projects, herdr):
     runs a herdr command."""
     kind, directory, sid = picked[:3]
     if kind == "new":
-        directory = tempfile.mkdtemp(
-            prefix=datetime.now().strftime("%Y%m%d-"), dir=projects
-        )
+        directory = str(new_project(projects, datetime.now()))
 
     cmd = f"HERDR_PROJECT_AGENT={selected} " + shlex.quote(str(BIN / "herdr-project"))
     if sid:

@@ -77,6 +77,19 @@ class TestAgent:
         assert args[-2:] == ['--resume', 'id']
         assert env == {'CLAUDE_CODE_SHELL': '/bin/bash'}
 
+    def test_launcher_works_where_it_was_started(self):
+        launcher = load('herdr_project_origin', ROOT / 'bin/herdr-project')
+        for agent in ('claude', 'codex'):
+            _, args, _ = launcher.command(agent, [], Path('/h/repos/org/app'))
+            assert args[args.index('/h/repos/org/app') - 1] == '--add-dir'
+            assert 'started in `/h/repos/org/app`' in ' '.join(args)
+        # Claude also reads the checkout's CLAUDE.md.
+        _, _, env = launcher.command('claude', [], Path('/h/repos/org/app'))
+        assert env['CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD'] == '1'
+        _, args, env = launcher.command('claude', [])
+        assert 'outside ~/project' not in ' '.join(args)
+        assert env == {'CLAUDE_CODE_SHELL': '/bin/bash'}
+
     def test_codex_launcher_new_and_resume(self):
         launcher = load('herdr_project_codex', ROOT / 'bin/herdr-project')
         for arguments, tail in [([], []), (['--resume', 'id'], ['resume', 'id'])]:
