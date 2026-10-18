@@ -76,6 +76,9 @@ test("reads the watcher's files and the projects' notes", () => {
   writeFileSync(join(p1, "README.md"), "---\ntitle: Do A\nname: a\n---\n");
   writeFileSync(join(p1, "AGENT-main.md"), "## Remaining\n- [you] Pick one\n");
   writeFileSync(join(p2, "AGENT-main.md"), "## Remaining\n- [wait] CI\n");
+  mkdirSync(join(p1, "repo"));
+  writeFileSync(join(p1, "repo", ".git"), "gitdir: elsewhere\n");
+  mkdirSync(join(p1, "logs"));
   writeFileSync(
     join(state, "screen.json"),
     JSON.stringify([{ title: "Panes", at: null, lines: ["90% w1:p1 a"] }]),
@@ -93,8 +96,8 @@ test("reads the watcher's files and the projects' notes", () => {
   const s = readState(state, projects);
   assert.deepEqual(s.sections, [{ title: "Panes", at: null, lines: ["90% w1:p1 a"] }]);
   assert.notEqual(s.watchedAt, null);
-  assert.deepEqual(s.projects.map((p) => [p.name, p.title, p.items.map((i) => i.text)]), [
-    ["a", "Do A", ["Pick one", "context 90% full"]],
+  assert.deepEqual(s.projects.map((p) => [p.name, p.title, p.worktrees, p.items.map((i) => i.text)]), [
+    ["a", "Do A", [join(p1, "repo")], ["Pick one", "context 90% full"]],
   ]);
   assert.deepEqual(s.unowned.map((i) => i.text), ["hi", "dm", "c#1 failed"]);
 

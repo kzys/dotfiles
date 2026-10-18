@@ -4,6 +4,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { type Item, frontMatter, projectItems, watchedItems } from "./inbox.ts";
+import { worktreeDirs } from "./worktrees.ts";
 
 // A check of a pull request's latest commit.
 export type Run = {
@@ -48,6 +49,8 @@ export type Project = {
   title: string;
   // The labels of the Herdr workspaces with panes in dir.
   workspaces: string[];
+  // The git worktrees and checkouts directly in dir.
+  worktrees: string[];
   items: Item[];
 };
 
@@ -209,6 +212,7 @@ export function readState(stateDir: string, projectRoot: string, herdr: Herdr | 
       name: (readme && frontMatter(readme, "name")) || dir.split("/").pop()!,
       title: (readme && frontMatter(readme, "title")) || "(no title)",
       workspaces: workspaceLabels(dir, herdr),
+      worktrees: worktreeDirs(dir),
       items,
     });
   }

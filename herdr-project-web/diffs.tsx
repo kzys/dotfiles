@@ -35,6 +35,20 @@ export const diffHref = (dir: string) => `#diffs/${encodeURIComponent(dir)}`;
 
 const base = (dir: string) => dir.split("/").pop() ?? dir;
 
+/** Returns links to the diffs of the worktrees in dirs, by name. */
+export function WorktreeLinks({ dirs }: { dirs: string[] }) {
+  if (!dirs.length) return null;
+  return (
+    <nav class="wt-links" aria-label="Diffs">
+      {dirs.map((d) => (
+        <a key={d} href={diffHref(d)}>
+          {base(d)}
+        </a>
+      ))}
+    </nav>
+  );
+}
+
 /** Returns what url says, as JSON, fetched again by refresh and
  * whenever the window regains focus, and when it was fetched. */
 function useFetched<T>(url: string): [T | null, string | null, Date | null, () => void] {

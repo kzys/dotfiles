@@ -7,7 +7,7 @@ import "@fontsource/ibm-plex-mono/latin-400.css";
 import "./style.css";
 import { createContext, render } from "preact";
 import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
-import { WorktreeDiffView, WorktreeList } from "./diffs.tsx";
+import { WorktreeDiffView, WorktreeLinks, WorktreeList } from "./diffs.tsx";
 import { QUOTES, halMessage } from "./hal.ts";
 import { type Item, linkParts, uniqueKeys } from "./inbox.ts";
 import { type AgentState, agentState, readiness, runsByState } from "./pulls.ts";
@@ -110,6 +110,7 @@ function ProjectCard({ project }: { project: Project }) {
           {copied ? "copied" : "path"}
         </button>
       </header>
+      <WorktreeLinks dirs={project.worktrees} />
       <ul>
         {uniqueKeys(project.items.map((i) => `${project.dir}:${i.role}:${i.mark}:${i.text}`)).map(
           (id, n) => (
@@ -401,7 +402,7 @@ function App() {
       (state?.projects ?? [])
         .map((p) => ({
           ...p,
-          items: matches(q, p.name, p.title)
+          items: matches(q, p.name, p.title, ...p.worktrees.map((d) => d.split("/").pop()!))
             ? p.items
             : p.items.filter((i) => matches(q, i.text, i.role)),
         }))
