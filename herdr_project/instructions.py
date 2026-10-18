@@ -1,5 +1,6 @@
 """The instructions agents get for working in a project."""
 
+import tempfile
 from pathlib import Path
 
 
@@ -29,3 +30,24 @@ def project_dir(cwd, projects):
     except ValueError:
         return None
     return Path(projects) / parts[0] if parts else None
+
+
+def new_project(projects, now):
+    """Creates a new project directory under projects, named for the date
+    of now, and returns it."""
+    Path(projects).mkdir(parents=True, exist_ok=True)
+    return Path(tempfile.mkdtemp(prefix=now.strftime("%Y%m%d-"), dir=projects))
+
+
+def start_in(cwd, projects, home, argv):
+    """Returns where an agent started in cwd with argv runs, as the
+    directory, or None for a new project under projects, and the
+    directory it was started from, which it should also work in, or
+    None. Only a new session, started with no arguments, outside a
+    project gets one; anything else, such as resuming a session, which
+    the agent finds where it ran, stays in cwd. It works in cwd unless
+    that is home or projects itself, where nothing in particular is."""
+    if argv or project_dir(cwd, projects):
+        return Path(cwd), None
+    plain = {Path(home).resolve(), Path(projects).resolve()}
+    return None, (None if Path(cwd).resolve() in plain else Path(cwd))

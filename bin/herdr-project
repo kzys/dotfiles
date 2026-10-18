@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-"""Start the selected agent in a scratch directory under ~/project with instructions
-for finding checkouts, keeping notes, and naming the Herdr workspace.
+"""Start the selected agent with instructions for finding checkouts,
+keeping notes, and naming the Herdr workspace, in its project's
+directory under ~/project. A new session started elsewhere gets a new
+project, and works in the directory it was started from too.
 In Herdr, the "## Remaining" section of the agent's notes shows in a
 pane above it.
 
@@ -31,12 +33,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from herdr_project.agent import agent
 from herdr_project.herdr import ancestors, herdr, in_pane
-from herdr_project.instructions import instructions
+from herdr_project.instructions import instructions, new_project, start_in
 from herdr_project.notes import report_title
 from herdr_project import watch
 from herdr_project.remaining import follow_remaining, remember_follower
 
 SELF = Path(__file__).resolve()
+PROJECTS = Path.home() / "project"
 
 
 def remaining_pane():
@@ -95,6 +98,12 @@ def main(argv):
 
     selected = agent()
 
+    # Keep the project, with its notes, under ~/project wherever the agent
+    # was started, so that the tools that look there find it.
+    directory, origin = start_in(os.getcwd(), PROJECTS, Path.home(), argv)
+    if directory is None:
+        os.chdir(new_project(PROJECTS, datetime.now()))
+
     # Herdr already tracks sessions, so keep them out of the background.
     if os.environ.get("HERDR_ENV") == "1":
         if selected == "claude":
@@ -109,15 +118,25 @@ def main(argv):
         except (KeyError, OSError, subprocess.CalledProcessError):
             pass
 
-    program, args, env = command(selected, argv)
+    program, args, env = command(selected, argv, origin)
     os.environ.update(env)
     os.execvp(program, args)
 
 
-def command(selected, argv):
+def command(selected, argv, origin=None):
     """Returns the program and arguments that start the selected agent,
-    passing it argv, and the environment variables to set for it."""
+    passing it argv, and the environment variables to set for it. origin
+    is the directory the agent was started from, outside its project,
+    which it may also work in, or None."""
     text = instructions(os.getcwd(), SELF.parent.parent, datetime.now().astimezone())
+    extra, env = [], {"CLAUDE_CODE_SHELL": "/bin/bash"}
+    if origin:
+        text += (f"\n\nThis session was started in `{origin}`, outside ~/project, "
+                 "so this task's directory was made for it. Work on what is in "
+                 f"`{origin}` as Checkouts says, keeping your notes here.")
+        extra = ["--add-dir", str(origin)]
+        # Claude reads CLAUDE.md files of added directories only if asked.
+        env["CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD"] = "1"
     if selected == "codex":
         # --resume is the picker's common spelling; Codex uses a subcommand.
         if argv[:1] == ["--resume"]:
@@ -129,7 +148,7 @@ def command(selected, argv):
             # Scratch projects may be untrusted, where Codex defaults to
             # read-only permissions and rejects additional writable roots.
             "codex", "--sandbox", "workspace-write",
-            "--add-dir", str(SELF.parent.parent),
+            "--add-dir", str(SELF.parent.parent), *extra,
             "-c", "developer_instructions=" + json.dumps(rules + "\n\n" + text),
             *argv,
         ], {}
@@ -137,9 +156,9 @@ def command(selected, argv):
     # Run claude's commands in bash, not the login shell, whose quirks
     # trip it up.
     return "claude", [
-        "claude", "--add-dir", str(SELF.parent.parent),
+        "claude", "--add-dir", str(SELF.parent.parent), *extra,
         "--append-system-prompt", text, *argv,
-    ], {"CLAUDE_CODE_SHELL": "/bin/bash"}
+    ], env
 
 
 if __name__ == "__main__":
