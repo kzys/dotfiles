@@ -221,7 +221,7 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
   text-transform: uppercase;
   border-bottom: 1px solid var(--panel-edge);
 }
-.watch time { font: 400 11px var(--mono); letter-spacing: 0.08em; color: var(--muted); }
+.watch .checked { font: 400 11px var(--mono); letter-spacing: 0.08em; text-transform: none; color: var(--muted); }
 /* What still comes as terminal lines reads like a ship's readout. */
 .watch pre {
   margin: 10px;

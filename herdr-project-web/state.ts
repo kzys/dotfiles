@@ -35,6 +35,8 @@ export type PullRequest = {
 export type Section = {
   title: string;
   at: string | null;
+  // When the watcher checks again, from watchers that say.
+  next?: string | null;
   lines: string[];
   // The pull requests the lines list, if the section is about them.
   pullRequests?: PullRequest[];

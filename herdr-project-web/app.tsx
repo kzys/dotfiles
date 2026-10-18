@@ -237,19 +237,40 @@ function WatchSection({
   section,
   query,
   agents,
+  now,
 }: {
   section: Section;
   query: string;
   agents: Record<string, string> | null;
+  now: number;
 }) {
-  const at = section.at ? new Date(section.at) : null;
+  const hhmm = (iso?: string | null) =>
+    iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : null;
+  const at = hhmm(section.at);
+  // Past its next check, the section is being checked, which may take a
+  // while, as for those that ask Claude.
+  const due = section.next ? Date.parse(section.next) <= now : false;
+  const next = hhmm(section.next);
   const prs = section.pullRequests?.filter((pr) =>
     matches(query, pr.title, pr.repo, pr.label, pr.project));
   return (
     <section class="watch">
       <h3>
         {section.title}
-        {at && <time>{at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>}
+        {at && (
+          <span class="checked">
+            <time dateTime={section.at!}>{at}</time>
+            {next &&
+              (due ? (
+                " · checking…"
+              ) : (
+                <>
+                  {" · next "}
+                  <time dateTime={section.next!}>{next}</time>
+                </>
+              ))}
+          </span>
+        )}
       </h3>
       {prs ? (
         prs.length ? (
@@ -456,7 +477,13 @@ function App() {
               <h2>Watcher</h2>
               {state.sections ? (
                 state.sections.map((s) => (
-                  <WatchSection key={s.title} section={s} query={q} agents={state.agents ?? null} />
+                  <WatchSection
+                    key={s.title}
+                    section={s}
+                    query={q}
+                    agents={state.agents ?? null}
+                    now={now}
+                  />
                 ))
               ) : (
                 <p class="empty">

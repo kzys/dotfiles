@@ -6,7 +6,7 @@ import subprocess
 import sys
 import threading
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -571,11 +571,12 @@ def test_draws_watch_screen():
 def test_keeps_watch_screen_for_other_viewers():
     at = datetime(2026, 10, 16, 15, 4, tzinfo=UTC)
     assert watch.screen_state([('PRs', at, ['a'], [{'label': 'app#1'}]), ('Slack', None, None),
-                               ('Panes', None, []), ('Failed', None, ['x'], None)]) == [
-        {'title': 'PRs', 'at': '2026-10-16T15:04:00+00:00', 'lines': ['a'],
-         'pullRequests': [{'label': 'app#1'}]},
-        {'title': 'Panes', 'at': None, 'lines': []},
-        {'title': 'Failed', 'at': None, 'lines': ['x']}]
+                               ('Panes', None, []), ('Failed', at, ['x'], None)],
+                              {'PRs': at + timedelta(minutes=5)}) == [
+        {'title': 'PRs', 'at': '2026-10-16T15:04:00+00:00', 'next': '2026-10-16T15:09:00+00:00',
+         'lines': ['a'], 'pullRequests': [{'label': 'app#1'}]},
+        {'title': 'Panes', 'at': None, 'next': None, 'lines': []},
+        {'title': 'Failed', 'at': '2026-10-16T15:04:00+00:00', 'next': None, 'lines': ['x']}]
 
 
 def test_checks_only_sources_with_connectors():
