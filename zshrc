@@ -109,6 +109,11 @@ if [ -e $dotfiles_private/zshrc ]; then
     PATH=$dotfiles_private/bin:$PATH
 fi
 
+# Homelab
+if [ -d ~/repos/kzys/homelab/bin ]; then
+    PATH=~/repos/kzys/homelab/bin:$PATH
+fi
+
 # Completion
 autoload -U compinit
 compinit -d ~/.zsh/compdump
