@@ -26,6 +26,7 @@ body {
   color: var(--fg);
   font: 400 15px/1.5 var(--sans);
   -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
 }
 
 a { color: inherit; text-decoration: none; }
@@ -443,3 +444,113 @@ code { font-family: var(--mono); font-size: 0.92em; }
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/* The views along the console strip. */
+.top nav { flex: none; display: flex; gap: 4px; }
+.top nav a {
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.top nav a.here { color: var(--panel); background: var(--fg); }
+
+/* Worktrees and their diffs. */
+.diffs { margin-top: 28px; }
+.diffs h2 a:hover { color: var(--red); }
+.diffs h2 .copy { order: 1; letter-spacing: 0.08em; }
+.stat { flex: none; font: 12px var(--mono); }
+.stat-add { color: var(--ok); }
+.stat-del { color: var(--red); }
+
+.wts { margin: 0; padding: 4px 0; list-style: none; }
+.wt { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; padding: 8px 18px; }
+.wt + .wt { border-top: 1px solid var(--panel-edge); }
+.wt-name { font-weight: 500; border-bottom: 1px solid var(--faint); }
+.wt-name:hover { border-color: var(--red); }
+.wt-branch { font: 12px var(--mono); }
+.wt-base { color: var(--muted); }
+.wt-counts { flex: 1; display: flex; gap: 12px; font-size: 12px; color: var(--muted); }
+.wt.clean .wt-name { color: var(--muted); }
+.wt-error { flex: 1; font-size: 12px; color: var(--red); overflow-wrap: anywhere; }
+
+.card .commits, .card .file-index { margin: 0; padding: 8px 18px; list-style: none; font-size: 13px; }
+.commits code { color: var(--muted); margin-right: 6px; }
+.commits + .file-index { border-top: 1px solid var(--panel-edge); }
+.file-index li { display: flex; gap: 12px; align-items: baseline; }
+.file-index button {
+  flex: 1;
+  min-width: 0;
+  padding: 1px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: 12px var(--mono);
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.file-index button:hover { color: var(--red); }
+.file-note { padding: 10px 18px; }
+
+.file { scroll-margin-top: 80px; }
+.card .file-head { align-items: center; cursor: pointer; user-select: none; }
+.file-path { flex: 1; min-width: 0; font: 13px var(--mono); overflow-wrap: anywhere; }
+.file-from { color: var(--muted); }
+.file-added { color: var(--ok); border-color: currentColor; }
+.file-deleted { color: var(--red); border-color: currentColor; }
+.fold {
+  flex: none;
+  width: 0;
+  height: 0;
+  border: 5px solid transparent;
+  border-left-color: var(--muted);
+  border-right: 0;
+  transition: transform 0.15s;
+}
+.fold.open { transform: rotate(90deg); }
+
+.diff-scroll { overflow-x: auto; }
+.diff { width: 100%; border-collapse: collapse; font: 12px/1.6 var(--mono); }
+.diff td { padding: 0 10px; vertical-align: top; }
+.diff .ln {
+  width: 1%;
+  min-width: 40px;
+  color: var(--faint);
+  text-align: right;
+  user-select: none;
+}
+.diff .code { white-space: pre; tab-size: 4; }
+.diff .hunk td { padding: 4px 10px; background: var(--well); color: var(--muted); }
+.line-add { background: rgba(47, 111, 87, 0.1); }
+.line-add .code::before { content: "+"; color: var(--ok); margin-right: 6px; }
+.line-del { background: rgba(208, 22, 27, 0.08); }
+.line-del .code::before { content: "−"; color: var(--red); margin-right: 6px; }
+.line-ctx .code::before { content: " "; margin-right: 6px; }
+.line-note .code { color: var(--muted); font-style: italic; }
+
+/* Diffs side by side: the old file on the left, the new on the right,
+   each wrapping its long lines to keep to its half. */
+.diffs h2 .layout { order: 1; display: flex; gap: 2px; }
+.diffs h2 .layout button {
+  padding: 2px 10px;
+  border: 1px solid var(--panel-edge);
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  font: 500 10px var(--sans);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.diffs h2 .layout button.here { color: var(--panel); background: var(--fg); border-color: var(--fg); }
+.diff-split { table-layout: fixed; }
+.diff-split .ln-col { width: 52px; }
+.diff-split .code { white-space: pre-wrap; overflow-wrap: anywhere; }
+.diff-split .code.line-note { color: var(--muted); font-style: italic; }
+.diff-split .ln + .code { border-right: 1px solid var(--panel-edge); }
+.diff-split .blank { background: var(--well); border-right: 1px solid var(--panel-edge); }
+.diff-split .blank:last-child, .diff-split .code:last-child { border-right: 0; }

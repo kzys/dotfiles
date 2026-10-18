@@ -7,6 +7,7 @@ import "@fontsource/ibm-plex-mono/latin-400.css";
 import "./style.css";
 import { createContext, render } from "preact";
 import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
+import { WorktreeDiffView, WorktreeList } from "./diffs.tsx";
 import { QUOTES, halMessage } from "./hal.ts";
 import { type Item, linkParts, uniqueKeys } from "./inbox.ts";
 import { type AgentState, agentState, readiness, runsByState } from "./pulls.ts";
@@ -340,7 +341,28 @@ const pressing = (item: Item) => !["?", "maybe", "close"].includes(item.mark);
 const matches = (query: string, ...texts: (string | null)[]) =>
   !query || texts.some((t) => t?.toLowerCase().includes(query));
 
+/** Returns the page's location after its #, kept current. */
+function useHash(): string {
+  const [hash, setHash] = useState(location.hash.slice(1));
+  useEffect(() => {
+    const changed = () => setHash(location.hash.slice(1));
+    addEventListener("hashchange", changed);
+    return () => removeEventListener("hashchange", changed);
+  }, []);
+  return hash;
+}
+
+/** Returns s decoded from a URL, or as is if it isn't encoded right. */
+function decodeHash(s: string): string {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+}
+
 function App() {
+  const hash = useHash();
   const [state, setState] = useState<State | null>(null);
   const [connected, setConnected] = useState(false);
   const [query, setQuery] = useState("");
@@ -440,6 +462,14 @@ function App() {
             title={eyeTitle}
           />
           <Readout text={message} />
+          <nav>
+            <a href="#" class={hash.startsWith("diffs") ? "" : "here"}>
+              Inbox
+            </a>
+            <a href="#diffs" class={hash.startsWith("diffs") ? "here" : ""}>
+              Diffs
+            </a>
+          </nav>
           <input
             ref={filter}
             type="search"
@@ -448,7 +478,11 @@ function App() {
             onInput={(e) => setQuery(e.currentTarget.value)}
           />
         </header>
-        {!state ? (
+        {hash === "diffs" ? (
+          <WorktreeList query={q} />
+        ) : hash.startsWith("diffs/") ? (
+          <WorktreeDiffView dir={decodeHash(hash.slice("diffs/".length))} query={q} />
+        ) : !state ? (
           <p class="empty">Loading…</p>
         ) : (
           <main>

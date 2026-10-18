@@ -111,6 +111,15 @@ export function projectDirs(root: string): string[] {
   }
 }
 
+/** Returns the projects under root that aren't closed, newest first,
+ * each with its README.md, or null if it has none. */
+export function openProjects(root: string): [string, string | null][] {
+  return projectDirs(root).flatMap((dir): [string, string | null][] => {
+    const readme = read(join(dir, "README.md"));
+    return readme !== null && frontMatter(readme, "closed") ? [] : [[dir, readme]];
+  });
+}
+
 /** Returns the URLs of the pull requests in prs, what the watcher kept
  * in pull-requests.json, by their labels: owner/name#N, and name#N as
  * the watcher shows them, unless two share it. */
@@ -181,10 +190,7 @@ export function readState(stateDir: string, projectRoot: string, herdr: Herdr | 
     watchedAt = statSync(join(stateDir, "screen.json")).mtime.toISOString();
   } catch {}
 
-  const open = projectDirs(projectRoot).flatMap((dir): [string, string | null][] => {
-    const readme = read(join(dir, "README.md"));
-    return readme !== null && frontMatter(readme, "closed") ? [] : [[dir, readme]];
-  });
+  const open = openProjects(projectRoot);
   const known = new Set(open.map(([dir]) => dir));
   const byProject = new Map<string, Item[]>();
   const unowned: Item[] = [];
