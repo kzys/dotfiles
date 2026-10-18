@@ -30,6 +30,8 @@ export type State = {
   projects: Project[];
   // What the watcher found that belongs to no project.
   unowned: Item[];
+  // The URLs of the open pull requests by their labels, like name#N.
+  links: Record<string, string>;
 };
 
 function read(path: string): string | null {
@@ -62,6 +64,25 @@ export function projectDirs(root: string): string[] {
   } catch {
     return [];
   }
+}
+
+/** Returns the URLs of the pull requests in prs, what the watcher kept
+ * in pull-requests.json, by their labels: owner/name#N, and name#N as
+ * the watcher shows them, unless two share it. */
+export function pullRequestLinks(prs: unknown): Record<string, string> {
+  const links: Record<string, string> = {};
+  if (!prs || typeof prs !== "object") return links;
+  const shared = new Set<string>();
+  for (const url of Object.keys(prs)) {
+    const m = url.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)$/);
+    if (!m) continue;
+    links[`${m[1]}/${m[2]}#${m[3]}`] = url;
+    const short = `${m[2]}#${m[3]}`;
+    if (links[short] && links[short] !== url) shared.add(short);
+    links[short] = url;
+  }
+  for (const label of shared) delete links[label];
+  return links;
 }
 
 /** Returns the agents' notes in directory as [role, text] pairs. */
@@ -131,5 +152,6 @@ export function readState(stateDir: string, projectRoot: string, herdr: Herdr | 
       items,
     });
   }
-  return { sections, watchedAt, projects, unowned };
+  const links = pullRequestLinks(readJSON(join(stateDir, "pull-requests.json")));
+  return { sections, watchedAt, projects, unowned, links };
 }

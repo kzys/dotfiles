@@ -1,6 +1,6 @@
-import { render } from "preact";
-import { useEffect, useMemo, useRef, useState } from "preact/hooks";
-import type { Item } from "./inbox.ts";
+import { createContext, render } from "preact";
+import { useContext, useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { type Item, linkParts } from "./inbox.ts";
 import type { Project, Section, State } from "./state.ts";
 
 // The watcher writes at least every five minutes while it runs.
@@ -25,14 +25,17 @@ function ago(iso: string | null, now: number): string {
   return `${Math.floor(s / 86400)}d ago`;
 }
 
-/** Returns text with URLs as links. */
+// The URLs of the open pull requests by their labels, like name#N.
+const Links = createContext<Record<string, string>>({});
+
+/** Returns text with URLs, and the labels of pull requests in Links, as
+ * links. */
 function Linked({ text }: { text: string }) {
-  const parts = text.split(/(https?:\/\/[^\s)]+)/g);
   return (
     <>
-      {parts.map((p, i) =>
-        i % 2 ? (
-          <a href={p} target="_blank" rel="noreferrer">
+      {linkParts(text, useContext(Links)).map(([p, href]) =>
+        href ? (
+          <a href={href} target="_blank" rel="noreferrer">
             {p}
           </a>
         ) : (
@@ -181,59 +184,61 @@ function App() {
   const stale = state?.watchedAt ? now - Date.parse(state.watchedAt) > STALE_MS : true;
 
   return (
-    <div class="page">
-      <header class="top">
-        <h1>watch</h1>
-        <span class={`status ${connected ? "on" : "off"}`}>{connected ? "live" : "reconnecting"}</span>
-        <span class={`watcher ${stale ? "stale" : ""}`}>
-          watcher {state?.sections ? ago(state.watchedAt, now) : "not running"}
-        </span>
-        <input
-          ref={filter}
-          type="search"
-          placeholder="Filter  /"
-          value={query}
-          onInput={(e) => setQuery(e.currentTarget.value)}
-        />
-      </header>
-      {!state ? (
-        <p class="empty">Loading…</p>
-      ) : (
-        <main>
-          <div class="column">
-            <h2>
-              Inbox <span class="count">{waiting}</span>
-            </h2>
-            {unowned.length > 0 && (
-              <section class="card">
-                <header>
-                  <span class="name">elsewhere</span>
-                </header>
-                <ul>
-                  {unowned.map((item, i) => (
-                    <ItemRow key={i} item={item} />
-                  ))}
-                </ul>
-              </section>
-            )}
-            {projects.map((p) => (
-              <ProjectCard key={p.dir} project={p} />
-            ))}
-            {!projects.length && !unowned.length && <p class="empty">Nothing waiting.</p>}
-          </div>
-          <div class="column">
-            <h2>Watcher</h2>
-            {state.sections ? (
-              state.sections.map((s) => <WatchSection key={s.title} section={s} />)
-            ) : (
-              <p class="empty">
-                No screen.json yet. Run <code>herdr-project --watch</code>.
-              </p>
-            )}
-          </div>
-        </main>
-      )}
-    </div>
+    <Links.Provider value={state?.links ?? {}}>
+      <div class="page">
+        <header class="top">
+          <h1>watch</h1>
+          <span class={`status ${connected ? "on" : "off"}`}>{connected ? "live" : "reconnecting"}</span>
+          <span class={`watcher ${stale ? "stale" : ""}`}>
+            watcher {state?.sections ? ago(state.watchedAt, now) : "not running"}
+          </span>
+          <input
+            ref={filter}
+            type="search"
+            placeholder="Filter  /"
+            value={query}
+            onInput={(e) => setQuery(e.currentTarget.value)}
+          />
+        </header>
+        {!state ? (
+          <p class="empty">Loading…</p>
+        ) : (
+          <main>
+            <div class="column">
+              <h2>
+                Inbox <span class="count">{waiting}</span>
+              </h2>
+              {unowned.length > 0 && (
+                <section class="card">
+                  <header>
+                    <span class="name">elsewhere</span>
+                  </header>
+                  <ul>
+                    {unowned.map((item, i) => (
+                      <ItemRow key={i} item={item} />
+                    ))}
+                  </ul>
+                </section>
+              )}
+              {projects.map((p) => (
+                <ProjectCard key={p.dir} project={p} />
+              ))}
+              {!projects.length && !unowned.length && <p class="empty">Nothing waiting.</p>}
+            </div>
+            <div class="column">
+              <h2>Watcher</h2>
+              {state.sections ? (
+                state.sections.map((s) => <WatchSection key={s.title} section={s} />)
+              ) : (
+                <p class="empty">
+                  No screen.json yet. Run <code>herdr-project --watch</code>.
+                </p>
+              )}
+            </div>
+          </main>
+        )}
+      </div>
+    </Links.Provider>
   );
 }
 
