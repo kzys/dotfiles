@@ -5,8 +5,7 @@ SessionStart: reports the session to the Herdr pane so that Herdr
 resumes it after a restart, and, when a session resumes, reports the
 role it last reported to its new pane and, in a project under
 ~/project, prints herdr-project's instructions, since claude keeps the
-system prompt the session started with. On a resume it also logs the
-input to ~/.cache/claude-hook.log, with any step that fails."""
+system prompt the session started with."""
 
 import json
 import os
@@ -104,31 +103,20 @@ def print_instructions(data):
         print(text)
 
 
-def log(text):
-    """Appends text, with the time, to the hook's log in the cache
-    directory, if it can be written."""
-    try:
-        path = Path.home() / ".cache" / "claude-hook.log"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("a", errors="backslashreplace") as f:
-            f.write(f"{datetime.now().astimezone().isoformat()} {text}\n")
-    except OSError:
-        pass
-
-
 def main():
     data = json.load(sys.stdin)
     if data.get("hook_event_name") != "SessionStart":
         return
-    if resuming(data):
-        log(f"SessionStart source={data.get('source')} "
-            f"transcript={data.get('transcript_path')} session={data.get('session_id')}")
-    # No step may keep another from running.
+    failed = False
+    # No step may keep another from running, but a failed one fails the hook.
     for step in (report_session, report_role, print_instructions):
         try:
             step(data)
         except Exception:  # noqa: BLE001
-            log(f"{step.__name__} failed:\n{traceback.format_exc()}")
+            traceback.print_exc()
+            failed = True
+    if failed:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
