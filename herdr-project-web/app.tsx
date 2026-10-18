@@ -1,10 +1,27 @@
+// The fonts come with the page, which may be used offline.
+import "@fontsource/jost/latin-300.css";
+import "@fontsource/jost/latin-400.css";
+import "@fontsource/jost/latin-500.css";
+import "@fontsource/jost/latin-600.css";
+import "@fontsource/ibm-plex-mono/latin-400.css";
+import "./style.css";
 import { createContext, render } from "preact";
-import { useContext, useEffect, useMemo, useRef, useState } from "preact/hooks";
-import { type Item, linkParts } from "./inbox.ts";
-import type { Project, PullRequest, Section, State } from "./state.ts";
+import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
+import { QUOTES, halMessage } from "./hal.ts";
+import { type Item, linkParts, uniqueKeys } from "./inbox.ts";
+import { readiness, runsByState } from "./pulls.ts";
+import type { Project, PullRequest, Run, Section, State } from "./state.ts";
 
 // The watcher writes at least every five minutes while it runs.
 const STALE_MS = 11 * 60 * 1000;
+
+const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// The items the page has shown, by key. Those that appear after the
+// first state flash as they arrive; those that only reappear, as after
+// filtering, don't.
+const seen = new Set<string>();
+let primed = false;
 
 const MARKS: Record<string, string> = {
   you: "you",
@@ -50,9 +67,14 @@ function Mark({ mark }: { mark: string }) {
   return <span class={`mark mark-${MARKS[mark] ?? "other"}`}>{MARKS[mark] ?? mark}</span>;
 }
 
-function ItemRow({ item }: { item: Item }) {
+function ItemRow({ item, id }: { item: Item; id: string }) {
+  const [fresh] = useState(() => {
+    const isNew = primed && !seen.has(id);
+    seen.add(id);
+    return isNew;
+  });
   return (
-    <li class="item">
+    <li class={fresh ? "item fresh" : "item"}>
       <Mark mark={item.mark} />
       {item.role && <span class="role">{item.role}</span>}
       <span class="text">
@@ -88,9 +110,11 @@ function ProjectCard({ project }: { project: Project }) {
         </button>
       </header>
       <ul>
-        {project.items.map((item, i) => (
-          <ItemRow key={i} item={item} />
-        ))}
+        {uniqueKeys(project.items.map((i) => `${project.dir}:${i.role}:${i.mark}:${i.text}`)).map(
+          (id, n) => (
+            <ItemRow key={id} id={id} item={project.items[n]} />
+          ),
+        )}
       </ul>
     </section>
   );
@@ -105,8 +129,68 @@ function checksState(checks: string | null): [string, string] {
   return ["none", "No checks"];
 }
 
+/** Returns the names of runs, each linked to its details if known. */
+function RunNames({ runs }: { runs: Run[] }) {
+  return (
+    <>
+      {uniqueKeys(runs.map((r) => r.name)).map((key, i) => {
+        const r = runs[i];
+        return (
+          <span key={key}>
+            {i > 0 && ", "}
+            {r.url ? (
+              <a href={r.url} target="_blank" rel="noreferrer">
+                {r.name}
+              </a>
+            ) : (
+              r.name
+            )}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
+/** Returns a bar of pr's checks, a segment for each by state, and what
+ * failed or still runs. */
+function Checks({ pr }: { pr: PullRequest }) {
+  const by = runsByState(pr);
+  const total = pr.runs?.length ?? 0;
+  if (!total) return null;
+  return (
+    <div class="runs">
+      <div class="runs-bar" aria-hidden="true">
+        {(["passed", "skipped", "cancelled", "failed", "running"] as const).map(
+          (state) =>
+            by[state].length > 0 && (
+              <span key={state} class={`run-${state}`} style={{ flexGrow: by[state].length }} />
+            ),
+        )}
+      </div>
+      <span class="runs-count">
+        {by.passed.length}/{total} passed
+      </span>
+      {by.failed.length > 0 && (
+        <span class="runs-failed">
+          failed: <RunNames runs={by.failed} />
+        </span>
+      )}
+      {by.running.length > 0 && (
+        <span class="runs-running">
+          running: <RunNames runs={by.running} />
+        </span>
+      )}
+      {!by.failed.length && !by.running.length && (
+        <span class="runs-done">all done</span>
+      )}
+    </div>
+  );
+}
+
 function PullRequestRow({ pr }: { pr: PullRequest }) {
   const [state, label] = checksState(pr.checks);
+  const [ready, kind] = readiness(pr);
   return (
     <li class="pr">
       <span class={`checks checks-${state}`} title={label} aria-label={label} />
@@ -114,17 +198,18 @@ function PullRequestRow({ pr }: { pr: PullRequest }) {
         <a class="pr-title" href={pr.url} target="_blank" rel="noreferrer">
           {pr.title}
         </a>
-        {pr.draft && <span class="badge">draft</span>}
-        {pr.review === "APPROVED" && <span class="badge badge-ok">approved</span>}
-        {pr.review === "CHANGES_REQUESTED" && (
-          <span class="badge badge-bad">changes requested</span>
-        )}
+        <span class={`badge badge-${kind}`}>{ready}</span>
         <div class="pr-meta">
-          <span class="pr-label">{pr.repo}#{pr.number}</span>
+          <span class="pr-label">
+            {pr.repo}#{pr.number}
+          </span>
           {pr.project && <span class="workspace">{pr.project}</span>}
           {pr.agent && <span class="pr-agent">agent on it</span>}
-          {pr.failed.length > 0 && <span class="pr-failed">failed: {pr.failed.join(", ")}</span>}
+          {!pr.runs && pr.failed.length > 0 && (
+            <span class="pr-failed">failed: {pr.failed.join(", ")}</span>
+          )}
         </div>
+        <Checks pr={pr} />
       </div>
     </li>
   );
@@ -162,6 +247,41 @@ function WatchSection({ section, query }: { section: Section; query: string }) {
         <p class="empty">Nothing.</p>
       )}
     </section>
+  );
+}
+
+/** Returns text typed out a character at a time, as HAL's readout. */
+function Readout({ text }: { text: string }) {
+  const [shown, setShown] = useState(text.length);
+  useLayoutEffect(() => {
+    if (reducedMotion()) return setShown(text.length);
+    setShown(0);
+    const timer = setInterval(
+      () => setShown((n) => (n >= text.length ? (clearInterval(timer), n) : n + 1)),
+      22,
+    );
+    return () => clearInterval(timer);
+  }, [text]);
+  return (
+    <p class="readout">
+      <span class="readout-text" aria-hidden="true">
+        {text.slice(0, shown)}
+      </span>
+      <span class="caret" />
+      <span class="sr-only" aria-live="polite">
+        {text}
+      </span>
+    </p>
+  );
+}
+
+/** Returns the monolith that stands where nothing waits. */
+function Monolith() {
+  return (
+    <div class="monolith-scene">
+      <div class="monolith" />
+      <p>Nothing waiting.</p>
+    </div>
   );
 }
 
@@ -223,21 +343,56 @@ function App() {
   const waiting = [...(state?.projects ?? []).flatMap((p) => p.items), ...(state?.unowned ?? [])]
     .filter(pressing).length;
 
+  const [booting, setBooting] = useState(true);
+  useEffect(() => {
+    if (!state || primed) return;
+    primed = true;
+    const timer = setTimeout(() => setBooting(false), 1500);
+    return () => clearTimeout(timer);
+  }, [state]);
+
   useEffect(() => {
     document.title = waiting ? `(${waiting}) watch` : "watch";
   }, [waiting]);
 
   const stale = state?.watchedAt ? now - Date.parse(state.watchedAt) > STALE_MS : true;
+  // HAL's eye says how things stand: lit while live, dimmed while the
+  // watcher is quiet, dark without the server.
+  const eyeTitle = [
+    connected ? "Live" : "Reconnecting",
+    state?.sections ? `watcher updated ${ago(state.watchedAt, now)}` : "watcher not running",
+    "click to talk to HAL",
+  ].join(" · ");
+  const [quote, setQuote] = useState<string | null>(null);
+  const message =
+    quote ??
+    halMessage({
+      connected,
+      running: !!state?.sections,
+      stale,
+      waiting,
+      hour: new Date(now).getHours(),
+    });
+  // Asked directly, HAL quotes the film for a while.
+  const askHal = () => {
+    setQuote(QUOTES[(QUOTES.indexOf(quote ?? "") + 1) % QUOTES.length]);
+  };
+  useEffect(() => {
+    if (!quote) return;
+    const timer = setTimeout(() => setQuote(null), 8000);
+    return () => clearTimeout(timer);
+  }, [quote]);
 
   return (
     <Links.Provider value={state?.links ?? {}}>
-      <div class="page">
+      <div class={booting ? "page booting" : "page"}>
         <header class="top">
-          <h1>watch</h1>
-          <span class={`status ${connected ? "on" : "off"}`}>{connected ? "live" : "reconnecting"}</span>
-          <span class={`watcher ${stale ? "stale" : ""}`}>
-            watcher {state?.sections ? ago(state.watchedAt, now) : "not running"}
-          </span>
+          <button
+            class={`status ${!connected || !state ? "off" : stale ? "stale" : "on"}`}
+            onClick={askHal}
+            title={eyeTitle}
+          />
+          <Readout text={message} />
           <input
             ref={filter}
             type="search"
@@ -260,8 +415,8 @@ function App() {
                     <span class="name">elsewhere</span>
                   </header>
                   <ul>
-                    {unowned.map((item, i) => (
-                      <ItemRow key={i} item={item} />
+                    {uniqueKeys(unowned.map((i) => `:${i.mark}:${i.text}`)).map((id, n) => (
+                      <ItemRow key={id} id={id} item={unowned[n]} />
                     ))}
                   </ul>
                 </section>
@@ -269,7 +424,7 @@ function App() {
               {projects.map((p) => (
                 <ProjectCard key={p.dir} project={p} />
               ))}
-              {!projects.length && !unowned.length && <p class="empty">Nothing waiting.</p>}
+              {!projects.length && !unowned.length && (q ? <p class="empty">No match.</p> : <Monolith />)}
             </div>
             <div class="column">
               <h2>Watcher</h2>

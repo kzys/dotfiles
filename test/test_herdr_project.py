@@ -270,6 +270,25 @@ def test_reads_pull_requests():
         (1, 'FAILURE', ['lint', 'test']), (2, None, [])]
     assert prs[0]['repo'] == 'org/app'
     assert prs[0]['branch'] == 'a'
+    assert [(r['name'], r['state']) for r in prs[0]['runs']] == [
+        ('lint', 'failed'), ('ok', 'passed'), ('test', 'failed')]
+
+
+def test_reads_how_each_check_went():
+    assert pull_request.runs([
+        {'__typename': 'CheckRun', 'name': 'build', 'conclusion': None,
+         'detailsUrl': 'https://ci/1'},
+        {'__typename': 'CheckRun', 'name': 'docs', 'conclusion': 'SKIPPED'},
+        {'__typename': 'StatusContext', 'context': 'deploy', 'state': 'PENDING',
+         'targetUrl': 'https://ci/2'},
+        {'__typename': 'CheckRun', 'name': 'e2e', 'conclusion': 'TIMED_OUT'},
+        {'__typename': 'CheckRun', 'name': 'old', 'conclusion': 'CANCELLED'},
+    ]) == [
+        {'name': 'build', 'state': 'running', 'url': 'https://ci/1'},
+        {'name': 'deploy', 'state': 'running', 'url': 'https://ci/2'},
+        {'name': 'docs', 'state': 'skipped', 'url': None},
+        {'name': 'e2e', 'state': 'failed', 'url': None},
+        {'name': 'old', 'state': 'cancelled', 'url': None}]
 
 
 def test_reads_repo_names():
