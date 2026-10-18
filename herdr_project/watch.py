@@ -3,6 +3,7 @@ and Linear issues together, each at its own pace, in one pane."""
 
 import fcntl
 import os
+import signal
 import subprocess
 import sys
 import threading
@@ -221,20 +222,54 @@ def watch_workspace(herdr, pane, env):
     return workspace if label == "watch" else None
 
 
+def web_command(web):
+    """Returns the command that runs herdr-project-web from directory
+    web, or None if its packages aren't installed."""
+    if not (web / "node_modules").is_dir():
+        return None
+    return ["node", "--experimental-strip-types", "--disable-warning=ExperimentalWarning",
+            str(web / "server.ts")]
+
+
+def start_web(command, log):
+    """Starts command, if any, writing its output to the file log, and
+    returns its process, or None if it can't start. It stays in the
+    watcher's process group, so that Ctrl-C reaches it too."""
+    if not command:
+        return None
+    try:
+        log.parent.mkdir(parents=True, exist_ok=True)
+        with open(log, "w") as out:
+            return subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=out,
+                                    stderr=subprocess.STDOUT)
+    except OSError:
+        return None
+
+
 def main(herdr, orgs=(), pane=None):
     """Watches the pull requests in orgs, or all without orgs, Slack
-    conversations and Linear issues of the projects under ~/project.
-    pane is the Herdr pane it runs in, if any, where zshrc resumes it
-    after Herdr restores the session, unless it was interrupted."""
+    conversations and Linear issues of the projects under ~/project,
+    serving them with herdr-project-web while it runs. pane is the Herdr
+    pane it runs in, if any, where zshrc resumes it after Herdr restores
+    the session, unless it was interrupted."""
     if pane:
         try:
             remember_watcher(pane, orgs, os.environ)
         except OSError:
             pass
+    web = start_web(web_command(Path(__file__).resolve().parent.parent / "herdr-project-web"),
+                    state_dir(os.environ) / "web.log")
+    # Stop the page too when the watcher is killed or its pane closes,
+    # or it keeps the port from the next watcher's.
+    for sig in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(sig, lambda *_: sys.exit(0))
     try:
         watch(herdr, Path.home() / "project", state_dir(os.environ), orgs,
               workspace=watch_workspace(herdr, pane, os.environ))
     except KeyboardInterrupt:
         if pane:
             watcher_file(pane, os.environ).unlink(missing_ok=True)
+    finally:
+        if web:
+            web.terminate()
     return 0

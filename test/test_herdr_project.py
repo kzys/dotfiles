@@ -593,6 +593,21 @@ def test_remembers_watcher_where_zshrc_looks(tmp_path):
     assert found == 'org one\ntwo\n'
 
 
+def test_runs_the_web_page_only_once_installed(tmp_path):
+    assert watch.web_command(tmp_path) is None
+    (tmp_path / 'node_modules').mkdir()
+    assert watch.web_command(tmp_path)[-1] == str(tmp_path / 'server.ts')
+
+
+def test_starts_the_web_page_with_its_output_in_a_log(tmp_path):
+    log = tmp_path / 'state/web.log'
+    web = watch.start_web([sys.executable, '-c', 'print("on 7317")'], log)
+    assert web.wait(timeout=10) == 0
+    assert log.read_text() == 'on 7317\n'
+    assert watch.start_web(None, log) is None
+    assert watch.start_web([str(tmp_path / 'missing')], log) is None
+
+
 def issue(identifier, updated_at, waiting=False, links=(), state='Backlog'):
     return {'identifier': identifier, 'title': f'Title {identifier}', 'state': state,
             'url': f'https://linear.app/x/issue/{identifier}', 'updated_at': updated_at,
