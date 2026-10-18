@@ -8,6 +8,7 @@ import { homedir } from "node:os";
 import { extname, join, relative } from "node:path";
 import { promisify } from "node:util";
 import { build } from "esbuild";
+import { HerdrEvents } from "./events.ts";
 import { type Herdr, projectDirs, readState } from "./state.ts";
 
 const here = import.meta.dirname;
@@ -58,21 +59,39 @@ async function runHerdr(...args: string[]): Promise<any> {
   }
 }
 
-// Herdr doesn't say when panes move, so ask it now and then.
+// Read Herdr when its events say something changed. A read asked for
+// while one runs runs again after it, so the last change isn't missed.
 let polling = false;
+let again = false;
 async function pollHerdr() {
-  if (polling) return;
+  if (polling) {
+    again = true;
+    return;
+  }
   polling = true;
   try {
-    const [w, p] = await Promise.all([runHerdr("workspace", "list"), runHerdr("pane", "list")]);
-    herdr = w && p ? { workspaces: w.workspaces, panes: p.panes } : null;
-    refresh();
+    do {
+      again = false;
+      const [w, p] = await Promise.all([runHerdr("workspace", "list"), runHerdr("pane", "list")]);
+      herdr = w && p ? { workspaces: w.workspaces, panes: p.panes } : null;
+      events.update(herdr);
+      refresh();
+    } while (again);
   } finally {
     polling = false;
   }
 }
+// Herdr's socket, as its CLI finds it, for the session it reads.
+async function herdrSocket(): Promise<string> {
+  const { stdout } = await promisify(execFile)("herdr", ["status", "server"], { timeout: 5000 });
+  const path = stdout.match(/^socket: (.+)$/m)?.[1];
+  if (!path) throw new Error("herdr status server names no socket");
+  return path;
+}
+const events = new HerdrEvents(herdrSocket, pollHerdr);
 pollHerdr();
-setInterval(pollHerdr, 10_000);
+// Panes' directories change without events, and Herdr may be away.
+setInterval(pollHerdr, 60_000);
 
 function refresh() {
   const next = JSON.stringify(readState(stateDir, projectRoot, herdr));
