@@ -125,15 +125,29 @@ def remember(old, conversations, now, days=7):
 
 def table(conversations, owners):
     """Returns lines listing conversations, those waiting on the user
-    first, with the project name from owners (by key)."""
-    rows = []
-    for c in conversations:
-        found = owners.get(key(c))
-        name = project_name(found.project) if found else ""
-        mark = "*" if c["waiting_on_me"] else " "
-        rows.append((not c["waiting_on_me"],
-                     f"{mark} {c['channel'][:26]:<26} {name:<20} {c['summary']}"))
-    return [r for _, r in sorted(rows, key=lambda r: r[0])]
+    first: those of a project with its name, from owners (by key), then
+    the others under a line naming their channel, channels with a
+    conversation waiting on the user first. Columns are as wide as
+    their longest entry, so empty ones take no space."""
+    def mark(c):
+        return "*" if c["waiting_on_me"] else " "
+
+    ordered = sorted(conversations, key=lambda c: not c["waiting_on_me"])
+    ours = [c for c in ordered if owners.get(key(c))]
+    names = {key(c): project_name(owners[key(c)].project) for c in ours}
+    channel_width = max((len(c["channel"][:26]) for c in ours), default=0)
+    name_width = max(map(len, names.values()), default=0)
+    lines = [f"{mark(c)} {c['channel'][:26]:<{channel_width}} "
+             f"{names[key(c)]:<{name_width}} {c['summary']}" for c in ours]
+    # Group by ID, which Claude can't spell two ways, under the first name.
+    channels = {}
+    for c in ordered:
+        if not owners.get(key(c)):
+            channels.setdefault(c["channel_id"], []).append(c)
+    for found in channels.values():
+        lines.append(found[0]["channel"] or found[0]["channel_id"])
+        lines += [f"  {mark(c)} {c['summary']}" for c in found]
+    return lines
 
 
 def poll(herdr, texts, path, pr_owners, fetch=fetch):

@@ -471,12 +471,12 @@ def test_polls_slack(tmp_path):
         return {}
 
     assert slack.poll(fake_herdr, texts, state, {}, fetch=lambda d: runs.pop(0))[0] == [
-        f'  {"#C1":<26} {"alpha":<20} about 1.5']
+        '  #C1 alpha about 1.5']
     assert calls == []
     lines, items = slack.poll(fake_herdr, texts, state, {}, fetch=lambda d: runs.pop(0))
     assert items == [{'project': str(tmp_path / 'a'), 'role': None, 'mark': 'slack',
                       'text': 'Slack #C1: about 1.5'}]
-    assert lines[0] == f'* {"#C1":<26} {"alpha":<20} about 1.5'
+    assert lines == ['* #C1 alpha about 1.5', '#C2', '    about ']
     assert calls == [('notification', 'show', 'Slack #C1', '--body', 'about 1.5 (a)',
                       '--sound', 'request')]
 
@@ -777,3 +777,16 @@ def test_closes_roles_and_then_the_project(tmp_path):
         'Nothing remaining; tell its agent the task is done to close it']
     (tmp_path / 'AGENT-b.md').write_text('closed:\n\n## Remaining\n- None.\n')
     assert not inbox.role_closed((tmp_path / 'AGENT-b.md').read_text())
+
+
+def test_groups_slack_conversations_without_a_project_by_channel(tmp_path):
+    (tmp_path / 'a').mkdir()
+    (tmp_path / 'a/README.md').write_text('---\nname: alpha\n---\n')
+    owners = {'C1/1.5': pull_request.Owner(str(tmp_path / 'a'))}
+    found = [conversation('C1', '1.5', '1'), conversation('C2', '2.5', '1'),
+             conversation('C3', '3.5', '1', waiting=True), conversation('C2', '4.5', '1', waiting=True)]
+    found[1]['channel'], found[2]['channel'], found[3]['channel'] = '#general', '', 'general'
+    assert slack.table(found, owners) == [
+        '  #C1 alpha about 1.5',
+        'C3', '  * about 3.5',
+        'general', '  * about 4.5', '    about 2.5']
