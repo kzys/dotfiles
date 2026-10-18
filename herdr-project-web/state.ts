@@ -5,6 +5,13 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { type Item, frontMatter, projectItems, watchedItems } from "./inbox.ts";
 
+// A check of a pull request's latest commit.
+export type Run = {
+  name: string;
+  state: "passed" | "failed" | "running" | "skipped" | "cancelled";
+  url: string | null;
+};
+
 // An open pull request as the watcher lists it.
 export type PullRequest = {
   url: string;
@@ -16,6 +23,8 @@ export type PullRequest = {
   // The rollup state of its checks, like SUCCESS, or null without any.
   checks: string | null;
   failed: string[];
+  // Each check, from watchers that keep them.
+  runs?: Run[];
   review: string | null;
   project: string | null;
   agent: boolean;

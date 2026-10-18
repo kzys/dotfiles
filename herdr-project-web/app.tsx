@@ -9,7 +9,8 @@ import { createContext, render } from "preact";
 import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 import { QUOTES, halMessage } from "./hal.ts";
 import { type Item, linkParts, uniqueKeys } from "./inbox.ts";
-import type { Project, PullRequest, Section, State } from "./state.ts";
+import { readiness, runsByState } from "./pulls.ts";
+import type { Project, PullRequest, Run, Section, State } from "./state.ts";
 
 // The watcher writes at least every five minutes while it runs.
 const STALE_MS = 11 * 60 * 1000;
@@ -128,8 +129,68 @@ function checksState(checks: string | null): [string, string] {
   return ["none", "No checks"];
 }
 
+/** Returns the names of runs, each linked to its details if known. */
+function RunNames({ runs }: { runs: Run[] }) {
+  return (
+    <>
+      {uniqueKeys(runs.map((r) => r.name)).map((key, i) => {
+        const r = runs[i];
+        return (
+          <span key={key}>
+            {i > 0 && ", "}
+            {r.url ? (
+              <a href={r.url} target="_blank" rel="noreferrer">
+                {r.name}
+              </a>
+            ) : (
+              r.name
+            )}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
+/** Returns a bar of pr's checks, a segment for each by state, and what
+ * failed or still runs. */
+function Checks({ pr }: { pr: PullRequest }) {
+  const by = runsByState(pr);
+  const total = pr.runs?.length ?? 0;
+  if (!total) return null;
+  return (
+    <div class="runs">
+      <div class="runs-bar" aria-hidden="true">
+        {(["passed", "skipped", "cancelled", "failed", "running"] as const).map(
+          (state) =>
+            by[state].length > 0 && (
+              <span key={state} class={`run-${state}`} style={{ flexGrow: by[state].length }} />
+            ),
+        )}
+      </div>
+      <span class="runs-count">
+        {by.passed.length}/{total} passed
+      </span>
+      {by.failed.length > 0 && (
+        <span class="runs-failed">
+          failed: <RunNames runs={by.failed} />
+        </span>
+      )}
+      {by.running.length > 0 && (
+        <span class="runs-running">
+          running: <RunNames runs={by.running} />
+        </span>
+      )}
+      {!by.failed.length && !by.running.length && (
+        <span class="runs-done">all done</span>
+      )}
+    </div>
+  );
+}
+
 function PullRequestRow({ pr }: { pr: PullRequest }) {
   const [state, label] = checksState(pr.checks);
+  const [ready, kind] = readiness(pr);
   return (
     <li class="pr">
       <span class={`checks checks-${state}`} title={label} aria-label={label} />
@@ -137,17 +198,18 @@ function PullRequestRow({ pr }: { pr: PullRequest }) {
         <a class="pr-title" href={pr.url} target="_blank" rel="noreferrer">
           {pr.title}
         </a>
-        {pr.draft && <span class="badge">draft</span>}
-        {pr.review === "APPROVED" && <span class="badge badge-ok">approved</span>}
-        {pr.review === "CHANGES_REQUESTED" && (
-          <span class="badge badge-bad">changes requested</span>
-        )}
+        <span class={`badge badge-${kind}`}>{ready}</span>
         <div class="pr-meta">
-          <span class="pr-label">{pr.repo}#{pr.number}</span>
+          <span class="pr-label">
+            {pr.repo}#{pr.number}
+          </span>
           {pr.project && <span class="workspace">{pr.project}</span>}
           {pr.agent && <span class="pr-agent">agent on it</span>}
-          {pr.failed.length > 0 && <span class="pr-failed">failed: {pr.failed.join(", ")}</span>}
+          {!pr.runs && pr.failed.length > 0 && (
+            <span class="pr-failed">failed: {pr.failed.join(", ")}</span>
+          )}
         </div>
+        <Checks pr={pr} />
       </div>
     </li>
   );

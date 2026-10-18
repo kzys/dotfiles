@@ -25,8 +25,8 @@ query($q: String!) {
           state
           contexts(first: 100) { nodes {
             __typename
-            ... on CheckRun { name conclusion }
-            ... on StatusContext { context state }
+            ... on CheckRun { name conclusion detailsUrl }
+            ... on StatusContext { context state targetUrl }
           } }
         } } } }
       }
@@ -39,6 +39,21 @@ query($q: String!) {
 FAILED = {"FAILURE", "ERROR", "TIMED_OUT", "STARTUP_FAILURE", "ACTION_REQUIRED"}
 
 MARKS = {"SUCCESS": "✓", "FAILURE": "✗", "ERROR": "✗", "PENDING": "…", "EXPECTED": "…"}
+
+# How each check run conclusion or status state counts; anything else,
+# such as a check run without a conclusion yet, is still running.
+RUN_STATES = {**{s: "failed" for s in FAILED}, "SUCCESS": "passed", "NEUTRAL": "skipped",
+              "SKIPPED": "skipped", "CANCELLED": "cancelled", "STALE": "cancelled"}
+
+
+def runs(contexts):
+    """Returns the checks in contexts, from a commit's status check
+    rollup, as dicts with their name, state (passed, failed, running,
+    skipped or cancelled) and url, or None, sorted by name."""
+    return sorted(({"name": c.get("name") or c.get("context") or "?",
+                    "state": RUN_STATES.get(c.get("conclusion") or c.get("state"), "running"),
+                    "url": c.get("detailsUrl") or c.get("targetUrl")}
+                   for c in contexts), key=lambda r: r["name"])
 
 
 def search_query(since, orgs=()):
@@ -69,8 +84,8 @@ def pull_requests(data):
     """Returns the pull requests in data, a response from fetch, as
     dicts with their url, repo ("owner/name"), number, title, branch,
     state (OPEN, MERGED or CLOSED), draft flag, checks (the rollup
-    state, or None without checks), the names of failed checks, and
-    review decision."""
+    state, or None without checks), the names of failed checks, each
+    check as runs returns them, and review decision."""
     prs = []
     for node in data["data"]["search"]["nodes"]:
         if not node:
@@ -92,6 +107,7 @@ def pull_requests(data):
             "draft": node["isDraft"],
             "checks": rollup.get("state"),
             "failed": failed,
+            "runs": runs(contexts),
             "review": node.get("reviewDecision"),
         })
     return prs
