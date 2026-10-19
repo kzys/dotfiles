@@ -14,6 +14,12 @@ where it goes: publish it however the request or another skill says.
 - Make every claim checkable: a reader should be able to follow your link
   or rerun your command and see what you saw. Write from what you read or
   ran, not from memory.
+- Link the first mention of everything you name that has a page: tools,
+  projects, docs, videos, tickets. Link the specific page (the video or
+  doc section, not just the channel or home page) and check that it loads
+  what you say it does; for source permalinks, the remote check below is
+  enough. Leave a link you couldn't check as plain text and say so on the
+  page.
 - Say what you verified and how ("ran `--check`", "compared the deployed
   files"), and say plainly what you didn't check or read. Leave out what
   you didn't read rather than guessing, and don't present a guess as a
