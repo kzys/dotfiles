@@ -489,6 +489,15 @@ def test_searches_pull_requests_in_orgs():
         'is:pr author:@me archived:false updated:>=2026-10-02 sort:updated-desc')
     assert pull_request.search_query(since, ['a', 'b']) == (
         'is:pr author:@me archived:false org:a org:b updated:>=2026-10-02 sort:updated-desc')
+    assert pull_request.search_query(since, ['a'], only_open=True) == (
+        'is:pr author:@me archived:false is:open org:a updated:>=2026-10-02 sort:updated-desc')
+
+
+def test_reads_open_pull_requests_beyond_the_recent_ones():
+    data = search(pr_node(2, 'me/one', state='MERGED'), pr_node(1, 'me/one'))
+    data['data']['open'] = {'nodes': [pr_node(1, 'me/one'), pr_node(3, 'me/two')]}
+    assert [(pr['number'], pr['state']) for pr in pull_request.pull_requests(data)] == [
+        (1, 'OPEN'), (3, 'OPEN'), (2, 'MERGED')]
 
 
 def conversation(channel_id, thread_ts, last_ts, waiting=False, links=()):
