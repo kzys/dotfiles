@@ -2,7 +2,7 @@
 import "@fontsource/ibm-plex-mono/latin-400.css";
 import "./style.css";
 import { render } from "preact";
-import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { blobPath, blobPoints } from "./blob.ts";
 import { WorktreeDiffView, WorktreeList } from "./diffs.tsx";
 import { halMessage } from "./hal.ts";
@@ -29,25 +29,11 @@ function ago(iso: string | null, now: number): string {
   return `${Math.floor(s / 86400)}d ago`;
 }
 
-/** Returns text typed out a character at a time, as HAL's readout. */
+/** Returns text as HAL's readout. */
 function Readout({ text }: { text: string }) {
-  const [shown, setShown] = useState(text.length);
-  useLayoutEffect(() => {
-    if (reducedMotion()) return setShown(text.length);
-    setShown(0);
-    const timer = setInterval(
-      () => setShown((n) => (n >= text.length ? (clearInterval(timer), n) : n + 1)),
-      22,
-    );
-    return () => clearInterval(timer);
-  }, [text]);
   return (
     <p class="readout">
-      <span class="readout-text" aria-hidden="true">
-        {text.slice(0, shown)}
-      </span>
-      <span class="caret" />
-      <span class="sr-only" aria-live="polite">
+      <span class="readout-text" aria-live="polite">
         {text}
       </span>
     </p>
@@ -147,9 +133,9 @@ function App() {
   const working = connected
     ? Object.values(state?.agents ?? {}).filter((s) => statusState(s) === "working").length
     : 0;
-  // The blob says how things stand: lit while live, dimmed while the
-  // watcher is quiet, dark without the server, and moving while agents
-  // work.
+  // The blob says how things stand: lit while live, and brighter if
+  // agents work, dimmed while the watcher is quiet, dark without the
+  // server, and moving while agents work.
   const blobTitle = [
     connected ? "Live" : "Reconnecting",
     state?.sections ? `watcher updated ${ago(state.watchedAt, now)}` : "watcher not running",
@@ -169,7 +155,7 @@ function App() {
         <header class="top">
           <a
             href="#"
-            class={`status ${!connected || !state ? "off" : stale ? "stale" : "on"}`}
+            class={`status ${!connected || !state ? "off" : stale ? "stale" : "on"}${working ? " working" : ""}`}
             title={blobTitle}
             aria-label={`Projects · ${blobTitle}`}
           >
