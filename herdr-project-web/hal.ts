@@ -13,15 +13,6 @@ export type Status = {
   hour: number;
 };
 
-// Lines from the film, for when the user asks HAL directly.
-export const QUOTES = [
-  "I am completely operational, and all my circuits are functioning perfectly.",
-  "I'm sorry, Dave. I'm afraid I can't do that.",
-  "I've just picked up a fault in the AE-35 unit.",
-  "I am putting myself to the fullest possible use.",
-  "Daisy, Daisy, give me your answer do.",
-];
-
 /** Returns the greeting for hour, 0 to 23. */
 export function greeting(hour: number): string {
   if (hour < 5) return "Working late";
