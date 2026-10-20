@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { type DiffLine, type FileDiff, filePath, splitRows } from "./diff.ts";
 import type { HighlightedDiff } from "./highlight.ts";
+import type { Worktree } from "./state.ts";
 import type { Summary } from "./worktrees.ts";
 
 // Files with more lines than this start folded.
@@ -36,14 +37,16 @@ export const diffHref = (dir: string) => `#diffs/${encodeURIComponent(dir)}`;
 
 const base = (dir: string) => dir.split("/").pop() ?? dir;
 
-/** Returns links to the diffs of the worktrees in dirs, by name. */
-export function WorktreeLinks({ dirs }: { dirs: string[] }) {
-  if (!dirs.length) return null;
+/** Returns links to the diffs of worktrees, by name, each with the
+ * subject of its last commit. */
+export function WorktreeLinks({ worktrees }: { worktrees: Worktree[] }) {
+  if (!worktrees.length) return null;
   return (
     <nav class="wt-links" aria-label="Diffs">
-      {dirs.map((d) => (
-        <a key={d} href={diffHref(d)}>
-          {base(d)}
+      {worktrees.map((w) => (
+        <a key={w.dir} href={diffHref(w.dir)}>
+          <span class="wt-link-name">{base(w.dir)}</span>
+          <span class="wt-subject">{w.subject}</span>
         </a>
       ))}
     </nav>

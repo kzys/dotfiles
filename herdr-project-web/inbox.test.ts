@@ -12,9 +12,9 @@ import { highlight, language } from "./highlight.ts";
 import { linkParts, projectItems, uniqueKeys, waiting, watchedItems } from "./inbox.ts";
 import { agentState, readiness } from "./pulls.ts";
 import {
-  type PullRequest, agentStates, namedCheckouts, pullRequestLinks, readState, workspaceLabels,
+  type Herdr, type PullRequest, agentStates, namedCheckouts, pullRequestLinks, readState, workspaceLabels,
 } from "./state.ts";
-import { checkoutDirs, summarize, worktreeDiff, worktreeDirs } from "./worktrees.ts";
+import { checkoutDirs, lastSubject, summarize, worktreeDiff, worktreeDirs } from "./worktrees.ts";
 
 test("guesses what waits on me as inbox.py does", () => {
   assert.deepEqual(
@@ -71,9 +71,10 @@ test("reads the watcher's files and the projects' notes", () => {
   const projects = join(root, "project");
   const p1 = join(projects, "20261018-a");
   const p2 = join(projects, "20261017-b");
+  const p3 = join(projects, "20261019-z");
   const closed = join(projects, "20261016-c");
   const hidden = join(projects, ".trash");
-  for (const d of [state, p1, p2, closed, hidden]) mkdirSync(d, { recursive: true });
+  for (const d of [state, p1, p2, p3, closed, hidden]) mkdirSync(d, { recursive: true });
   writeFileSync(join(closed, "README.md"), "---\nclosed: done\n---\n");
   writeFileSync(join(hidden, "AGENT-main.md"), "## Remaining\n- [you] Old\n");
   writeFileSync(join(p1, "README.md"), "---\ntitle: Do A\nname: a\n---\n");
@@ -84,7 +85,7 @@ test("reads the watcher's files and the projects' notes", () => {
   mkdirSync(join(p1, "logs"));
   writeFileSync(
     join(state, "screen.json"),
-    JSON.stringify([{ title: "Panes", at: null, lines: ["90% w1:p1 a"] }]),
+    JSON.stringify([{ title: "Panes", at: null, lines: [" 85% w2:p1    20261019-z", "  2d w3:p1    a", " 90% w9:p1    /tmp/x"] }]),
   );
   writeFileSync(
     join(state, "inbox.json"),
@@ -97,11 +98,51 @@ test("reads the watcher's files and the projects' notes", () => {
   );
 
   const s = readState(state, projects);
-  assert.deepEqual(s.sections, [{ title: "Panes", at: null, lines: ["90% w1:p1 a"] }]);
+  // Without Herdr, which panes are in projects isn't known.
+  assert.deepEqual(s.sections?.[0].lines.length, 3);
   assert.notEqual(s.watchedAt, null);
+  // The worktree's repository is gone, so git can't name its last commit.
   assert.deepEqual(s.projects.map((p) => [p.name, p.title, p.worktrees, p.items.map((i) => i.text)]), [
-    ["a", "Do A", [join(p1, "repo")], ["Pick one", "context 90% full"]],
+    ["a", "Do A", [{ dir: join(p1, "repo"), subject: null }], ["Pick one", "context 90% full"]],
+    ["20261019-z", "(no title)", [], []],
+    ["20261017-b", "(no title)", [], []],
   ]);
+  // Projects open in Herdr come before the quiet ones too, and those
+  // with an agent whose context is full before all.
+  const herdr: Herdr = {
+    workspaces: [{ workspace_id: "w1", label: "bee" }, { workspace_id: "w2", label: "zed" }],
+    panes: [
+      { pane_id: "w1:p1", workspace_id: "w1", cwd: p2 },
+      { pane_id: "w2:p1", workspace_id: "w2", cwd: p3, agent: "claude", agent_status: "idle",
+        tokens: { role: "main", ctx: "85%" } },
+      { pane_id: "w2:p2", workspace_id: "w2", cwd: join(p3, "wt"), agent: "claude", agent_status: "working",
+        tokens: { ctx: "90%", bg: "1" } },
+      // A shell, and an agent placed by the directory it reports.
+      { pane_id: "w3:p1", workspace_id: "w3", foreground_cwd: p1 },
+      { pane_id: "w4:p1", workspace_id: "w4", cwd: "/home", agent: "claude", agent_status: "idle",
+        tokens: { cwd: join(p2, "wt"), ctx: "85.5%" } },
+    ],
+  };
+  const withHerdr = readState(state, projects, herdr);
+  assert.deepEqual(withHerdr.projects.map((p) => [p.name, p.workspaces, p.panes]), [
+    ["20261019-z", ["zed"], [{ id: "w2:p1", role: "main", status: "idle", ctx: 85 },
+                             { id: "w2:p2", role: null, status: "working", ctx: null }]],
+    ["a", [], []],
+    ["20261017-b", ["bee"], [{ id: "w4:p1", role: null, status: "idle", ctx: null }]],
+  ]);
+  // Panes in projects show with them, not in the watcher's section,
+  // which goes when no others are left.
+  assert.deepEqual(withHerdr.sections, [{ title: "Panes", at: null, lines: [" 90% w9:p1    /tmp/x"] }]);
+  writeFileSync(
+    join(state, "screen.json"),
+    JSON.stringify([{ title: "Panes", at: null, lines: [" 85% w2:p1    20261019-z"] },
+                    { title: "Slack", at: null, lines: ["Nothing to clean up."] }]),
+  );
+  assert.deepEqual(readState(state, projects, herdr).sections, [
+    { title: "Slack", at: null, lines: ["Nothing to clean up."] },
+  ]);
+  writeFileSync(join(state, "screen.json"), JSON.stringify([{ title: "Panes", at: null, lines: ["Nothing to clean up."] }]));
+  assert.deepEqual(readState(state, projects).sections, []);
   assert.deepEqual(s.unowned.map((i) => i.text), ["hi", "dm", "c#1 failed"]);
 
   assert.deepEqual(readState(join(root, "none"), join(root, "none")), {
@@ -134,14 +175,14 @@ test("lists the checkouts a project works in after its worktrees", () => {
   writeFileSync(join(p2, "AGENT-main.md"), "## Remaining\n- [you] Check ~/repos/o/r1\n");
 
   const s = readState(join(root, "state"), projects, null, root);
-  assert.deepEqual(s.projects.map((p) => p.worktrees), [
+  assert.deepEqual(s.projects.map((p) => p.worktrees.map((w) => w.dir)), [
     [join(p1, "wt"), join(root, "repos/o/r2")],
     [join(root, "repos/o/r1")],
   ]);
 });
 
 test("names the workspaces with panes in a project", () => {
-  const herdr = {
+  const herdr: Herdr = {
     workspaces: [{ workspace_id: "w1", label: "custom" }, { workspace_id: "w2" },
                  { workspace_id: "w3", label: "other" }],
     panes: [{ pane_id: "w1:p1", workspace_id: "w1", cwd: "/p/a/wt" },
@@ -368,6 +409,7 @@ test("diffs a worktree from where its branch left the remote's default", async (
   git(wt, "switch", "-q", "-c", "feature");
   git(wt, "rm", "-q", "gone.txt");
   git(wt, "commit", "-q", "-m", "Drop gone.txt");
+  assert.equal(lastSubject(wt), "Drop gone.txt");
   writeFileSync(join(wt, "kept.txt"), "a\nB\n");
   writeFileSync(join(wt, "new.txt"), "n\n");
   writeFileSync(join(wt, "empty"), "");
@@ -403,6 +445,7 @@ test("diffs a worktree from where its branch left the remote's default", async (
   mkdirSync(broken);
   writeFileSync(join(broken, ".git"), "gitdir: /nonexistent\n");
   assert.match((await summarize(broken)).error ?? "", /not a git repository/);
+  assert.equal(lastSubject(broken), null);
 });
 
 test("puts removed lines beside the added lines after them", () => {
@@ -439,4 +482,15 @@ test("highlights each side of a hunk as a whole", async () => {
 
   assert.equal((await highlight(diff("notes.unknown"))).hunks[0].lines[0].tokens, undefined);
   assert.deepEqual(["x/Makefile", "a.PY", "README", "b.tsx"].map(language), ["makefile", "py", null, "tsx"]);
+});
+
+test("names a worktree's last commit again once it changes", () => {
+  const dir = mkdtempSync(join(tmpdir(), "herdr-project-web-"));
+  const git = (...args: string[]) =>
+    execFileSync("git", ["-C", dir, "-c", "user.name=t", "-c", "user.email=t@t", ...args], { stdio: "pipe" });
+  git("init", "-q");
+  git("commit", "-q", "--allow-empty", "-m", "First");
+  assert.equal(lastSubject(dir), "First");
+  git("commit", "-q", "--allow-empty", "-m", "Second");
+  assert.equal(lastSubject(dir), "Second");
 });

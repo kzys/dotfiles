@@ -9,9 +9,9 @@ import { createContext, render } from "preact";
 import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 import { WorktreeDiffView, WorktreeLinks, WorktreeList } from "./diffs.tsx";
 import { QUOTES, halMessage } from "./hal.ts";
-import { type Item, linkParts, uniqueKeys } from "./inbox.ts";
-import { type AgentState, agentState, readiness, runsByState } from "./pulls.ts";
-import type { Entry, Project, PullRequest, Run, Section, State } from "./state.ts";
+import { FULL_AT, type Item, linkParts, uniqueKeys } from "./inbox.ts";
+import { type AgentState, agentState, readiness, runsByState, statusState } from "./pulls.ts";
+import type { Entry, Pane, Project, PullRequest, Run, Section, State } from "./state.ts";
 
 // The watcher writes at least every five minutes while it runs.
 const STALE_MS = 11 * 60 * 1000;
@@ -85,6 +85,25 @@ function ItemRow({ item, id }: { item: Item; id: string }) {
   );
 }
 
+/** Returns the agent panes of a project, each with its role, what it is
+ * doing and how full its context is. */
+function PaneRow({ panes }: { panes: Pane[] }) {
+  if (!panes.length) return null;
+  return (
+    <div class="panes">
+      {panes.map((p) => {
+        const state = statusState(p.status);
+        return (
+          <span key={p.id} class="pane" title={`${p.id} · ${p.status ?? "unknown"}`}>
+            <span class={`pr-agent agent-${state}`}>{p.role ?? p.id}</span>
+            {p.ctx !== null && <span class={p.ctx >= FULL_AT ? "ctx ctx-full" : "ctx"}>{p.ctx}%</span>}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 function ProjectCard({ project }: { project: Project }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
@@ -95,7 +114,7 @@ function ProjectCard({ project }: { project: Project }) {
     } catch {}
   };
   return (
-    <section class="card">
+    <section class={project.workspaces.length || project.items.length ? "card" : "card quiet"}>
       <header>
         {project.workspaces
           .filter((w) => w !== project.name)
@@ -110,14 +129,17 @@ function ProjectCard({ project }: { project: Project }) {
           {copied ? "copied" : "path"}
         </button>
       </header>
-      <WorktreeLinks dirs={project.worktrees} />
-      <ul>
-        {uniqueKeys(project.items.map((i) => `${project.dir}:${i.role}:${i.mark}:${i.text}`)).map(
-          (id, n) => (
-            <ItemRow key={id} id={id} item={project.items[n]} />
-          ),
-        )}
-      </ul>
+      <PaneRow panes={project.panes} />
+      <WorktreeLinks worktrees={project.worktrees} />
+      {project.items.length > 0 && (
+        <ul>
+          {uniqueKeys(project.items.map((i) => `${project.dir}:${i.role}:${i.mark}:${i.text}`)).map(
+            (id, n) => (
+              <ItemRow key={id} id={id} item={project.items[n]} />
+            ),
+          )}
+        </ul>
+      )}
     </section>
   );
 }
@@ -451,14 +473,13 @@ function App() {
   const q = query.trim().toLowerCase();
   const projects = useMemo(
     () =>
-      (state?.projects ?? [])
-        .map((p) => ({
-          ...p,
-          items: matches(q, p.name, p.title, ...p.worktrees.map((d) => d.split("/").pop()!))
-            ? p.items
-            : p.items.filter((i) => matches(q, i.text, i.role)),
-        }))
-        .filter((p) => p.items.length),
+      (state?.projects ?? []).flatMap((p) => {
+        const wts = p.worktrees.flatMap((w) => [w.dir.split("/").pop()!, w.subject]);
+        const names = [p.name, p.title, ...p.workspaces, ...wts];
+        if (matches(q, ...names)) return [p];
+        const items = p.items.filter((i) => matches(q, i.text, i.role));
+        return items.length ? [{ ...p, items }] : [];
+      }),
     [state, q],
   );
   const unowned = (state?.unowned ?? []).filter((i) => matches(q, i.text));
@@ -541,7 +562,7 @@ function App() {
           <main>
             <div class="column">
               <h2>
-                Inbox <span class="count">{waiting}</span>
+                Projects <span class="count">{waiting}</span>
               </h2>
               {unowned.length > 0 && (
                 <section class="card">
@@ -555,10 +576,11 @@ function App() {
                   </ul>
                 </section>
               )}
+              {!q && !unowned.length && !projects.some((p) => p.items.length) && <Monolith />}
               {projects.map((p) => (
                 <ProjectCard key={p.dir} project={p} />
               ))}
-              {!projects.length && !unowned.length && (q ? <p class="empty">No match.</p> : <Monolith />)}
+              {q && !projects.length && !unowned.length && <p class="empty">No match.</p>}
             </div>
             <div class="column">
               <h2>Watcher</h2>

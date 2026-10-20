@@ -4,8 +4,8 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { type Item, frontMatter, projectItems, watchedItems } from "./inbox.ts";
-import { isCheckout, worktreeDirs } from "./worktrees.ts";
+import { FULL_AT, type Item, frontMatter, projectItems, watchedItems } from "./inbox.ts";
+import { isCheckout, lastSubject, worktreeDirs } from "./worktrees.ts";
 
 // A check of a pull request's latest commit.
 export type Run = {
@@ -63,6 +63,20 @@ export type Entry = {
   project: string | null;
 };
 
+// A worktree or checkout, with the subject of its last commit, if git
+// can say.
+export type Worktree = { dir: string; subject: string | null };
+
+// An agent's pane in Herdr.
+export type Pane = {
+  id: string;
+  role: string | null;
+  // What Herdr says the agent is doing, like working or idle.
+  status: string | null;
+  // How full its context is, in percent, if it says.
+  ctx: number | null;
+};
+
 export type Project = {
   dir: string;
   name: string;
@@ -71,7 +85,9 @@ export type Project = {
   workspaces: string[];
   // The git worktrees and checkouts directly in dir, followed by the
   // checkouts in ~/repos it works in.
-  worktrees: string[];
+  worktrees: Worktree[];
+  // The agent panes in Herdr working in dir.
+  panes: Pane[];
   items: Item[];
 };
 
@@ -85,6 +101,8 @@ export type Herdr = {
     foreground_cwd?: string;
     agent?: string | null;
     agent_status?: string;
+    // What the agent's status line reports, like its role and ctx.
+    tokens?: Record<string, string>;
   }[];
 };
 
@@ -205,6 +223,41 @@ export function workspaceLabels(dir: string, herdr: Herdr | null): string[] {
     .map((w) => w.label || w.workspace_id);
 }
 
+/** Returns the panes in herdr working in dir or under it, in the order
+ * herdr lists them, by the directory their agent reports, as the watcher
+ * reads it, else Herdr's. */
+function panesIn(dir: string, herdr: Herdr | null): Herdr["panes"] {
+  if (!herdr) return [];
+  const inside = (cwd?: string) => !!cwd && (cwd === dir || cwd.startsWith(dir + "/"));
+  return herdr.panes.filter((p) => inside(p.tokens?.cwd || p.cwd) || inside(p.foreground_cwd));
+}
+
+/** Returns the agent panes in herdr working in dir or under it, in the
+ * order herdr lists them, with how full each one's context is, as
+ * herdr_project/panes.py reads it. A background session reports to the
+ * pane that started it, flagging that with the bg token, so then the ctx
+ * isn't the pane's own. */
+export function projectPanes(dir: string, herdr: Herdr | null): Pane[] {
+  return panesIn(dir, herdr)
+    .filter((p) => p.agent)
+    .map((p) => {
+      const ctx = p.tokens?.bg ? "" : (p.tokens?.ctx ?? "");
+      return {
+        id: p.pane_id,
+        role: p.tokens?.role || null,
+        status: p.agent_status ?? null,
+        ctx: /^\d+%*$/.test(ctx) ? parseInt(ctx, 10) : null,
+      };
+    });
+}
+
+/** Returns lines, the watcher's lines about panes, without those about
+ * the panes with ids, named after the first field, and without saying
+ * there are none. */
+export function panesElsewhere(lines: string[], ids: Set<string>): string[] {
+  return lines.filter((l) => l !== "Nothing to clean up." && !ids.has(l.match(/^\s*\S+\s+(\S+)/)?.[1] ?? ""));
+}
+
 /** Returns what each agent pane in herdr is doing, by id, or null if
  * herdr is. Other panes have none. */
 export function agentStates(herdr: Herdr | null): Record<string, string> | null {
@@ -215,11 +268,14 @@ export function agentStates(herdr: Herdr | null): Record<string, string> | null 
 }
 
 /** Returns the state for the page from the watcher's files in stateDir
- * and the projects under projectRoot, keeping only projects with
- * something waiting on the user, and naming their workspaces in herdr,
- * if known. The checkouts a project works in are those in home's
- * ~/repos that the "repositories" field of its README.md names, or else
- * that it or its notes name. */
+ * and the open projects under projectRoot, naming their workspaces in
+ * herdr, if known. Projects with an agent whose context is at least
+ * FULL_AT percent full come first, then those with a workspace or
+ * something waiting on the user, newest first within each group. The
+ * watcher's Panes section keeps only panes outside the listed projects,
+ * and goes if none are left. The checkouts a project works in are those
+ * in home's ~/repos that the "repositories" field of its README.md
+ * names, or else that it or its notes name. */
 export function readState(
   stateDir: string,
   projectRoot: string,
@@ -247,7 +303,6 @@ export function readState(
   for (const [dir, readme] of open) {
     const notes = roleNotes(dir);
     const items = projectItems(dir, readme, notes, byProject.get(dir) ?? []);
-    if (!items.length) continue;
     const named =
       (readme && frontMatter(readme, "repositories")) || [readme ?? "", ...notes.map(([, t]) => t)].join("\n");
     projects.push({
@@ -255,10 +310,23 @@ export function readState(
       name: (readme && frontMatter(readme, "name")) || dir.split("/").pop()!,
       title: (readme && frontMatter(readme, "title")) || "(no title)",
       workspaces: workspaceLabels(dir, herdr),
-      worktrees: [...worktreeDirs(dir), ...namedCheckouts(named, home).filter(isCheckout)],
+      panes: projectPanes(dir, herdr),
+      worktrees: [...worktreeDirs(dir), ...namedCheckouts(named, home).filter(isCheckout)].map((d) => ({
+        dir: d,
+        subject: lastSubject(d),
+      })),
       items,
     });
   }
+  const rank = (p: Project) =>
+    p.panes.some((pane) => (pane.ctx ?? 0) >= FULL_AT) ? 0 : p.workspaces.length || p.items.length ? 1 : 2;
+  projects.sort((a, b) => rank(a) - rank(b));
+  // The panes in projects show with them, and the section only when
+  // others are left.
+  const ids = new Set(projects.flatMap((p) => panesIn(p.dir, herdr).map((pane) => pane.pane_id)));
+  for (const section of sections ?? [])
+    if (section.title === "Panes") section.lines = panesElsewhere(section.lines, ids);
+  const shown = sections?.filter((s) => s.title !== "Panes" || s.lines.length) ?? null;
   const links = pullRequestLinks(readJSON(join(stateDir, "pull-requests.json")));
-  return { sections, watchedAt, projects, unowned, links, agents: agentStates(herdr) };
+  return { sections: shown, watchedAt, projects, unowned, links, agents: agentStates(herdr) };
 }
