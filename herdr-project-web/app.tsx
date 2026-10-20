@@ -11,7 +11,7 @@ import { WorktreeDiffView, WorktreeLinks, WorktreeList } from "./diffs.tsx";
 import { halMessage } from "./hal.ts";
 import { FULL_AT, type Item, uniqueKeys } from "./inbox.ts";
 import { LearningsView } from "./learnings.tsx";
-import { decodeHash, pageTitle } from "./pages.ts";
+import { pageTitle, route, tab } from "./pages.ts";
 import { type AgentState, agentState, readiness, runsByState, statusState } from "./pulls.ts";
 import type { Entry, Pane, Project, PullRequest, Run, Section, State } from "./state.ts";
 import { Linked, Links, matches } from "./ui.tsx";
@@ -394,6 +394,13 @@ function Monolith() {
  * found by the watcher, not guessed or suggested. */
 const pressing = (item: Item) => !["?", "maybe", "close"].includes(item.mark);
 
+// The tabs of the console strip, each with its link.
+const TABS = [
+  ["projects", "#", "Projects"],
+  ["worktrees", "#diffs", "Worktrees"],
+  ["learnings", "#learnings", "Learnings"],
+] as const;
+
 /** Returns the page's location after its #, kept current. */
 function useHash(): string {
   const [hash, setHash] = useState(location.hash.slice(1));
@@ -406,7 +413,8 @@ function useHash(): string {
 }
 
 function App() {
-  const hash = useHash();
+  const at = route(useHash());
+  const title = pageTitle(at);
   const [state, setState] = useState<State | null>(null);
   const [connected, setConnected] = useState(false);
   const [query, setQuery] = useState("");
@@ -464,8 +472,8 @@ function App() {
   }, [state]);
 
   useEffect(() => {
-    document.title = pageTitle(hash);
-  }, [hash]);
+    document.title = title;
+  }, [title]);
 
   const stale = state?.watchedAt ? now - Date.parse(state.watchedAt) > STALE_MS : true;
   // HAL's eye says how things stand: lit while live, dimmed while the
@@ -494,15 +502,11 @@ function App() {
           />
           <Readout text={message} />
           <nav>
-            <a href="#" class={hash.startsWith("diffs") || hash === "learnings" ? "" : "here"}>
-              Projects
-            </a>
-            <a href="#diffs" class={hash.startsWith("diffs") ? "here" : ""}>
-              Worktrees
-            </a>
-            <a href="#learnings" class={hash === "learnings" ? "here" : ""}>
-              Learnings
-            </a>
+            {TABS.map(([t, href, label]) => (
+              <a key={t} href={href} class={tab(at) === t ? "here" : ""}>
+                {label}
+              </a>
+            ))}
           </nav>
           <input
             ref={filter}
@@ -512,12 +516,12 @@ function App() {
             onInput={(e) => setQuery(e.currentTarget.value)}
           />
         </header>
-        {hash === "diffs" ? (
+        {at.view === "worktrees" ? (
           <WorktreeList query={q} />
-        ) : hash === "learnings" ? (
+        ) : at.view === "learnings" ? (
           <LearningsView query={q} />
-        ) : hash.startsWith("diffs/") ? (
-          <WorktreeDiffView dir={decodeHash(hash.slice("diffs/".length))} query={q} />
+        ) : at.view === "diff" ? (
+          <WorktreeDiffView dir={at.dir} query={q} />
         ) : !state ? (
           <p class="empty">Loading…</p>
         ) : (
