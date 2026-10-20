@@ -42,6 +42,25 @@ export type Section = {
   lines: string[];
   // The pull requests the lines list, if the section is about them.
   pullRequests?: PullRequest[];
+  // What the lines list, if the section is about Slack or Linear.
+  entries?: Entry[];
+};
+
+// A Slack conversation or a Linear issue.
+export type Entry = {
+  // Its channel or identifier.
+  label: string;
+  title: string;
+  // What is pending, if title doesn't say.
+  note?: string;
+  // Its state, like In Progress, if it has one.
+  detail?: string;
+  url: string | null;
+  waiting: boolean;
+  // Whether Claude finds nothing left for the user in it, from watchers
+  // that say.
+  done?: boolean;
+  project: string | null;
 };
 
 export type Project = {

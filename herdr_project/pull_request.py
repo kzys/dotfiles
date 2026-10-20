@@ -15,8 +15,12 @@ from herdr_project.notes import project_name
 from herdr_project.state import load_state, save_state
 
 QUERY = """
-query($q: String!) {
-  search(query: $q, type: ISSUE, first: 50) {
+query($q: String!, $open: String!) {
+  open: search(query: $open, type: ISSUE, first: 50) { ...pullRequests }
+  search(query: $q, type: ISSUE, first: 50) { ...pullRequests }
+}
+
+fragment pullRequests on SearchResultItemConnection {
     nodes {
       ... on PullRequest {
         number title url state isDraft headRefName reviewDecision
@@ -32,7 +36,6 @@ query($q: String!) {
         } } } }
       }
     }
-  }
 }
 """
 
@@ -57,23 +60,26 @@ def runs(contexts):
                    for c in contexts), key=lambda r: r["name"])
 
 
-def search_query(since, orgs=()):
+def search_query(since, orgs=(), only_open=False):
     """Returns the GitHub search for the user's pull requests updated
-    since the date since, most recently updated first, in any of orgs,
-    or anywhere without orgs."""
-    return " ".join(["is:pr author:@me archived:false", *(f"org:{o}" for o in orgs),
+    since the date since, or only the open ones if only_open, most
+    recently updated first, in any of orgs, or anywhere without orgs."""
+    return " ".join(["is:pr author:@me archived:false", *(["is:open"] if only_open else []),
+                     *(f"org:{o}" for o in orgs),
                      f"updated:>={since:%Y-%m-%d} sort:updated-desc"])
 
 
 def fetch(command="gh", days=14, orgs=()):
-    """Returns the user's pull requests updated in the last days days in
-    any of orgs, or anywhere without orgs, most recently updated first,
-    including merged and closed ones, as GitHub's GraphQL API returns
-    them. Raises if gh fails, with its error rather than the query."""
+    """Returns two searches for the user's pull requests updated in the
+    last days days in any of orgs, or anywhere without orgs, each most
+    recently updated first, as GitHub's GraphQL API returns them: open,
+    the open ones, and search, all of them, including merged and closed
+    ones, which may push the open ones out. Raises if gh fails, with its
+    error rather than the query."""
     since = datetime.now().astimezone() - timedelta(days=days)
     run = subprocess.run(
         [command, "api", "graphql", "-f", f"query={QUERY}",
-         "-f", f"q={search_query(since, orgs)}"],
+         "-f", f"q={search_query(since, orgs)}", "-f", f"open={search_query(since, orgs, only_open=True)}"],
         capture_output=True, text=True, check=False,
     )
     if run.returncode != 0:
@@ -87,11 +93,15 @@ def pull_requests(data):
     in (head, the same unless from a fork), number, title, branch,
     state (OPEN, MERGED or CLOSED), draft flag, checks (the rollup
     state, or None without checks), the names of failed checks, each
-    check as runs returns them, and review decision."""
-    prs = []
-    for node in data["data"]["search"]["nodes"]:
-        if not node:
+    check as runs returns them, and review decision. The open ones come
+    first, each pull request once."""
+    prs, seen = [], set()
+    nodes = [n for part in ("open", "search")
+             for n in (data["data"].get(part) or {}).get("nodes") or []]
+    for node in nodes:
+        if not node or node["url"] in seen:
             continue
+        seen.add(node["url"])
         commits = (node.get("commits") or {}).get("nodes") or [{}]
         rollup = (commits[0].get("commit") or {}).get("statusCheckRollup") or {}
         contexts = (rollup.get("contexts") or {}).get("nodes") or []

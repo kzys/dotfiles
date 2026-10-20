@@ -21,7 +21,7 @@ SCHEMA = {
     "properties": {"conversations": {"type": "array", "items": {
         "type": "object",
         "required": ["channel_id", "thread_ts", "channel", "summary",
-                     "waiting_on_me", "last_ts"],
+                     "waiting_on_me", "done", "last_ts"],
         "properties": {
             "channel_id": {"type": "string"},
             "thread_ts": {"type": "string"},
@@ -29,6 +29,7 @@ SCHEMA = {
             "permalink": {"type": "string"},
             "summary": {"type": "string"},
             "waiting_on_me": {"type": "boolean"},
+            "done": {"type": "boolean"},
             "last_ts": {"type": "string"},
             "links": {"type": "array", "items": {"type": "string"}},
         },
@@ -56,8 +57,13 @@ def prompt(since):
         "at most 15, to see its latest message. last_ts is the ts of that "
         "message. waiting_on_me is true when someone else wrote after my "
         "last message and it asks or tells me something, or mentions me. "
-        "summary is one line saying what is pending. links are the GitHub "
-        "pull request URLs in the conversation. Do not send anything."
+        "done is true when nothing is left for me in it: what I was asked "
+        "for has already happened, as when the pull requests it is about are "
+        "merged or closed, or the question was answered or dropped. "
+        "summary is one line saying what is pending. permalink is the "
+        "conversation's Slack permalink: the thread's, or for a DM, that of "
+        "its latest message. links are the GitHub pull request URLs in the "
+        "conversation. Do not send anything."
     )
 
 
@@ -87,6 +93,12 @@ def owner(conversation, texts, pr_owners):
     return pull_request.project_of(pattern, conversation.get("links"), texts, pr_owners)
 
 
+def waiting(conversation):
+    """Returns whether conversation waits on the user: Claude says so and
+    doesn't find it done."""
+    return conversation["waiting_on_me"] and not conversation.get("done")
+
+
 def last(conversation):
     """Returns the ts of conversation's latest message, written the same
     way however Claude wrote it, if it is a number."""
@@ -103,7 +115,7 @@ def events(old, conversations):
     if old is None:
         return []
     return [c for c in conversations
-            if c["waiting_on_me"] and old.get(key(c)) != last(c)]
+            if waiting(c) and old.get(key(c)) != last(c)]
 
 
 def remember(old, conversations, now, days=7):
@@ -125,14 +137,15 @@ def remember(old, conversations, now, days=7):
 
 def table(conversations, owners):
     """Returns lines listing conversations, those waiting on the user
-    first: those of a project with its name, from owners (by key), then
+    first and those done, marked with a check, last, within each group:
+    those of a project with its name, from owners (by key), then
     the others under a line naming their channel, channels with a
     conversation waiting on the user first. Columns are as wide as
     their longest entry, so empty ones take no space."""
     def mark(c):
-        return "*" if c["waiting_on_me"] else " "
+        return "*" if waiting(c) else "✓" if c.get("done") else " "
 
-    ordered = sorted(conversations, key=lambda c: not c["waiting_on_me"])
+    ordered = sorted(conversations, key=lambda c: (not waiting(c), bool(c.get("done"))))
     ours = [c for c in ordered if owners.get(key(c))]
     names = {key(c): project_name(owners[key(c)].project) for c in ours}
     channel_width = max((len(c["channel"][:26]) for c in ours), default=0)
@@ -150,11 +163,24 @@ def table(conversations, owners):
     return lines
 
 
+def entries(conversations, owners):
+    """Returns conversations as rows for other viewers, with the name of
+    their project from owners (by key): those waiting on the user first
+    and those done last, then those of a project. Unlike table, it
+    doesn't group them by project and channel."""
+    rows = [{"label": c["channel"] or c["channel_id"], "title": c["summary"],
+             "url": c.get("permalink") or None, "waiting": waiting(c),
+             "done": bool(c.get("done")),
+             "project": project_name(owners[key(c)].project) if owners.get(key(c)) else None}
+            for c in conversations]
+    return sorted(rows, key=lambda r: (not r["waiting"], r["done"], r["project"] is None))
+
+
 def poll(herdr, texts, path, pr_owners, fetch=fetch):
     """Checks the Slack conversations once with fetch: tells the user
     about those newly waiting on them since the state in path, saves the
-    new state there, and returns the lines of table and inbox items for
-    the conversations waiting on the user. herdr runs a herdr
+    new state there, and returns the lines of table, the rows of entries
+    and inbox items for the conversations waiting on the user. herdr runs a herdr
     command. texts are the projects' notes, and pr_owners the projects
     of pull requests by url."""
     old = load_state(path)
@@ -171,5 +197,5 @@ def poll(herdr, texts, path, pr_owners, fetch=fetch):
             pass
     save_state(path, remember(old, found, time.time()))
     items = [inbox.item(owners.get(key(c)), "slack", f"Slack {c['channel']}: {c['summary']}")
-             for c in found if c["waiting_on_me"]]
-    return table(found, owners), items
+             for c in found if waiting(c)]
+    return table(found, owners), entries(found, owners), items

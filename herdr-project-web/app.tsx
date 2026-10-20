@@ -11,7 +11,7 @@ import { WorktreeDiffView, WorktreeLinks, WorktreeList } from "./diffs.tsx";
 import { QUOTES, halMessage } from "./hal.ts";
 import { type Item, linkParts, uniqueKeys } from "./inbox.ts";
 import { type AgentState, agentState, readiness, runsByState } from "./pulls.ts";
-import type { Project, PullRequest, Run, Section, State } from "./state.ts";
+import type { Entry, Project, PullRequest, Run, Section, State } from "./state.ts";
 
 // The watcher writes at least every five minutes while it runs.
 const STALE_MS = 11 * 60 * 1000;
@@ -235,6 +235,46 @@ function PullRequestRow({
   );
 }
 
+/** Returns a Slack conversation or Linear issue as a row like a pull
+ * request's, its lamp lit if it waits on the user, and dimmed if done. */
+function EntryRow({ entry }: { entry: Entry }) {
+  const [lamp, label] = entry.waiting
+    ? ["failed", "Waiting on you"]
+    : entry.done
+      ? ["passed", "Done"]
+      : ["none", "Nothing asked of you"];
+  return (
+    <li class={entry.done ? "pr entry-done" : "pr"}>
+      <span
+        class={`checks checks-${lamp}`}
+        title={label}
+        aria-label={label}
+      />
+      <div class="pr-main">
+        {entry.url ? (
+          <a class="pr-title" href={entry.url} target="_blank" rel="noreferrer">
+            {entry.title}
+          </a>
+        ) : (
+          <span class="pr-title">{entry.title}</span>
+        )}
+        {entry.waiting && <span class="badge badge-bad">your turn</span>}
+        {entry.done && <span class="badge badge-ok">done</span>}
+        <div class="pr-meta">
+          <span class="pr-label">{entry.label}</span>
+          {entry.detail && <span>{entry.detail}</span>}
+          {entry.project && <span class="workspace">{entry.project}</span>}
+        </div>
+        {entry.note && (
+          <p class="entry-note">
+            <Linked text={entry.note} />
+          </p>
+        )}
+      </div>
+    </li>
+  );
+}
+
 function WatchSection({
   section,
   query,
@@ -255,6 +295,8 @@ function WatchSection({
   const next = hhmm(section.next);
   const prs = section.pullRequests?.filter((pr) =>
     matches(query, pr.title, pr.repo, pr.label, pr.project));
+  const entries = section.entries?.filter((e) =>
+    matches(query, e.title, e.label, e.note ?? null, e.detail ?? null, e.project));
   return (
     <section class="watch">
       <h3>
@@ -283,6 +325,16 @@ function WatchSection({
           </ul>
         ) : (
           <p class="empty">{query ? "No match." : "None open."}</p>
+        )
+      ) : entries ? (
+        entries.length ? (
+          <ul class="prs">
+            {uniqueKeys(entries.map((e) => `${e.label}:${e.url ?? e.title}`)).map((key, i) => (
+              <EntryRow key={key} entry={entries[i]} />
+            ))}
+          </ul>
+        ) : (
+          <p class="empty">{query ? "No match." : "Nothing."}</p>
         )
       ) : section.lines.length ? (
         <pre>

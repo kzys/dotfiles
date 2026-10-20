@@ -130,11 +130,24 @@ def table(issues, owners):
     return [r for _, r in sorted(rows, key=lambda r: r[0])]
 
 
+def entries(issues, owners):
+    """Returns issues as rows for other viewers, in the order of table,
+    with the name of their project from owners (by identifier)."""
+    def row(i):
+        found = owners.get(i["identifier"])
+        return {"label": i["identifier"], "title": i["title"], "note": i["summary"],
+                "detail": i["state"], "url": i["url"] or None, "waiting": i["waiting_on_me"],
+                "project": project_name(found.project) if found else None}
+
+    ordered = sorted(issues, key=lambda i: i["updated_at"], reverse=True)
+    return [row(i) for i in sorted(ordered, key=lambda i: not i["waiting_on_me"])]
+
+
 def poll(herdr, texts, path, pr_owners, fetch=fetch, now=None):
     """Checks the Linear issues once with fetch: tells the user about
     those newly waiting on them since the state in path, saves the new
-    state there, and returns the lines of table and inbox items for the
-    issues waiting on the user. herdr runs a herdr
+    state there, and returns the lines of table, the rows of entries and
+    inbox items for the issues waiting on the user. herdr runs a herdr
     command. texts are the projects' notes, and pr_owners the projects
     of pull requests by url. now is the current time unless given."""
     old = load_state(path)
@@ -154,4 +167,4 @@ def poll(herdr, texts, path, pr_owners, fetch=fetch, now=None):
     items = [inbox.item(owners.get(i["identifier"]), "linear",
                         f"{i['identifier']}: {i['summary']}")
              for i in found if i["waiting_on_me"]]
-    return table(found, owners), items
+    return table(found, owners), entries(found, owners), items

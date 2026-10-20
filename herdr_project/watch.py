@@ -67,16 +67,17 @@ def start(herdr, env):
 
 
 def check_queue(module, names, poll):
-    """Returns the lines and inbox items of the source in module, which
-    a headless Claude session checks with its claude.ai connector, by
-    calling poll if the connector is among names, the connected ones.
-    Without the connector, there are no lines, hiding the source, and
-    no items. If names is None, as when listing the connectors failed,
-    the lines say so and the items are None, keeping the last ones."""
+    """Returns the lines, the rows and the inbox items of the source
+    in module, which a headless Claude session checks with its claude.ai
+    connector, by calling poll if the connector is among names, the
+    connected ones. Without the connector, there are no lines or rows,
+    hiding the source, and no items. If names is None, as when listing
+    the connectors failed, the lines say so, there are no rows, and the
+    items are None, keeping the last ones."""
     if names is None:
-        return ["Cannot list the claude.ai connectors."], None
+        return ["Cannot list the claude.ai connectors."], None, None
     if module.CONNECTOR not in names:
-        return None, []
+        return None, None, []
     return poll()
 
 
@@ -100,7 +101,8 @@ def screen_state(sections, nexts=None):
     is checked again, from nexts, those times by title, or None, and the
     lines. A section may have a fourth item, the pull requests it lists,
     as pull_request.listed returns them, kept as pullRequests unless
-    None."""
+    None, and a fifth, the rows of a queue as its entries function
+    returns them, kept as entries unless None."""
     out = []
     for title, at, lines, *rest in sections:
         if lines is None:
@@ -110,6 +112,8 @@ def screen_state(sections, nexts=None):
                     "next": upcoming.isoformat() if upcoming else None, "lines": lines})
         if rest and rest[0] is not None:
             out[-1]["pullRequests"] = rest[0]
+        if len(rest) > 1 and rest[1] is not None:
+            out[-1]["entries"] = rest[1]
     return out
 
 
@@ -191,12 +195,13 @@ def watch(herdr, root, state, orgs=(), pr_interval=300, queue_interval=1800,
             with lock:
                 owners = dict(pr_owners)
             try:
-                lines, new = check_queue(module, connected(), lambda owners=owners: module.poll(
-                    herdr, pull_request.notes_texts(root), state / name, owners))
+                lines, rows, new = check_queue(
+                    module, connected(), lambda owners=owners: module.poll(
+                        herdr, pull_request.notes_texts(root), state / name, owners))
             except Exception as e:  # noqa: BLE001 - shown rather than ending the thread.
-                lines, new = [f"Cannot check {section[0]}: {e!r}"], None
+                lines, rows, new = [f"Cannot check {section[0]}: {e!r}"], None, None
             with lock:
-                section[1:] = [datetime.now().astimezone(), lines]
+                section[1:] = [datetime.now().astimezone(), lines, None, rows]
                 if new is not None:
                     found(section[0], new)
             sleep(queue_interval, section[0])

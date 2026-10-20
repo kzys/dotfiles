@@ -282,6 +282,8 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
 .agent-blocked { color: var(--red); font-weight: 600; }
 @media (prefers-reduced-motion: reduce) { .agent-working::before { animation: none; } }
 .pr-failed { color: var(--red); }
+.entry-note { margin: 5px 0 0; font-size: 13px; color: var(--muted); }
+.entry-done .pr-main { opacity: 0.6; }
 
 /* The state of a pull request's checks, as an indicator lamp. */
 .checks {
