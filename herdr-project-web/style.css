@@ -588,3 +588,39 @@ code { font-family: var(--mono); font-size: var(--normal); }
 .diff-split .ln + .code { border-right: 1px solid var(--panel-edge); }
 .diff-split .blank { background: var(--well); border-right: 1px solid var(--panel-edge); }
 .diff-split .blank:last-child, .diff-split .code:last-child { border-right: 0; }
+
+/* The LEARNINGS.md in ~/repos, with an index of their topics. */
+.learn-org {
+  display: grid;
+  grid-template-columns: minmax(200px, 280px) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.learn-index { position: sticky; top: 80px; max-height: calc(100vh - 96px); overflow-y: auto; }
+.learn-index li { display: flex; gap: 10px; align-items: baseline; padding: 0 18px; }
+.learn-index button {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: var(--normal) var(--sans);
+  text-align: left;
+  cursor: pointer;
+}
+.learn-index button:hover { color: var(--red); }
+.learn-count { font: var(--small) var(--mono); color: var(--muted); }
+.learn-topics { padding: 18px 24px; }
+.learn-topic { scroll-margin-top: 80px; }
+.learn-topic + .learn-topic { margin-top: 24px; }
+.learn-topic h3 { margin: 0 0 6px; font-size: var(--normal); font-weight: 600; }
+.learn-topic ul { margin: 0; padding: 0 0 0 20px; list-style: disc; }
+.learn-topic li { margin: 4px 0; line-height: 1.55; overflow-wrap: anywhere; }
+.learn-topic code { padding: 0 4px; border-radius: 4px; background: var(--well); }
+.learn-topic a { border-bottom: 1px solid var(--faint); }
+.learn-topic a:hover { border-color: var(--red); }
+@media (max-width: 900px) {
+  .learn-org { grid-template-columns: minmax(0, 1fr); }
+  .learn-index { position: static; max-height: none; }
+}

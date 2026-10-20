@@ -2,7 +2,7 @@
 // agents' notes say waits on the user, updated as their files change.
 
 import { execFile } from "node:child_process";
-import { type FSWatcher, readFileSync, watch } from "node:fs";
+import { type FSWatcher, readFileSync, readdirSync, watch } from "node:fs";
 import { type ServerResponse, createServer } from "node:http";
 import { homedir } from "node:os";
 import { extname, join, relative } from "node:path";
@@ -11,6 +11,7 @@ import { build } from "esbuild";
 import { HerdrEvents } from "./events.ts";
 import { highlightDiff } from "./highlight.ts";
 import { frontMatter } from "./inbox.ts";
+import { type Learnings, parseLearnings } from "./learnings.ts";
 import { type Herdr, openProjects, projectDirs, readState } from "./state.ts";
 import { checkoutDirs, summarize, worktreeDiff, worktreeDirs } from "./worktrees.ts";
 
@@ -149,6 +150,25 @@ function projectWorktrees() {
   ].filter((p) => p.worktrees.length);
 }
 
+/** Returns the LEARNINGS.md of each organization in ~/repos, by
+ * organization name. */
+function readLearnings(): Learnings[] {
+  let orgs: string[];
+  try {
+    orgs = readdirSync(reposRoot).sort();
+  } catch {
+    return [];
+  }
+  return orgs.flatMap((org) => {
+    const path = join(reposRoot, org, "LEARNINGS.md");
+    try {
+      return [{ org, path, topics: parseLearnings(readFileSync(path, "utf8")) }];
+    } catch {
+      return [];
+    }
+  });
+}
+
 function json(res: ServerResponse, status: number, body: unknown) {
   res.writeHead(status, { "Content-Type": "application/json" }).end(JSON.stringify(body));
 }
@@ -185,6 +205,9 @@ const server = createServer((req, res) => {
         .then(highlightDiff)
         .then((diff) => json(res, 200, diff))
         .catch((e) => json(res, 500, { error: e.message }));
+  } else if (path === "/api/learnings") {
+    // They are small and change rarely, so they are read each time.
+    json(res, 200, readLearnings());
   } else if (assets[path]) {
     const [type, body] = assets[path];
     res.writeHead(200, { "Content-Type": type }).end(body);
