@@ -7,7 +7,7 @@ test("moves the blob's outline from a circle as it wobbles", () => {
   for (const d of distances(blobPoints(3, 32, 0))) assert.ok(Math.abs(d - 32 * 0.38) < 1e-9);
   const moving = distances(blobPoints(3, 32, 1));
   assert.ok(moving.some((d) => Math.abs(d - 32 * 0.38) > 0.1));
-  assert.ok(moving.every((d) => d > 32 * 0.38 * 0.85 && d < 32 * 0.38 * 1.15));
+  assert.ok(moving.every((d) => d > 32 * 0.38 * 0.75 && d < 32 * 0.38 * 1.25));
   assert.notDeepEqual(blobPoints(3, 32, 1), blobPoints(4, 32, 1));
 
   const path = blobPath(blobPoints(0, 32, 1));

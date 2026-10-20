@@ -4,14 +4,14 @@
 const POINTS = 7;
 
 /** Returns the points of the blob's outline at time t, in seconds, in a
- * square of size, each moved from a circle by up to wobble times an
- * eighth of its radius. */
+ * square of size, each moved from a circle by up to wobble times a
+ * quarter of its radius. */
 export function blobPoints(t: number, size: number, wobble: number): [number, number][] {
   const c = size / 2;
   const r = size * 0.38;
   return Array.from({ length: POINTS }, (_, i) => {
     const angle = (i / POINTS) * 2 * Math.PI;
-    const d = 0.08 * Math.sin(t * (0.9 + i * 0.13) + i * 2.1) + 0.045 * Math.sin(t * 1.7 + i * 1.3);
+    const d = 0.16 * Math.sin(t * (0.9 + i * 0.13) + i * 2.1) + 0.09 * Math.sin(t * 1.7 + i * 1.3);
     const ri = r * (1 + wobble * d);
     return [c + ri * Math.cos(angle), c + ri * Math.sin(angle)];
   });
