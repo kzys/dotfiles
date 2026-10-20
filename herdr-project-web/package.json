@@ -7,7 +7,7 @@
   },
   "scripts": {
     "start": "node --experimental-strip-types --disable-warning=ExperimentalWarning server.ts",
-    "test": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test inbox.test.ts",
+    "test": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test \"*.test.ts\"",
     "check": "tsc --noEmit"
   },
   "dependencies": {
