@@ -51,7 +51,8 @@ test("reads the watcher's files and the projects' notes", () => {
   // Projects open in Herdr come before the quiet ones too, and those
   // with an agent whose context is full before all.
   const herdr: Herdr = {
-    workspaces: [{ workspace_id: "w1", label: "bee" }, { workspace_id: "w2", label: "zed" }],
+    workspaces: [{ workspace_id: "w1", label: "bee" }, { workspace_id: "w2", label: "zed" },
+                 { workspace_id: "w5", label: "done" }],
     panes: [
       { pane_id: "w1:p1", workspace_id: "w1", cwd: p2 },
       { pane_id: "w2:p1", workspace_id: "w2", cwd: p3, agent: "claude", agent_status: "idle",
@@ -62,6 +63,8 @@ test("reads the watcher's files and the projects' notes", () => {
       { pane_id: "w3:p1", workspace_id: "w3", foreground_cwd: p1 },
       { pane_id: "w4:p1", workspace_id: "w4", cwd: "/home", agent: "claude", agent_status: "idle",
         tokens: { cwd: join(p2, "wt"), ctx: "85.5%" } },
+      // A closed project still open in a workspace.
+      { pane_id: "w5:p1", workspace_id: "w5", cwd: closed },
     ],
   };
   const withHerdr = readState(state, projects, herdr);
@@ -70,9 +73,12 @@ test("reads the watcher's files and the projects' notes", () => {
                              { id: "w2:p2", role: null, status: "working", ctx: null }]],
     ["a", [], []],
     ["20261017-b", ["bee"], [{ id: "w4:p1", role: null, status: "idle", ctx: null }]],
+    ["20261016-c", ["done"], []],
   ]);
   // Panes in projects show with them, not in the watcher's section,
   // which goes when no others are left.
+  // A closed project has no items, so the watcher's stay unowned.
+  assert.deepEqual(withHerdr.unowned.map((i) => i.text), ["hi", "dm", "c#1 failed"]);
   assert.deepEqual(withHerdr.sections, [{ title: "Panes", at: null, lines: [" 90% w9:p1    /tmp/x"] }]);
   writeFileSync(
     join(state, "screen.json"),
