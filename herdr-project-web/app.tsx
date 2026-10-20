@@ -10,6 +10,7 @@ import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } fro
 import { WorktreeDiffView, WorktreeLinks, WorktreeList } from "./diffs.tsx";
 import { QUOTES, halMessage } from "./hal.ts";
 import { FULL_AT, type Item, linkParts, uniqueKeys } from "./inbox.ts";
+import { decodeHash, pageTitle } from "./pages.ts";
 import { type AgentState, agentState, readiness, runsByState, statusState } from "./pulls.ts";
 import type { Entry, Pane, Project, PullRequest, Run, Section, State } from "./state.ts";
 
@@ -427,15 +428,6 @@ function useHash(): string {
   return hash;
 }
 
-/** Returns s decoded from a URL, or as is if it isn't encoded right. */
-function decodeHash(s: string): string {
-  try {
-    return decodeURIComponent(s);
-  } catch {
-    return s;
-  }
-}
-
 function App() {
   const hash = useHash();
   const [state, setState] = useState<State | null>(null);
@@ -495,8 +487,8 @@ function App() {
   }, [state]);
 
   useEffect(() => {
-    document.title = waiting ? `(${waiting}) watch` : "watch";
-  }, [waiting]);
+    document.title = pageTitle(hash);
+  }, [hash]);
 
   const stale = state?.watchedAt ? now - Date.parse(state.watchedAt) > STALE_MS : true;
   // HAL's eye says how things stand: lit while live, dimmed while the
