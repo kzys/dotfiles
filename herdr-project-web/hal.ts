@@ -23,10 +23,9 @@ export function greeting(hour: number): string {
 
 /** Returns what HAL says about status. */
 export function halMessage(s: Status): string {
-  if (!s.connected) return "I seem to have lost contact with the ship's computer. Retrying.";
-  if (!s.running) return "The watcher isn't running. I suggest starting herdr-project --watch.";
-  if (s.stale) return "The watcher has stopped reporting. You may want to restart it.";
-  if (!s.waiting) return `${greeting(s.hour)}. All systems functional. Nothing requires your attention.`;
-  const what = s.waiting === 1 ? "One matter requires" : `${s.waiting} matters require`;
-  return `${greeting(s.hour)}. ${what} your attention.`;
+  if (!s.connected) return "Can't reach the server. Retrying.";
+  if (!s.running) return "The watcher isn't running. Start herdr-project --watch.";
+  if (s.stale) return "The watcher has stopped reporting. Restart it.";
+  if (!s.waiting) return `${greeting(s.hour)}. Nothing waits on you.`;
+  return `${greeting(s.hour)}. ${s.waiting === 1 ? "1 item waits" : `${s.waiting} items wait`} on you.`;
 }
