@@ -518,10 +518,10 @@ function App() {
           <Readout text={message} />
           <nav>
             <a href="#" class={hash.startsWith("diffs") ? "" : "here"}>
-              Inbox
+              Projects
             </a>
             <a href="#diffs" class={hash.startsWith("diffs") ? "here" : ""}>
-              Diffs
+              Worktrees
             </a>
           </nav>
           <input
