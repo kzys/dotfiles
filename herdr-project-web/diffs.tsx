@@ -55,7 +55,7 @@ export function WorktreeLinks({ worktrees }: { worktrees: Worktree[] }) {
 
 /** Returns what url says, as JSON, fetched again by refresh and
  * whenever the window regains focus, and when it was fetched. */
-function useFetched<T>(url: string): [T | null, string | null, Date | null, () => void] {
+export function useFetched<T>(url: string): [T | null, string | null, Date | null, () => void] {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [at, setAt] = useState<Date | null>(null);
@@ -84,9 +84,9 @@ function useFetched<T>(url: string): [T | null, string | null, Date | null, () =
 }
 
 /** Returns a button that fetches again, saying when it last did. */
-function Refresh({ at, onClick }: { at: Date | null; onClick: () => void }) {
+export function Refresh({ at, onClick, title = "Ask git again" }: { at: Date | null; onClick: () => void; title?: string }) {
   return (
-    <button class="copy" onClick={onClick} title="Ask git again">
+    <button class="copy" onClick={onClick} title={title}>
       {at ? at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "…"} ↻
     </button>
   );

@@ -13,6 +13,7 @@ export function decodeHash(s: string): string {
  * #. */
 export function pageTitle(hash: string): string {
   if (hash === "diffs") return "Worktrees";
+  if (hash === "learnings") return "Learnings";
   if (hash.startsWith("diffs/")) {
     const dir = decodeHash(hash.slice("diffs/".length));
     return `${dir.split("/").filter(Boolean).pop() ?? "Worktree"} · Diff`;

@@ -10,6 +10,7 @@ import { HerdrEvents, subscriptions } from "./events.ts";
 import { halMessage } from "./hal.ts";
 import { pageTitle } from "./pages.ts";
 import { highlight, language } from "./highlight.ts";
+import { codeParts, parseLearnings } from "./learnings.ts";
 import { linkParts, projectItems, uniqueKeys, waiting, watchedItems } from "./inbox.ts";
 import { agentState, readiness } from "./pulls.ts";
 import {
@@ -498,7 +499,28 @@ test("names a worktree's last commit again once it changes", () => {
 
 test("titles each view of the page", () => {
   assert.deepEqual(
-    ["", "diffs", `diffs/${encodeURIComponent("/p/x/wt/")}`, "diffs/%E0", "diffs/"].map(pageTitle),
-    ["Projects", "Worktrees", "wt · Diff", "%E0 · Diff", "Worktree · Diff"],
+    ["", "diffs", `diffs/${encodeURIComponent("/p/x/wt/")}`, "diffs/%E0", "diffs/", "learnings"].map(pageTitle),
+    ["Projects", "Worktrees", "wt · Diff", "%E0 · Diff", "Worktree · Diff", "Learnings"],
   );
+});
+
+test("reads the topics of a LEARNINGS.md", () => {
+  const text = [
+    "# Learnings", "", "Facts from finished projects.", "",
+    "## Git", "", "- `git ls-remote` exits 0", "  without the tag.", "- Fetch first.", "",
+    "## Fonts", "A paragraph", "on two lines.", "", "* Another bullet", "",
+    "## Empty", "",
+  ].join("\r\n");
+  assert.deepEqual(parseLearnings(text), [
+    { heading: "Git", items: ["`git ls-remote` exits 0 without the tag.", "Fetch first."] },
+    { heading: "Fonts", items: ["A paragraph on two lines.", "Another bullet"] },
+    { heading: "Empty", items: [] },
+  ]);
+});
+
+test("splits code spans out of text", () => {
+  assert.deepEqual(codeParts("Run `a` and `b`, not `c"), [
+    ["Run ", false], ["a", true], [" and ", false], ["b", true], [", not `c", false],
+  ]);
+  assert.deepEqual(codeParts("`x`"), [["x", true]]);
 });

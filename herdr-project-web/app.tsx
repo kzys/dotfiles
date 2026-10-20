@@ -10,6 +10,7 @@ import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } fro
 import { WorktreeDiffView, WorktreeLinks, WorktreeList } from "./diffs.tsx";
 import { halMessage } from "./hal.ts";
 import { FULL_AT, type Item, linkParts, uniqueKeys } from "./inbox.ts";
+import { LearningsView } from "./learnings.tsx";
 import { decodeHash, pageTitle } from "./pages.ts";
 import { type AgentState, agentState, readiness, runsByState, statusState } from "./pulls.ts";
 import type { Entry, Pane, Project, PullRequest, Run, Section, State } from "./state.ts";
@@ -517,11 +518,14 @@ function App() {
           />
           <Readout text={message} />
           <nav>
-            <a href="#" class={hash.startsWith("diffs") ? "" : "here"}>
+            <a href="#" class={hash.startsWith("diffs") || hash === "learnings" ? "" : "here"}>
               Projects
             </a>
             <a href="#diffs" class={hash.startsWith("diffs") ? "here" : ""}>
               Worktrees
+            </a>
+            <a href="#learnings" class={hash === "learnings" ? "here" : ""}>
+              Learnings
             </a>
           </nav>
           <input
@@ -534,6 +538,8 @@ function App() {
         </header>
         {hash === "diffs" ? (
           <WorktreeList query={q} />
+        ) : hash === "learnings" ? (
+          <LearningsView query={q} />
         ) : hash.startsWith("diffs/") ? (
           <WorktreeDiffView dir={decodeHash(hash.slice("diffs/".length))} query={q} />
         ) : !state ? (
