@@ -185,6 +185,21 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
 .copy:hover { color: var(--red); border-color: var(--red); }
 
 .card ul { margin: 0; padding: 6px 0; list-style: none; }
+/* A project's agent panes, with how full their context is. */
+.panes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  padding: 8px 18px;
+  border-bottom: 1px solid var(--panel-edge);
+}
+.pane { display: inline-flex; align-items: baseline; gap: 8px; }
+.pane .pr-agent { color: var(--muted); font-size: 12px; letter-spacing: 0.02em; text-transform: none; }
+.pane .pr-agent.agent-blocked { color: var(--red); }
+.ctx { font: 12px var(--mono); color: var(--muted); }
+.ctx-full { color: var(--red); font-weight: 600; }
+.card > .panes:last-child { border-bottom: 0; }
+
 /* A project's worktrees, each linked to its diff. */
 .wt-links {
   display: grid;

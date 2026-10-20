@@ -12,7 +12,7 @@ import { highlight, language } from "./highlight.ts";
 import { linkParts, projectItems, uniqueKeys, waiting, watchedItems } from "./inbox.ts";
 import { agentState, readiness } from "./pulls.ts";
 import {
-  type PullRequest, agentStates, namedCheckouts, pullRequestLinks, readState, workspaceLabels,
+  type Herdr, type PullRequest, agentStates, namedCheckouts, pullRequestLinks, readState, workspaceLabels,
 } from "./state.ts";
 import { checkoutDirs, lastSubject, summarize, worktreeDiff, worktreeDirs } from "./worktrees.ts";
 
@@ -85,7 +85,7 @@ test("reads the watcher's files and the projects' notes", () => {
   mkdirSync(join(p1, "logs"));
   writeFileSync(
     join(state, "screen.json"),
-    JSON.stringify([{ title: "Panes", at: null, lines: ["90% w1:p1 a"] }]),
+    JSON.stringify([{ title: "Panes", at: null, lines: [" 85% w2:p1    20261019-z", "  2d w3:p1    a", " 90% w9:p1    /tmp/x"] }]),
   );
   writeFileSync(
     join(state, "inbox.json"),
@@ -98,7 +98,8 @@ test("reads the watcher's files and the projects' notes", () => {
   );
 
   const s = readState(state, projects);
-  assert.deepEqual(s.sections, [{ title: "Panes", at: null, lines: ["90% w1:p1 a"] }]);
+  // Without Herdr, which panes are in projects isn't known.
+  assert.deepEqual(s.sections?.[0].lines.length, 3);
   assert.notEqual(s.watchedAt, null);
   // The worktree's repository is gone, so git can't name its last commit.
   assert.deepEqual(s.projects.map((p) => [p.name, p.title, p.worktrees, p.items.map((i) => i.text)]), [
@@ -106,12 +107,42 @@ test("reads the watcher's files and the projects' notes", () => {
     ["20261019-z", "(no title)", [], []],
     ["20261017-b", "(no title)", [], []],
   ]);
-  // Projects open in Herdr come before the quiet ones too.
-  const herdr = { workspaces: [{ workspace_id: "w1", label: "bee" }],
-                  panes: [{ pane_id: "w1:p1", workspace_id: "w1", cwd: p2 }] };
-  assert.deepEqual(readState(state, projects, herdr).projects.map((p) => [p.name, p.workspaces]), [
-    ["a", []], ["20261017-b", ["bee"]], ["20261019-z", []],
+  // Projects open in Herdr come before the quiet ones too, and those
+  // with an agent whose context is full before all.
+  const herdr: Herdr = {
+    workspaces: [{ workspace_id: "w1", label: "bee" }, { workspace_id: "w2", label: "zed" }],
+    panes: [
+      { pane_id: "w1:p1", workspace_id: "w1", cwd: p2 },
+      { pane_id: "w2:p1", workspace_id: "w2", cwd: p3, agent: "claude", agent_status: "idle",
+        tokens: { role: "main", ctx: "85%" } },
+      { pane_id: "w2:p2", workspace_id: "w2", cwd: join(p3, "wt"), agent: "claude", agent_status: "working",
+        tokens: { ctx: "90%", bg: "1" } },
+      // A shell, and an agent placed by the directory it reports.
+      { pane_id: "w3:p1", workspace_id: "w3", foreground_cwd: p1 },
+      { pane_id: "w4:p1", workspace_id: "w4", cwd: "/home", agent: "claude", agent_status: "idle",
+        tokens: { cwd: join(p2, "wt"), ctx: "85.5%" } },
+    ],
+  };
+  const withHerdr = readState(state, projects, herdr);
+  assert.deepEqual(withHerdr.projects.map((p) => [p.name, p.workspaces, p.panes]), [
+    ["20261019-z", ["zed"], [{ id: "w2:p1", role: "main", status: "idle", ctx: 85 },
+                             { id: "w2:p2", role: null, status: "working", ctx: null }]],
+    ["a", [], []],
+    ["20261017-b", ["bee"], [{ id: "w4:p1", role: null, status: "idle", ctx: null }]],
   ]);
+  // Panes in projects show with them, not in the watcher's section,
+  // which goes when no others are left.
+  assert.deepEqual(withHerdr.sections, [{ title: "Panes", at: null, lines: [" 90% w9:p1    /tmp/x"] }]);
+  writeFileSync(
+    join(state, "screen.json"),
+    JSON.stringify([{ title: "Panes", at: null, lines: [" 85% w2:p1    20261019-z"] },
+                    { title: "Slack", at: null, lines: ["Nothing to clean up."] }]),
+  );
+  assert.deepEqual(readState(state, projects, herdr).sections, [
+    { title: "Slack", at: null, lines: ["Nothing to clean up."] },
+  ]);
+  writeFileSync(join(state, "screen.json"), JSON.stringify([{ title: "Panes", at: null, lines: ["Nothing to clean up."] }]));
+  assert.deepEqual(readState(state, projects).sections, []);
   assert.deepEqual(s.unowned.map((i) => i.text), ["hi", "dm", "c#1 failed"]);
 
   assert.deepEqual(readState(join(root, "none"), join(root, "none")), {
@@ -151,7 +182,7 @@ test("lists the checkouts a project works in after its worktrees", () => {
 });
 
 test("names the workspaces with panes in a project", () => {
-  const herdr = {
+  const herdr: Herdr = {
     workspaces: [{ workspace_id: "w1", label: "custom" }, { workspace_id: "w2" },
                  { workspace_id: "w3", label: "other" }],
     panes: [{ pane_id: "w1:p1", workspace_id: "w1", cwd: "/p/a/wt" },

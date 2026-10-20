@@ -9,9 +9,9 @@ import { createContext, render } from "preact";
 import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 import { WorktreeDiffView, WorktreeLinks, WorktreeList } from "./diffs.tsx";
 import { QUOTES, halMessage } from "./hal.ts";
-import { type Item, linkParts, uniqueKeys } from "./inbox.ts";
-import { type AgentState, agentState, readiness, runsByState } from "./pulls.ts";
-import type { Entry, Project, PullRequest, Run, Section, State } from "./state.ts";
+import { FULL_AT, type Item, linkParts, uniqueKeys } from "./inbox.ts";
+import { type AgentState, agentState, readiness, runsByState, statusState } from "./pulls.ts";
+import type { Entry, Pane, Project, PullRequest, Run, Section, State } from "./state.ts";
 
 // The watcher writes at least every five minutes while it runs.
 const STALE_MS = 11 * 60 * 1000;
@@ -85,6 +85,25 @@ function ItemRow({ item, id }: { item: Item; id: string }) {
   );
 }
 
+/** Returns the agent panes of a project, each with its role, what it is
+ * doing and how full its context is. */
+function PaneRow({ panes }: { panes: Pane[] }) {
+  if (!panes.length) return null;
+  return (
+    <div class="panes">
+      {panes.map((p) => {
+        const state = statusState(p.status);
+        return (
+          <span key={p.id} class="pane" title={`${p.id} · ${p.status ?? "unknown"}`}>
+            <span class={`pr-agent agent-${state}`}>{p.role ?? p.id}</span>
+            {p.ctx !== null && <span class={p.ctx >= FULL_AT ? "ctx ctx-full" : "ctx"}>{p.ctx}%</span>}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 function ProjectCard({ project }: { project: Project }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
@@ -110,6 +129,7 @@ function ProjectCard({ project }: { project: Project }) {
           {copied ? "copied" : "path"}
         </button>
       </header>
+      <PaneRow panes={project.panes} />
       <WorktreeLinks worktrees={project.worktrees} />
       {project.items.length > 0 && (
         <ul>

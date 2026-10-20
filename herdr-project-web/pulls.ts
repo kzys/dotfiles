@@ -14,7 +14,12 @@ export function agentState(pr: PullRequest, agents: Record<string, string> | nul
   if (!pr.agent) return null;
   if (!pr.pane || !agents) return "unknown";
   if (!(pr.pane in agents)) return null;
-  const status = agents[pr.pane];
+  return statusState(agents[pr.pane]);
+}
+
+/** Returns what an agent is doing from status, what Herdr says, or
+ * "unknown" for a state the page doesn't know. */
+export function statusState(status: string | null | undefined): AgentState {
   if (status === "working" || status === "blocked") return status;
   if (status === "idle" || status === "done") return "idle";
   return "unknown";
