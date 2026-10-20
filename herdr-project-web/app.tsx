@@ -110,7 +110,7 @@ function ProjectCard({ project }: { project: Project }) {
           {copied ? "copied" : "path"}
         </button>
       </header>
-      <WorktreeLinks dirs={project.worktrees} />
+      <WorktreeLinks worktrees={project.worktrees} />
       {project.items.length > 0 && (
         <ul>
           {uniqueKeys(project.items.map((i) => `${project.dir}:${i.role}:${i.mark}:${i.text}`)).map(
@@ -454,7 +454,8 @@ function App() {
   const projects = useMemo(
     () =>
       (state?.projects ?? []).flatMap((p) => {
-        const names = [p.name, p.title, ...p.workspaces, ...p.worktrees.map((d) => d.split("/").pop()!)];
+        const wts = p.worktrees.flatMap((w) => [w.dir.split("/").pop()!, w.subject]);
+        const names = [p.name, p.title, ...p.workspaces, ...wts];
         if (matches(q, ...names)) return [p];
         const items = p.items.filter((i) => matches(q, i.text, i.role));
         return items.length ? [{ ...p, items }] : [];

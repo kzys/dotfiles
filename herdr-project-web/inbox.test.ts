@@ -14,7 +14,7 @@ import { agentState, readiness } from "./pulls.ts";
 import {
   type PullRequest, agentStates, namedCheckouts, pullRequestLinks, readState, workspaceLabels,
 } from "./state.ts";
-import { checkoutDirs, summarize, worktreeDiff, worktreeDirs } from "./worktrees.ts";
+import { checkoutDirs, lastSubject, summarize, worktreeDiff, worktreeDirs } from "./worktrees.ts";
 
 test("guesses what waits on me as inbox.py does", () => {
   assert.deepEqual(
@@ -100,8 +100,9 @@ test("reads the watcher's files and the projects' notes", () => {
   const s = readState(state, projects);
   assert.deepEqual(s.sections, [{ title: "Panes", at: null, lines: ["90% w1:p1 a"] }]);
   assert.notEqual(s.watchedAt, null);
+  // The worktree's repository is gone, so git can't name its last commit.
   assert.deepEqual(s.projects.map((p) => [p.name, p.title, p.worktrees, p.items.map((i) => i.text)]), [
-    ["a", "Do A", [join(p1, "repo")], ["Pick one", "context 90% full"]],
+    ["a", "Do A", [{ dir: join(p1, "repo"), subject: null }], ["Pick one", "context 90% full"]],
     ["20261019-z", "(no title)", [], []],
     ["20261017-b", "(no title)", [], []],
   ]);
@@ -143,7 +144,7 @@ test("lists the checkouts a project works in after its worktrees", () => {
   writeFileSync(join(p2, "AGENT-main.md"), "## Remaining\n- [you] Check ~/repos/o/r1\n");
 
   const s = readState(join(root, "state"), projects, null, root);
-  assert.deepEqual(s.projects.map((p) => p.worktrees), [
+  assert.deepEqual(s.projects.map((p) => p.worktrees.map((w) => w.dir)), [
     [join(p1, "wt"), join(root, "repos/o/r2")],
     [join(root, "repos/o/r1")],
   ]);
@@ -377,6 +378,7 @@ test("diffs a worktree from where its branch left the remote's default", async (
   git(wt, "switch", "-q", "-c", "feature");
   git(wt, "rm", "-q", "gone.txt");
   git(wt, "commit", "-q", "-m", "Drop gone.txt");
+  assert.equal(lastSubject(wt), "Drop gone.txt");
   writeFileSync(join(wt, "kept.txt"), "a\nB\n");
   writeFileSync(join(wt, "new.txt"), "n\n");
   writeFileSync(join(wt, "empty"), "");
@@ -412,6 +414,7 @@ test("diffs a worktree from where its branch left the remote's default", async (
   mkdirSync(broken);
   writeFileSync(join(broken, ".git"), "gitdir: /nonexistent\n");
   assert.match((await summarize(broken)).error ?? "", /not a git repository/);
+  assert.equal(lastSubject(broken), null);
 });
 
 test("puts removed lines beside the added lines after them", () => {
@@ -448,4 +451,15 @@ test("highlights each side of a hunk as a whole", async () => {
 
   assert.equal((await highlight(diff("notes.unknown"))).hunks[0].lines[0].tokens, undefined);
   assert.deepEqual(["x/Makefile", "a.PY", "README", "b.tsx"].map(language), ["makefile", "py", null, "tsx"]);
+});
+
+test("names a worktree's last commit again once it changes", () => {
+  const dir = mkdtempSync(join(tmpdir(), "herdr-project-web-"));
+  const git = (...args: string[]) =>
+    execFileSync("git", ["-C", dir, "-c", "user.name=t", "-c", "user.email=t@t", ...args], { stdio: "pipe" });
+  git("init", "-q");
+  git("commit", "-q", "--allow-empty", "-m", "First");
+  assert.equal(lastSubject(dir), "First");
+  git("commit", "-q", "--allow-empty", "-m", "Second");
+  assert.equal(lastSubject(dir), "Second");
 });

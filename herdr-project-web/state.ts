@@ -5,7 +5,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { type Item, frontMatter, projectItems, watchedItems } from "./inbox.ts";
-import { isCheckout, worktreeDirs } from "./worktrees.ts";
+import { isCheckout, lastSubject, worktreeDirs } from "./worktrees.ts";
 
 // A check of a pull request's latest commit.
 export type Run = {
@@ -63,6 +63,10 @@ export type Entry = {
   project: string | null;
 };
 
+// A worktree or checkout, with the subject of its last commit, if git
+// can say.
+export type Worktree = { dir: string; subject: string | null };
+
 export type Project = {
   dir: string;
   name: string;
@@ -71,7 +75,7 @@ export type Project = {
   workspaces: string[];
   // The git worktrees and checkouts directly in dir, followed by the
   // checkouts in ~/repos it works in.
-  worktrees: string[];
+  worktrees: Worktree[];
   items: Item[];
 };
 
@@ -254,7 +258,10 @@ export function readState(
       name: (readme && frontMatter(readme, "name")) || dir.split("/").pop()!,
       title: (readme && frontMatter(readme, "title")) || "(no title)",
       workspaces: workspaceLabels(dir, herdr),
-      worktrees: [...worktreeDirs(dir), ...namedCheckouts(named, home).filter(isCheckout)],
+      worktrees: [...worktreeDirs(dir), ...namedCheckouts(named, home).filter(isCheckout)].map((d) => ({
+        dir: d,
+        subject: lastSubject(d),
+      })),
       items,
     });
   }

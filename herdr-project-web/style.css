@@ -187,15 +187,18 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
 .card ul { margin: 0; padding: 6px 0; list-style: none; }
 /* A project's worktrees, each linked to its diff. */
 .wt-links {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
   gap: 4px 14px;
   padding: 8px 18px;
   border-bottom: 1px solid var(--panel-edge);
   font: 12px var(--mono);
 }
-.wt-links a { color: var(--muted); border-bottom: 1px solid var(--faint); }
-.wt-links a:hover { color: var(--red); border-color: var(--red); }
+.wt-links a { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; color: var(--muted); }
+.wt-link-name { justify-self: start; border-bottom: 1px solid var(--faint); }
+.wt-subject { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 13px var(--sans); }
+.wt-links a:hover .wt-link-name { color: var(--red); border-color: var(--red); }
+.wt-links a:hover .wt-subject { color: var(--fg); }
 .item { display: flex; gap: 12px; align-items: baseline; padding: 6px 18px; }
 .item .role {
   font-size: 11px;
