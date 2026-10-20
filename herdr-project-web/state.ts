@@ -153,12 +153,14 @@ export function projectDirs(root: string): string[] {
   }
 }
 
-/** Returns the projects under root that aren't closed, newest first,
- * each with its README.md, or null if it has none. */
-export function openProjects(root: string): [string, string | null][] {
+/** Returns the projects under root that aren't closed, or still have a
+ * workspace in herdr, newest first, each with its README.md, or null if
+ * it has none. */
+export function openProjects(root: string, herdr: Herdr | null = null): [string, string | null][] {
   return projectDirs(root).flatMap((dir): [string, string | null][] => {
     const readme = read(join(dir, "README.md"));
-    return readme !== null && frontMatter(readme, "closed") ? [] : [[dir, readme]];
+    const closed = readme !== null && frontMatter(readme, "closed");
+    return closed && !workspaceLabels(dir, herdr).length ? [] : [[dir, readme]];
   });
 }
 
@@ -268,8 +270,8 @@ export function agentStates(herdr: Herdr | null): Record<string, string> | null 
 }
 
 /** Returns the state for the page from the watcher's files in stateDir
- * and the open projects under projectRoot, naming their workspaces in
- * herdr, if known. Projects with an agent whose context is at least
+ * and the projects under projectRoot that are open or still have a
+ * workspace in herdr, naming their workspaces, if known. Projects with an agent whose context is at least
  * FULL_AT percent full come first, then those with a workspace or
  * something waiting on the user, newest first within each group. The
  * watcher's Panes section keeps only panes outside the listed projects,
@@ -289,8 +291,10 @@ export function readState(
     watchedAt = statSync(join(stateDir, "screen.json")).mtime.toISOString();
   } catch {}
 
-  const open = openProjects(projectRoot);
-  const known = new Set(open.map(([dir]) => dir));
+  const open = openProjects(projectRoot, herdr);
+  const known = new Set(
+    open.filter(([, readme]) => !(readme && frontMatter(readme, "closed"))).map(([dir]) => dir),
+  );
   const byProject = new Map<string, Item[]>();
   const unowned: Item[] = [];
   for (const item of watchedItems(readJSON(join(stateDir, "inbox.json")))) {

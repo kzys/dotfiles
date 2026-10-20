@@ -135,12 +135,12 @@ rewatch();
 // Catch what the watches miss, such as the state directory appearing.
 setInterval(changed, 30_000);
 
-/** Returns the open projects with worktrees in them, each with their
- * directories, followed by the checkouts in ~/repos, where some tasks
- * work on their branches. */
+/** Returns the projects that are open or still have a workspace in
+ * Herdr, with worktrees in them, each with their directories, followed
+ * by the checkouts in ~/repos, where some tasks work on their branches. */
 function projectWorktrees() {
   return [
-    ...openProjects(projectRoot).map(([dir, readme]) => ({
+    ...openProjects(projectRoot, herdr).map(([dir, readme]) => ({
       dir,
       name: (readme && frontMatter(readme, "name")) || dir.split("/").pop()!,
       title: (readme && frontMatter(readme, "title")) || "(no title)",
