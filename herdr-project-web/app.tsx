@@ -1,8 +1,4 @@
-// The fonts come with the page, which may be used offline.
-import "@fontsource/jost/latin-300.css";
-import "@fontsource/jost/latin-400.css";
-import "@fontsource/jost/latin-500.css";
-import "@fontsource/jost/latin-600.css";
+// The monospace font comes with the page, which may be used offline.
 import "@fontsource/ibm-plex-mono/latin-400.css";
 import "./style.css";
 import { render } from "preact";

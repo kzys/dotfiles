@@ -1,4 +1,4 @@
-/* Discovery One: white moulded panels, Futura-like type, HAL's red eye. */
+/* Discovery One: white panels, the system's type, HAL's red eye. */
 :root {
   --bg: #ecebe7;
   --panel: #fbfbf9;
@@ -11,7 +11,7 @@
   --red-glow: rgba(208, 22, 27, 0.35);
   --ok: #2f6f57;
   --amber: #c8860d;
-  --sans: "Jost", "Futura", "Century Gothic", "Avenir Next", system-ui, sans-serif;
+  --sans: system-ui, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
   /* The page's only text sizes. */
   --large: 15px;
@@ -57,7 +57,6 @@ a:hover { color: var(--red); }
   width: min(280px, 40vw);
   padding: 7px 16px;
   border: 1px solid var(--panel-edge);
-  border-radius: 999px;
   background: var(--well);
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
   color: var(--fg);
@@ -131,12 +130,11 @@ h2 {
 h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
 .count { color: var(--red); font-weight: 600; letter-spacing: 0.1em; }
 
-/* Panels, as moulded as the pod bay's. */
+/* Panels. */
 .card, .watch {
   margin-bottom: 14px;
   background: var(--panel);
   border: 1px solid var(--panel-edge);
-  border-radius: 16px;
   box-shadow: 0 1px 0 #fff inset, 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px -16px rgba(0, 0, 0, 0.18);
   overflow: hidden;
 }
@@ -153,7 +151,6 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
 .card > header:last-child, .card > .wt-links:last-child { border-bottom: 0; }
 .workspace {
   padding: 0 9px;
-  border-radius: 999px;
   background: var(--fg);
   color: var(--panel);
   font: 500 var(--small)/20px var(--sans);
@@ -174,7 +171,6 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
 .copy {
   padding: 2px 10px;
   border: 1px solid var(--panel-edge);
-  border-radius: 999px;
   background: var(--well);
   color: var(--muted);
   font: 500 var(--small) var(--sans);
@@ -230,7 +226,6 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
   flex: none;
   min-width: 64px;
   padding: 0 8px;
-  border-radius: 999px;
   font: 500 var(--small)/18px var(--sans);
   letter-spacing: 0.16em;
   text-align: center;
@@ -260,7 +255,6 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
   margin: 10px;
   padding: 10px 14px;
   overflow-x: auto;
-  border-radius: 10px;
   background: var(--well);
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.07);
   font: var(--normal)/1.7 var(--mono);
@@ -329,7 +323,6 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
   margin-right: 6px;
   padding: 0 8px;
   border: 1px solid var(--panel-edge);
-  border-radius: 999px;
   font-size: var(--small);
   font-weight: 500;
   letter-spacing: 0.14em;
@@ -358,7 +351,6 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
   gap: 2px;
   width: 120px;
   height: 6px;
-  border-radius: 999px;
   overflow: hidden;
   background: var(--well);
 }
@@ -483,7 +475,6 @@ code { font-family: var(--mono); font-size: var(--normal); }
 .top nav { flex: none; display: flex; gap: 4px; }
 .top nav a {
   padding: 3px 12px;
-  border-radius: 999px;
   font-size: var(--small);
   font-weight: 500;
   letter-spacing: 0.24em;
@@ -572,7 +563,6 @@ code { font-family: var(--mono); font-size: var(--normal); }
 .diffs h2 .layout button {
   padding: 2px 10px;
   border: 1px solid var(--panel-edge);
-  border-radius: 999px;
   background: none;
   color: var(--muted);
   font: 500 var(--small) var(--sans);
@@ -617,7 +607,7 @@ code { font-family: var(--mono); font-size: var(--normal); }
 .learn-topic h3 { margin: 0 0 6px; font-size: var(--normal); font-weight: 600; }
 .learn-topic ul { margin: 0; padding: 0 0 0 20px; list-style: disc; }
 .learn-topic li { margin: 4px 0; line-height: 1.55; overflow-wrap: anywhere; }
-.learn-topic code { padding: 0 4px; border-radius: 4px; background: var(--well); }
+.learn-topic code { padding: 0 4px; background: var(--well); }
 .learn-topic a { border-bottom: 1px solid var(--faint); }
 .learn-topic a:hover { border-color: var(--red); }
 @media (max-width: 900px) {
