@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { parseDiff, splitRows, unquote } from "./diff.ts";
 import { HerdrEvents, subscriptions } from "./events.ts";
 import { halMessage } from "./hal.ts";
+import { pageTitle } from "./pages.ts";
 import { highlight, language } from "./highlight.ts";
 import { linkParts, projectItems, uniqueKeys, waiting, watchedItems } from "./inbox.ts";
 import { agentState, readiness } from "./pulls.ts";
@@ -493,4 +494,11 @@ test("names a worktree's last commit again once it changes", () => {
   assert.equal(lastSubject(dir), "First");
   git("commit", "-q", "--allow-empty", "-m", "Second");
   assert.equal(lastSubject(dir), "Second");
+});
+
+test("titles each view of the page", () => {
+  assert.deepEqual(
+    ["", "diffs", `diffs/${encodeURIComponent("/p/x/wt/")}`, "diffs/%E0", "diffs/"].map(pageTitle),
+    ["Projects", "Worktrees", "wt · Diff", "%E0 · Diff", "Worktree · Diff"],
+  );
 });

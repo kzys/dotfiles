@@ -67,14 +67,10 @@ a:hover { color: var(--red); }
 .top input:focus { outline: none; border-color: var(--red); box-shadow: 0 0 0 3px var(--red-glow); }
 
 /* HAL's eye: lit while live, dimmed while the watcher is quiet, dark
-   without the server. Click it to talk to HAL. */
+   without the server. It leads to the projects. */
 .status {
   flex: none;
   display: inline-flex;
-  padding: 0;
-  border: 0;
-  background: none;
-  cursor: pointer;
 }
 .status:active::before { transform: scale(0.94); }
 .status::before {

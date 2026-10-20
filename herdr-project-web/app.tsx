@@ -8,8 +8,9 @@ import "./style.css";
 import { createContext, render } from "preact";
 import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 import { WorktreeDiffView, WorktreeLinks, WorktreeList } from "./diffs.tsx";
-import { QUOTES, halMessage } from "./hal.ts";
+import { halMessage } from "./hal.ts";
 import { FULL_AT, type Item, linkParts, uniqueKeys } from "./inbox.ts";
+import { decodeHash, pageTitle } from "./pages.ts";
 import { type AgentState, agentState, readiness, runsByState, statusState } from "./pulls.ts";
 import type { Entry, Pane, Project, PullRequest, Run, Section, State } from "./state.ts";
 
@@ -427,15 +428,6 @@ function useHash(): string {
   return hash;
 }
 
-/** Returns s decoded from a URL, or as is if it isn't encoded right. */
-function decodeHash(s: string): string {
-  try {
-    return decodeURIComponent(s);
-  } catch {
-    return s;
-  }
-}
-
 function App() {
   const hash = useHash();
   const [state, setState] = useState<State | null>(null);
@@ -495,8 +487,8 @@ function App() {
   }, [state]);
 
   useEffect(() => {
-    document.title = waiting ? `(${waiting}) watch` : "watch";
-  }, [waiting]);
+    document.title = pageTitle(hash);
+  }, [hash]);
 
   const stale = state?.watchedAt ? now - Date.parse(state.watchedAt) > STALE_MS : true;
   // HAL's eye says how things stand: lit while live, dimmed while the
@@ -504,44 +496,32 @@ function App() {
   const eyeTitle = [
     connected ? "Live" : "Reconnecting",
     state?.sections ? `watcher updated ${ago(state.watchedAt, now)}` : "watcher not running",
-    "click to talk to HAL",
   ].join(" · ");
-  const [quote, setQuote] = useState<string | null>(null);
-  const message =
-    quote ??
-    halMessage({
-      connected,
-      running: !!state?.sections,
-      stale,
-      waiting,
-      hour: new Date(now).getHours(),
-    });
-  // Asked directly, HAL quotes the film for a while.
-  const askHal = () => {
-    setQuote(QUOTES[(QUOTES.indexOf(quote ?? "") + 1) % QUOTES.length]);
-  };
-  useEffect(() => {
-    if (!quote) return;
-    const timer = setTimeout(() => setQuote(null), 8000);
-    return () => clearTimeout(timer);
-  }, [quote]);
+  const message = halMessage({
+    connected,
+    running: !!state?.sections,
+    stale,
+    waiting,
+    hour: new Date(now).getHours(),
+  });
 
   return (
     <Links.Provider value={state?.links ?? {}}>
       <div class={booting ? "page booting" : "page"}>
         <header class="top">
-          <button
+          <a
+            href="#"
             class={`status ${!connected || !state ? "off" : stale ? "stale" : "on"}`}
-            onClick={askHal}
             title={eyeTitle}
+            aria-label={`Projects · ${eyeTitle}`}
           />
           <Readout text={message} />
           <nav>
             <a href="#" class={hash.startsWith("diffs") ? "" : "here"}>
-              Inbox
+              Projects
             </a>
             <a href="#diffs" class={hash.startsWith("diffs") ? "here" : ""}>
-              Diffs
+              Worktrees
             </a>
           </nav>
           <input
