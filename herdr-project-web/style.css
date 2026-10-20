@@ -65,44 +65,17 @@ a:hover { color: var(--red); }
 }
 .top input:focus { outline: none; border-color: var(--red); box-shadow: 0 0 0 3px var(--red-glow); }
 
-/* HAL's eye: lit while live, dimmed while the watcher is quiet, dark
+/* The blob: lit while live, dimmed while the watcher is quiet, dark
    without the server. It leads to the projects. */
 .status {
   flex: none;
   display: inline-flex;
 }
-.status:active::before { transform: scale(0.94); }
-.status::before {
-  content: "";
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  border: 3px solid #2b2b2e;
-  background: radial-gradient(circle at 50% 50%, #3a3a3d 0 22%, #1d1d20 60%);
-  box-shadow: inset 0 0 0 1px #6b6b70, 0 1px 2px rgba(0, 0, 0, 0.25);
-}
-.status.on::before {
-  background: radial-gradient(circle at 50% 50%, #fff6c9 0 6%, #ffb31a 12%, var(--red) 34%, #4a0406 70%, #140102 100%);
-  box-shadow: inset 0 0 0 1px #6b6b70, 0 0 10px 2px var(--red-glow);
-  animation: hal 4s ease-in-out infinite;
-}
-@keyframes hal {
-  50% { box-shadow: inset 0 0 0 1px #6b6b70, 0 0 16px 4px var(--red-glow); }
-}
-.status.stale::before {
-  background: radial-gradient(circle at 50% 50%, #e8a3a0 0 6%, #8a3a33 30%, #3a0a0b 70%, #140102 100%);
-  box-shadow: inset 0 0 0 1px #6b6b70;
-  animation: falter 2.6s steps(1) infinite;
-}
-@keyframes falter {
-  0%, 100% { opacity: 1; }
-  8% { opacity: 0.55; }
-  12% { opacity: 1; }
-  15% { opacity: 0.7; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .status.on::before, .status.stale::before { animation: none; }
-}
+.status:active .blob { transform: scale(0.94); }
+.blob { width: 28px; height: 28px; overflow: visible; }
+.blob path { fill: #3a3a3d; }
+.status.on .blob path { fill: #129e8c; }
+.status.stale .blob path { fill: #5f8f88; opacity: 0.7; }
 
 main {
   display: grid;
@@ -374,7 +347,7 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
 .empty { margin: 0; color: var(--muted); font-weight: 300; }
 code { font-family: var(--mono); font-size: var(--normal); }
 
-/* HAL's readout, typed beside its eye. */
+/* The readout, typed beside the blob. */
 .readout {
   flex: 1;
   min-width: 0;

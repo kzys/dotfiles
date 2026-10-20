@@ -3,11 +3,13 @@ import "@fontsource/ibm-plex-mono/latin-400.css";
 import "./style.css";
 import { render } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { blobPath, blobPoints } from "./blob.ts";
 import { WorktreeDiffView, WorktreeList } from "./diffs.tsx";
 import { halMessage } from "./hal.ts";
 import { LearningsView } from "./learnings.tsx";
 import { pageTitle, route, tab } from "./pages.ts";
 import { ProjectsColumn, pressing, prime } from "./projects.tsx";
+import { statusState } from "./pulls.ts";
 import type { State } from "./state.ts";
 import { Links } from "./ui.tsx";
 import { WatcherColumn } from "./watcher.tsx";
@@ -49,6 +51,26 @@ function Readout({ text }: { text: string }) {
         {text}
       </span>
     </p>
+  );
+}
+
+/** Returns the blob that stands for the page's state, wobbling while
+ * working. */
+function Blob({ working }: { working: boolean }) {
+  const [t, setT] = useState(0);
+  useEffect(() => {
+    if (!working || reducedMotion()) return;
+    const start = performance.now() - t * 1000;
+    let frame = requestAnimationFrame(function tick(now) {
+      setT((now - start) / 1000);
+      frame = requestAnimationFrame(tick);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [working]);
+  return (
+    <svg class="blob" viewBox="0 0 32 32" aria-hidden="true">
+      <path d={blobPath(blobPoints(t, 32, working ? 1 : 0.5))} />
+    </svg>
   );
 }
 
@@ -121,11 +143,17 @@ function App() {
   }, [title]);
 
   const stale = state?.watchedAt ? now - Date.parse(state.watchedAt) > STALE_MS : true;
-  // HAL's eye says how things stand: lit while live, dimmed while the
-  // watcher is quiet, dark without the server.
-  const eyeTitle = [
+  // What Herdr said last says nothing once the server is gone.
+  const working = connected
+    ? Object.values(state?.agents ?? {}).filter((s) => statusState(s) === "working").length
+    : 0;
+  // The blob says how things stand: lit while live, dimmed while the
+  // watcher is quiet, dark without the server, and moving while agents
+  // work.
+  const blobTitle = [
     connected ? "Live" : "Reconnecting",
     state?.sections ? `watcher updated ${ago(state.watchedAt, now)}` : "watcher not running",
+    ...(working ? [`${working} agent${working === 1 ? "" : "s"} working`] : []),
   ].join(" · ");
   const message = halMessage({
     connected,
@@ -142,9 +170,11 @@ function App() {
           <a
             href="#"
             class={`status ${!connected || !state ? "off" : stale ? "stale" : "on"}`}
-            title={eyeTitle}
-            aria-label={`Projects · ${eyeTitle}`}
-          />
+            title={blobTitle}
+            aria-label={`Projects · ${blobTitle}`}
+          >
+            <Blob working={working > 0} />
+          </a>
           <Readout text={message} />
           <nav>
             {TABS.map(([t, href, label]) => (
