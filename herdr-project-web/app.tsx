@@ -95,7 +95,7 @@ function ProjectCard({ project }: { project: Project }) {
     } catch {}
   };
   return (
-    <section class="card">
+    <section class={project.workspaces.length || project.items.length ? "card" : "card quiet"}>
       <header>
         {project.workspaces
           .filter((w) => w !== project.name)
@@ -111,13 +111,15 @@ function ProjectCard({ project }: { project: Project }) {
         </button>
       </header>
       <WorktreeLinks dirs={project.worktrees} />
-      <ul>
-        {uniqueKeys(project.items.map((i) => `${project.dir}:${i.role}:${i.mark}:${i.text}`)).map(
-          (id, n) => (
-            <ItemRow key={id} id={id} item={project.items[n]} />
-          ),
-        )}
-      </ul>
+      {project.items.length > 0 && (
+        <ul>
+          {uniqueKeys(project.items.map((i) => `${project.dir}:${i.role}:${i.mark}:${i.text}`)).map(
+            (id, n) => (
+              <ItemRow key={id} id={id} item={project.items[n]} />
+            ),
+          )}
+        </ul>
+      )}
     </section>
   );
 }
@@ -451,14 +453,12 @@ function App() {
   const q = query.trim().toLowerCase();
   const projects = useMemo(
     () =>
-      (state?.projects ?? [])
-        .map((p) => ({
-          ...p,
-          items: matches(q, p.name, p.title, ...p.worktrees.map((d) => d.split("/").pop()!))
-            ? p.items
-            : p.items.filter((i) => matches(q, i.text, i.role)),
-        }))
-        .filter((p) => p.items.length),
+      (state?.projects ?? []).flatMap((p) => {
+        const names = [p.name, p.title, ...p.workspaces, ...p.worktrees.map((d) => d.split("/").pop()!)];
+        if (matches(q, ...names)) return [p];
+        const items = p.items.filter((i) => matches(q, i.text, i.role));
+        return items.length ? [{ ...p, items }] : [];
+      }),
     [state, q],
   );
   const unowned = (state?.unowned ?? []).filter((i) => matches(q, i.text));
@@ -541,7 +541,7 @@ function App() {
           <main>
             <div class="column">
               <h2>
-                Inbox <span class="count">{waiting}</span>
+                Projects <span class="count">{waiting}</span>
               </h2>
               {unowned.length > 0 && (
                 <section class="card">
@@ -555,10 +555,11 @@ function App() {
                   </ul>
                 </section>
               )}
+              {!q && !unowned.length && !projects.some((p) => p.items.length) && <Monolith />}
               {projects.map((p) => (
                 <ProjectCard key={p.dir} project={p} />
               ))}
-              {!projects.length && !unowned.length && (q ? <p class="empty">No match.</p> : <Monolith />)}
+              {q && !projects.length && !unowned.length && <p class="empty">No match.</p>}
             </div>
             <div class="column">
               <h2>Watcher</h2>

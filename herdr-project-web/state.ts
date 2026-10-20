@@ -215,11 +215,11 @@ export function agentStates(herdr: Herdr | null): Record<string, string> | null 
 }
 
 /** Returns the state for the page from the watcher's files in stateDir
- * and the projects under projectRoot, keeping only projects with
- * something waiting on the user, and naming their workspaces in herdr,
- * if known. The checkouts a project works in are those in home's
- * ~/repos that the "repositories" field of its README.md names, or else
- * that it or its notes name. */
+ * and the open projects under projectRoot, naming their workspaces in
+ * herdr, if known. Projects with a workspace or something waiting on the
+ * user come first, newest first within each group. The checkouts a
+ * project works in are those in home's ~/repos that the "repositories"
+ * field of its README.md names, or else that it or its notes name. */
 export function readState(
   stateDir: string,
   projectRoot: string,
@@ -247,7 +247,6 @@ export function readState(
   for (const [dir, readme] of open) {
     const notes = roleNotes(dir);
     const items = projectItems(dir, readme, notes, byProject.get(dir) ?? []);
-    if (!items.length) continue;
     const named =
       (readme && frontMatter(readme, "repositories")) || [readme ?? "", ...notes.map(([, t]) => t)].join("\n");
     projects.push({
@@ -259,6 +258,8 @@ export function readState(
       items,
     });
   }
+  const quiet = (p: Project) => !p.workspaces.length && !p.items.length;
+  projects.sort((a, b) => Number(quiet(a)) - Number(quiet(b)));
   const links = pullRequestLinks(readJSON(join(stateDir, "pull-requests.json")));
   return { sections, watchedAt, projects, unowned, links, agents: agentStates(herdr) };
 }

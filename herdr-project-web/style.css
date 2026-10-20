@@ -148,6 +148,9 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
   border-bottom: 1px solid var(--panel-edge);
 }
 .card .name { font-weight: 600; letter-spacing: 0.02em; }
+/* Projects with no workspace and nothing waiting on the user. */
+.card.quiet .name { font-weight: 400; color: var(--muted); }
+.card > header:last-child, .card > .wt-links:last-child { border-bottom: 0; }
 .workspace {
   padding: 0 9px;
   border-radius: 999px;

@@ -71,9 +71,10 @@ test("reads the watcher's files and the projects' notes", () => {
   const projects = join(root, "project");
   const p1 = join(projects, "20261018-a");
   const p2 = join(projects, "20261017-b");
+  const p3 = join(projects, "20261019-z");
   const closed = join(projects, "20261016-c");
   const hidden = join(projects, ".trash");
-  for (const d of [state, p1, p2, closed, hidden]) mkdirSync(d, { recursive: true });
+  for (const d of [state, p1, p2, p3, closed, hidden]) mkdirSync(d, { recursive: true });
   writeFileSync(join(closed, "README.md"), "---\nclosed: done\n---\n");
   writeFileSync(join(hidden, "AGENT-main.md"), "## Remaining\n- [you] Old\n");
   writeFileSync(join(p1, "README.md"), "---\ntitle: Do A\nname: a\n---\n");
@@ -101,6 +102,14 @@ test("reads the watcher's files and the projects' notes", () => {
   assert.notEqual(s.watchedAt, null);
   assert.deepEqual(s.projects.map((p) => [p.name, p.title, p.worktrees, p.items.map((i) => i.text)]), [
     ["a", "Do A", [join(p1, "repo")], ["Pick one", "context 90% full"]],
+    ["20261019-z", "(no title)", [], []],
+    ["20261017-b", "(no title)", [], []],
+  ]);
+  // Projects open in Herdr come before the quiet ones too.
+  const herdr = { workspaces: [{ workspace_id: "w1", label: "bee" }],
+                  panes: [{ pane_id: "w1:p1", workspace_id: "w1", cwd: p2 }] };
+  assert.deepEqual(readState(state, projects, herdr).projects.map((p) => [p.name, p.workspaces]), [
+    ["a", []], ["20261017-b", ["bee"]], ["20261019-z", []],
   ]);
   assert.deepEqual(s.unowned.map((i) => i.text), ["hi", "dm", "c#1 failed"]);
 
