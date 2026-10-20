@@ -5,15 +5,16 @@ import "@fontsource/jost/latin-500.css";
 import "@fontsource/jost/latin-600.css";
 import "@fontsource/ibm-plex-mono/latin-400.css";
 import "./style.css";
-import { createContext, render } from "preact";
-import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
+import { render } from "preact";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 import { WorktreeDiffView, WorktreeLinks, WorktreeList } from "./diffs.tsx";
 import { halMessage } from "./hal.ts";
-import { FULL_AT, type Item, linkParts, uniqueKeys } from "./inbox.ts";
+import { FULL_AT, type Item, uniqueKeys } from "./inbox.ts";
 import { LearningsView } from "./learnings.tsx";
 import { decodeHash, pageTitle } from "./pages.ts";
 import { type AgentState, agentState, readiness, runsByState, statusState } from "./pulls.ts";
 import type { Entry, Pane, Project, PullRequest, Run, Section, State } from "./state.ts";
+import { Linked, Links, matches } from "./ui.tsx";
 
 // The watcher writes at least every five minutes while it runs.
 const STALE_MS = 11 * 60 * 1000;
@@ -43,27 +44,6 @@ function ago(iso: string | null, now: number): string {
   if (s < 3600) return `${Math.floor(s / 60)}m ago`;
   if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
   return `${Math.floor(s / 86400)}d ago`;
-}
-
-// The URLs of the open pull requests by their labels, like name#N.
-const Links = createContext<Record<string, string>>({});
-
-/** Returns text with URLs, and the labels of pull requests in Links, as
- * links. */
-function Linked({ text }: { text: string }) {
-  return (
-    <>
-      {linkParts(text, useContext(Links)).map(([p, href]) =>
-        href ? (
-          <a href={href} target="_blank" rel="noreferrer">
-            {p}
-          </a>
-        ) : (
-          p
-        ),
-      )}
-    </>
-  );
 }
 
 function Mark({ mark }: { mark: string }) {
@@ -413,10 +393,6 @@ function Monolith() {
 /** Reports whether item surely waits on the user: tagged [you] or
  * found by the watcher, not guessed or suggested. */
 const pressing = (item: Item) => !["?", "maybe", "close"].includes(item.mark);
-
-/** Reports whether any of texts contains query, ignoring case. */
-const matches = (query: string, ...texts: (string | null)[]) =>
-  !query || texts.some((t) => t?.toLowerCase().includes(query));
 
 /** Returns the page's location after its #, kept current. */
 function useHash(): string {

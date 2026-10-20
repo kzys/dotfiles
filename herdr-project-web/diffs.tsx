@@ -1,9 +1,10 @@
 // The page's view of the worktrees in the projects and their diffs.
 
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useState } from "preact/hooks";
 import { type DiffLine, type FileDiff, filePath, splitRows } from "./diff.ts";
 import type { HighlightedDiff } from "./highlight.ts";
 import type { Worktree } from "./state.ts";
+import { Refresh, matches, useFetched } from "./ui.tsx";
 import type { Summary } from "./worktrees.ts";
 
 // Files with more lines than this start folded.
@@ -53,45 +54,6 @@ export function WorktreeLinks({ worktrees }: { worktrees: Worktree[] }) {
   );
 }
 
-/** Returns what url says, as JSON, fetched again by refresh and
- * whenever the window regains focus, and when it was fetched. */
-export function useFetched<T>(url: string): [T | null, string | null, Date | null, () => void] {
-  const [data, setData] = useState<T | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [at, setAt] = useState<Date | null>(null);
-  const latest = useRef(0);
-  const refresh = async () => {
-    const n = ++latest.current;
-    try {
-      const res = await fetch(url);
-      const body = await res.json();
-      if (n !== latest.current) return;
-      if (!res.ok) throw new Error(body.error ?? res.statusText);
-      setData(body);
-      setError(null);
-      setAt(new Date());
-    } catch (e) {
-      if (n === latest.current) setError((e as Error).message);
-    }
-  };
-  useEffect(() => {
-    setData(null);
-    refresh();
-    addEventListener("focus", refresh);
-    return () => removeEventListener("focus", refresh);
-  }, [url]);
-  return [data, error, at, refresh];
-}
-
-/** Returns a button that fetches again, saying when it last did. */
-export function Refresh({ at, onClick, title = "Ask git again" }: { at: Date | null; onClick: () => void; title?: string }) {
-  return (
-    <button class="copy" onClick={onClick} title={title}>
-      {at ? at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "…"} ↻
-    </button>
-  );
-}
-
 function Stat({ added, removed }: { added: number; removed: number }) {
   return (
     <span class="stat">
@@ -134,9 +96,9 @@ export function WorktreeList({ query }: { query: string }) {
   const [projects, error, at, refresh] = useFetched<ProjectWorktrees[]>("/api/worktrees");
   const shown = (projects ?? [])
     .map((p) =>
-      [p.name, p.title].some((t) => t.toLowerCase().includes(query))
+      matches(query, p.name, p.title)
         ? p
-        : { ...p, worktrees: p.worktrees.filter((w) => `${base(w.dir)} ${w.branch ?? ""}`.toLowerCase().includes(query)) },
+        : { ...p, worktrees: p.worktrees.filter((w) => matches(query, `${base(w.dir)} ${w.branch ?? ""}`)) },
     )
     .filter((p) => p.worktrees.length);
   return (
@@ -274,7 +236,7 @@ export function WorktreeDiffView({ dir, query }: { dir: string; query: string })
   const [layout, setLayout] = useLayout();
   const [wt, error, at, refresh] = useFetched<HighlightedDiff>(`/api/diff?dir=${encodeURIComponent(dir)}`);
   const files = wt?.fileDiffs ?? [];
-  const shown = files.filter((f) => [f.from, f.to].some((p) => p?.toLowerCase().includes(query)));
+  const shown = files.filter((f) => matches(query, f.from, f.to));
   const added = files.reduce((n, f) => n + f.added, 0);
   const removed = files.reduce((n, f) => n + f.removed, 0);
   const fileId = (i: number) => `file-${i}`;
