@@ -6,35 +6,20 @@ import "@fontsource/jost/latin-600.css";
 import "@fontsource/ibm-plex-mono/latin-400.css";
 import "./style.css";
 import { render } from "preact";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
-import { WorktreeDiffView, WorktreeLinks, WorktreeList } from "./diffs.tsx";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { WorktreeDiffView, WorktreeList } from "./diffs.tsx";
 import { halMessage } from "./hal.ts";
-import { FULL_AT, type Item, uniqueKeys } from "./inbox.ts";
 import { LearningsView } from "./learnings.tsx";
 import { pageTitle, route, tab } from "./pages.ts";
-import { type AgentState, agentState, readiness, runsByState, statusState } from "./pulls.ts";
-import type { Entry, Pane, Project, PullRequest, Run, Section, State } from "./state.ts";
-import { Linked, Links, matches } from "./ui.tsx";
+import { ProjectsColumn, pressing, prime } from "./projects.tsx";
+import type { State } from "./state.ts";
+import { Links } from "./ui.tsx";
+import { WatcherColumn } from "./watcher.tsx";
 
 // The watcher writes at least every five minutes while it runs.
 const STALE_MS = 11 * 60 * 1000;
 
 const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-// The items the page has shown, by key. Those that appear after the
-// first state flash as they arrive; those that only reappear, as after
-// filtering, don't.
-const seen = new Set<string>();
-let primed = false;
-
-const MARKS: Record<string, string> = {
-  you: "you",
-  "?": "likely",
-  maybe: "maybe",
-  close: "close",
-  ctx: "context",
-  idle: "idle",
-};
 
 /** Returns a short, relative form of the time iso, from now. */
 function ago(iso: string | null, now: number): string {
@@ -44,315 +29,6 @@ function ago(iso: string | null, now: number): string {
   if (s < 3600) return `${Math.floor(s / 60)}m ago`;
   if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
   return `${Math.floor(s / 86400)}d ago`;
-}
-
-function Mark({ mark }: { mark: string }) {
-  return <span class={`mark mark-${MARKS[mark] ?? "other"}`}>{MARKS[mark] ?? mark}</span>;
-}
-
-function ItemRow({ item, id }: { item: Item; id: string }) {
-  const [fresh] = useState(() => {
-    const isNew = primed && !seen.has(id);
-    seen.add(id);
-    return isNew;
-  });
-  return (
-    <li class={fresh ? "item fresh" : "item"}>
-      <Mark mark={item.mark} />
-      {item.role && <span class="role">{item.role}</span>}
-      <span class="text">
-        <Linked text={item.text} />
-      </span>
-    </li>
-  );
-}
-
-/** Returns the agent panes of a project, each with its role, what it is
- * doing and how full its context is. */
-function PaneRow({ panes }: { panes: Pane[] }) {
-  if (!panes.length) return null;
-  return (
-    <div class="panes">
-      {panes.map((p) => {
-        const state = statusState(p.status);
-        return (
-          <span key={p.id} class="pane" title={`${p.id} · ${p.status ?? "unknown"}`}>
-            <span class={`pr-agent agent-${state}`}>{p.role ?? p.id}</span>
-            {p.ctx !== null && <span class={p.ctx >= FULL_AT ? "ctx ctx-full" : "ctx"}>{p.ctx}%</span>}
-          </span>
-        );
-      })}
-    </div>
-  );
-}
-
-function ProjectCard({ project }: { project: Project }) {
-  const [copied, setCopied] = useState(false);
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(project.dir);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1200);
-    } catch {}
-  };
-  return (
-    <section class={project.workspaces.length || project.items.length ? "card" : "card quiet"}>
-      <header>
-        {project.workspaces
-          .filter((w) => w !== project.name)
-          .map((w) => (
-            <span key={w} class="workspace" title="Herdr workspace">
-              {w}
-            </span>
-          ))}
-        <span class="name">{project.name}</span>
-        <span class="title">{project.title}</span>
-        <button class="copy" onClick={copy} title={`Copy ${project.dir}`}>
-          {copied ? "copied" : "path"}
-        </button>
-      </header>
-      <PaneRow panes={project.panes} />
-      <WorktreeLinks worktrees={project.worktrees} />
-      {project.items.length > 0 && (
-        <ul>
-          {uniqueKeys(project.items.map((i) => `${project.dir}:${i.role}:${i.mark}:${i.text}`)).map(
-            (id, n) => (
-              <ItemRow key={id} id={id} item={project.items[n]} />
-            ),
-          )}
-        </ul>
-      )}
-    </section>
-  );
-}
-
-/** Returns how the checks of a pull request went, for its status dot,
- * from their rollup state. */
-function checksState(checks: string | null): [string, string] {
-  if (checks === "SUCCESS") return ["passed", "Checks passed"];
-  if (checks === "FAILURE" || checks === "ERROR") return ["failed", "Checks failed"];
-  if (checks === "PENDING" || checks === "EXPECTED") return ["pending", "Checks running"];
-  return ["none", "No checks"];
-}
-
-/** Returns the names of runs, each linked to its details if known. */
-function RunNames({ runs }: { runs: Run[] }) {
-  return (
-    <>
-      {uniqueKeys(runs.map((r) => r.name)).map((key, i) => {
-        const r = runs[i];
-        return (
-          <span key={key}>
-            {i > 0 && ", "}
-            {r.url ? (
-              <a href={r.url} target="_blank" rel="noreferrer">
-                {r.name}
-              </a>
-            ) : (
-              r.name
-            )}
-          </span>
-        );
-      })}
-    </>
-  );
-}
-
-/** Returns a bar of pr's checks, a segment for each by state, and what
- * failed or still runs. */
-function Checks({ pr }: { pr: PullRequest }) {
-  const by = runsByState(pr);
-  const total = pr.runs?.length ?? 0;
-  if (!total) return null;
-  return (
-    <div class="runs">
-      <div class="runs-bar" aria-hidden="true">
-        {(["passed", "skipped", "cancelled", "failed", "running"] as const).map(
-          (state) =>
-            by[state].length > 0 && (
-              <span key={state} class={`run-${state}`} style={{ flexGrow: by[state].length }} />
-            ),
-        )}
-      </div>
-      <span class="runs-count">
-        {by.passed.length}/{total} passed
-      </span>
-      {by.failed.length > 0 && (
-        <span class="runs-failed">
-          failed: <RunNames runs={by.failed} />
-        </span>
-      )}
-      {by.running.length > 0 && (
-        <span class="runs-running">
-          running: <RunNames runs={by.running} />
-        </span>
-      )}
-      {!by.failed.length && !by.running.length && (
-        <span class="runs-done">all done</span>
-      )}
-    </div>
-  );
-}
-
-const AGENT_LABELS: Record<AgentState, string> = {
-  working: "agent working",
-  blocked: "agent needs you",
-  idle: "agent idle",
-  unknown: "agent on it",
-};
-
-function PullRequestRow({
-  pr,
-  agents,
-}: {
-  pr: PullRequest;
-  agents: Record<string, string> | null;
-}) {
-  const [state, label] = checksState(pr.checks);
-  const agent = agentState(pr, agents);
-  const [ready, kind] = readiness(pr, agent);
-  // When the agent decides the pill, the pill says what it does.
-  const agentInPill = ready !== readiness(pr)[0];
-  return (
-    <li class="pr">
-      <span class={`checks checks-${state}`} title={label} aria-label={label} />
-      <div class="pr-main">
-        <a class="pr-title" href={pr.url} target="_blank" rel="noreferrer">
-          {pr.title}
-        </a>
-        <span class={`badge badge-${kind}`}>{ready}</span>
-        <div class="pr-meta">
-          <span class="pr-label">
-            {pr.repo}#{pr.number}
-          </span>
-          {pr.project && <span class="workspace">{pr.project}</span>}
-          {agent && !agentInPill && (
-            <span class={`pr-agent agent-${agent}`}>{AGENT_LABELS[agent]}</span>
-          )}
-          {!pr.runs && pr.failed.length > 0 && (
-            <span class="pr-failed">failed: {pr.failed.join(", ")}</span>
-          )}
-        </div>
-        <Checks pr={pr} />
-      </div>
-    </li>
-  );
-}
-
-/** Returns a Slack conversation or Linear issue as a row like a pull
- * request's, its lamp lit if it waits on the user, and dimmed if done. */
-function EntryRow({ entry }: { entry: Entry }) {
-  const [lamp, label] = entry.waiting
-    ? ["failed", "Waiting on you"]
-    : entry.done
-      ? ["passed", "Done"]
-      : ["none", "Nothing asked of you"];
-  return (
-    <li class={entry.done ? "pr entry-done" : "pr"}>
-      <span
-        class={`checks checks-${lamp}`}
-        title={label}
-        aria-label={label}
-      />
-      <div class="pr-main">
-        {entry.url ? (
-          <a class="pr-title" href={entry.url} target="_blank" rel="noreferrer">
-            {entry.title}
-          </a>
-        ) : (
-          <span class="pr-title">{entry.title}</span>
-        )}
-        {entry.waiting && <span class="badge badge-bad">your turn</span>}
-        {entry.done && <span class="badge badge-ok">done</span>}
-        <div class="pr-meta">
-          <span class="pr-label">{entry.label}</span>
-          {entry.detail && <span>{entry.detail}</span>}
-          {entry.project && <span class="workspace">{entry.project}</span>}
-        </div>
-        {entry.note && (
-          <p class="entry-note">
-            <Linked text={entry.note} />
-          </p>
-        )}
-      </div>
-    </li>
-  );
-}
-
-function WatchSection({
-  section,
-  query,
-  agents,
-  now,
-}: {
-  section: Section;
-  query: string;
-  agents: Record<string, string> | null;
-  now: number;
-}) {
-  const hhmm = (iso?: string | null) =>
-    iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : null;
-  const at = hhmm(section.at);
-  // Past its next check, the section is being checked, which may take a
-  // while, as for those that ask Claude.
-  const due = section.next ? Date.parse(section.next) <= now : false;
-  const next = hhmm(section.next);
-  const prs = section.pullRequests?.filter((pr) =>
-    matches(query, pr.title, pr.repo, pr.label, pr.project));
-  const entries = section.entries?.filter((e) =>
-    matches(query, e.title, e.label, e.note ?? null, e.detail ?? null, e.project));
-  return (
-    <section class="watch">
-      <h3>
-        {section.title}
-        {at && (
-          <span class="checked">
-            <time dateTime={section.at!}>{at}</time>
-            {next &&
-              (due ? (
-                " · checking…"
-              ) : (
-                <>
-                  {" · next "}
-                  <time dateTime={section.next!}>{next}</time>
-                </>
-              ))}
-          </span>
-        )}
-      </h3>
-      {prs ? (
-        prs.length ? (
-          <ul class="prs">
-            {prs.map((pr) => (
-              <PullRequestRow key={pr.url} pr={pr} agents={agents} />
-            ))}
-          </ul>
-        ) : (
-          <p class="empty">{query ? "No match." : "None open."}</p>
-        )
-      ) : entries ? (
-        entries.length ? (
-          <ul class="prs">
-            {uniqueKeys(entries.map((e) => `${e.label}:${e.url ?? e.title}`)).map((key, i) => (
-              <EntryRow key={key} entry={entries[i]} />
-            ))}
-          </ul>
-        ) : (
-          <p class="empty">{query ? "No match." : "Nothing."}</p>
-        )
-      ) : section.lines.length ? (
-        <pre>
-          {section.lines.map((l, i) => (
-            <div key={i}>
-              <Linked text={l} />
-            </div>
-          ))}
-        </pre>
-      ) : (
-        <p class="empty">Nothing.</p>
-      )}
-    </section>
-  );
 }
 
 /** Returns text typed out a character at a time, as HAL's readout. */
@@ -379,20 +55,6 @@ function Readout({ text }: { text: string }) {
     </p>
   );
 }
-
-/** Returns the monolith that stands where nothing waits. */
-function Monolith() {
-  return (
-    <div class="monolith-scene">
-      <div class="monolith" />
-      <p>Nothing waiting.</p>
-    </div>
-  );
-}
-
-/** Reports whether item surely waits on the user: tagged [you] or
- * found by the watcher, not guessed or suggested. */
-const pressing = (item: Item) => !["?", "maybe", "close"].includes(item.mark);
 
 // The tabs of the console strip, each with its link.
 const TABS = [
@@ -448,25 +110,12 @@ function App() {
   }, []);
 
   const q = query.trim().toLowerCase();
-  const projects = useMemo(
-    () =>
-      (state?.projects ?? []).flatMap((p) => {
-        const wts = p.worktrees.flatMap((w) => [w.dir.split("/").pop()!, w.subject]);
-        const names = [p.name, p.title, ...p.workspaces, ...wts];
-        if (matches(q, ...names)) return [p];
-        const items = p.items.filter((i) => matches(q, i.text, i.role));
-        return items.length ? [{ ...p, items }] : [];
-      }),
-    [state, q],
-  );
-  const unowned = (state?.unowned ?? []).filter((i) => matches(q, i.text));
   const waiting = [...(state?.projects ?? []).flatMap((p) => p.items), ...(state?.unowned ?? [])]
     .filter(pressing).length;
 
   const [booting, setBooting] = useState(true);
   useEffect(() => {
-    if (!state || primed) return;
-    primed = true;
+    if (!state || prime()) return;
     const timer = setTimeout(() => setBooting(false), 1500);
     return () => clearTimeout(timer);
   }, [state]);
@@ -526,46 +175,8 @@ function App() {
           <p class="empty">Loading…</p>
         ) : (
           <main>
-            <div class="column">
-              <h2>
-                Projects <span class="count">{waiting}</span>
-              </h2>
-              {unowned.length > 0 && (
-                <section class="card">
-                  <header>
-                    <span class="name">elsewhere</span>
-                  </header>
-                  <ul>
-                    {uniqueKeys(unowned.map((i) => `:${i.mark}:${i.text}`)).map((id, n) => (
-                      <ItemRow key={id} id={id} item={unowned[n]} />
-                    ))}
-                  </ul>
-                </section>
-              )}
-              {!q && !unowned.length && !projects.some((p) => p.items.length) && <Monolith />}
-              {projects.map((p) => (
-                <ProjectCard key={p.dir} project={p} />
-              ))}
-              {q && !projects.length && !unowned.length && <p class="empty">No match.</p>}
-            </div>
-            <div class="column">
-              <h2>Watcher</h2>
-              {state.sections ? (
-                state.sections.map((s) => (
-                  <WatchSection
-                    key={s.title}
-                    section={s}
-                    query={q}
-                    agents={state.agents ?? null}
-                    now={now}
-                  />
-                ))
-              ) : (
-                <p class="empty">
-                  No screen.json yet. Run <code>herdr-project --watch</code>.
-                </p>
-              )}
-            </div>
+            <ProjectsColumn state={state} query={q} waiting={waiting} />
+            <WatcherColumn state={state} query={q} now={now} />
           </main>
         )}
       </div>
