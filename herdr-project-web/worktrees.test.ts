@@ -53,6 +53,19 @@ test("diffs a worktree from where its branch left the remote's default", async (
   ]);
   assert.equal(diff.omitted, 0);
 
+  // A directory of untracked files counts as one, and one of ignored
+  // files not at all.
+  mkdirSync(join(wt, "more"));
+  writeFileSync(join(wt, "more", "a.txt"), "a\n");
+  writeFileSync(join(wt, "more", "b.txt"), "b\n");
+  mkdirSync(join(wt, "cache"));
+  writeFileSync(join(wt, "cache", "c.pyc"), "");
+  writeFileSync(join(wt, ".git", "info", "exclude"), "*.pyc\n");
+  assert.equal((await summarize(wt)).untracked, 3);
+  const more = await worktreeDiff(wt);
+  assert.equal(more.omitted, 0);
+  assert.equal(parseDiff(more.diff).length, 6);
+
   // Without a remote, it shows what changed since HEAD.
   git(wt, "remote", "remove", "origin");
   assert.equal((await summarize(wt)).base, null);

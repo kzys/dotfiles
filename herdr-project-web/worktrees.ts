@@ -22,6 +22,8 @@ export type Summary = {
   files: number;
   added: number;
   removed: number;
+  // Untracked paths, counting a directory of them as one, which keeps
+  // git from listing every file in a big one.
   untracked: number;
   // Why git couldn't say, as when the worktree's repository is gone.
   error: string | null;
@@ -171,31 +173,32 @@ async function start(dir: string): Promise<[string | null, string, boolean]> {
 const DIFF = ["diff", "--no-color", "--no-ext-diff", "--src-prefix=a/", "--dst-prefix=b/"];
 
 /** Returns the paths of the untracked files in dir that git doesn't
- * ignore. */
-async function untracked(dir: string): Promise<string[]> {
-  return (await git(dir, ["ls-files", "-z", "--others", "--exclude-standard"])).split("\0").filter((p) => p);
+ * ignore, with a directory of only such files as one path if collapse
+ * is set. */
+async function untracked(dir: string, collapse = false): Promise<string[]> {
+  const args = ["ls-files", "-z", "--others", "--exclude-standard"];
+  if (collapse) args.push("--directory", "--no-empty-directory");
+  return (await git(dir, args)).split("\0").filter((p) => p);
 }
 
 /** Returns how dir differs from where its branch started, without the
- * diff itself, with what the diff starts from, whether HEAD has a
- * commit, and the untracked files, unless git failed. */
-async function inspect(dir: string): Promise<[Summary, string, boolean, string[]]> {
+ * diff itself, with what the diff starts from and whether HEAD has a
+ * commit. */
+async function inspect(dir: string): Promise<[Summary, string, boolean]> {
   const summary: Summary = {
     dir, branch: null, base: null, ahead: 0, files: 0, added: 0, removed: 0, untracked: 0, error: null,
   };
   let from = "HEAD";
   let born = true;
-  let others: string[] = [];
   try {
     let b: string | null;
     [b, from, born] = await start(dir);
     summary.base = b;
-    let branch, numstat, ahead;
-    [branch, numstat, ahead, others] = await Promise.all([
+    const [branch, numstat, ahead, others] = await Promise.all([
       git(dir, ["symbolic-ref", "-q", "--short", "HEAD"], [1]),
       git(dir, ["diff", "--numstat", "-z", "--find-renames", from]),
       born ? git(dir, ["rev-list", "--count", `${from}..HEAD`]) : "0",
-      untracked(dir),
+      untracked(dir, true),
     ]);
     summary.branch = branch.trim() || null;
     summary.ahead = Number(ahead.trim()) || 0;
@@ -210,7 +213,7 @@ async function inspect(dir: string): Promise<[Summary, string, boolean, string[]
   } catch (e) {
     summary.error = (e as Error).message;
   }
-  return [summary, from, born, others];
+  return [summary, from, born];
 }
 
 /** Returns how dir differs from where its branch started, without the
@@ -222,13 +225,17 @@ export async function summarize(dir: string): Promise<Summary> {
 /** Returns how dir differs from where its branch started: its commits
  * since and the diff of its files, untracked ones included as added. */
 export async function worktreeDiff(dir: string): Promise<WorktreeDiff> {
-  const [summary, from, born, others] = await inspect(dir);
+  // Listed alongside the summary, which doesn't list every file.
+  const listing = untracked(dir);
+  listing.catch(() => {});
+  const [summary, from, born] = await inspect(dir);
   const result: WorktreeDiff = { ...summary, commits: [], diff: "", omitted: 0 };
   if (summary.error) return result;
   try {
-    const [log, diff] = await Promise.all([
+    const [log, diff, others] = await Promise.all([
       born ? git(dir, ["log", "-z", "--format=%h %s", `${from}..HEAD`]) : "",
       git(dir, [...DIFF, "--find-renames", from]),
+      listing,
     ]);
     result.commits = log.split("\0").filter((l) => l).map((l) => {
       const i = l.indexOf(" ");
