@@ -22,6 +22,13 @@ const projectRoot = join(home, "project");
 const reposRoot = join(home, "repos");
 const port = Number(process.env.PORT || 9000);
 
+// The commit the server runs, for the page to show.
+let version = "unknown";
+try {
+  const { stdout } = await promisify(execFile)("git", ["rev-parse", "--short", "HEAD"], { cwd: here, timeout: 5000 });
+  version = stdout.trim();
+} catch {}
+
 // Bundle the page, its styles and fonts once at start; they are small
 // enough to keep in memory.
 const outdir = join(here, "out");
@@ -37,6 +44,7 @@ const bundle = await build({
   loader: { ".woff2": "file", ".woff": "file" },
   assetNames: "fonts/[name]",
   publicPath: "/",
+  define: { VERSION: JSON.stringify(version) },
 });
 const types: Record<string, string> = {
   ".js": "text/javascript",
@@ -186,6 +194,7 @@ const server = createServer((req, res) => {
     res.writeHead(200, { "Content-Type": "application/json" }).end(last);
   } else if (path === "/api/events") {
     res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" });
+    res.write(`event: version\ndata: ${JSON.stringify(version)}\n\n`);
     res.write(`data: ${last}\n\n`);
     clients.add(res);
     req.on("close", () => clients.delete(res));

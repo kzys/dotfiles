@@ -65,6 +65,7 @@ a:hover { color: var(--accent); }
   font: 400 var(--normal) var(--sans);
   letter-spacing: 0.04em;
 }
+.top .version { flex: none; font: var(--small) var(--mono); color: var(--faint); }
 .top input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
 
 /* The blob: lit while live, and brighter while agents work, dimmed while

@@ -86,7 +86,9 @@ remote's default branch, uncommitted and untracked files included.
 
 The watcher serves it at http://127.0.0.1:9000/ once its packages are
 installed, with Node 22.6 or later. If the page doesn't come up, look in
-`~/.local/state/herdr-project/web.log`.
+`~/.local/state/herdr-project/web.log`. To restart it on new code, touch
+`herdr-project-web/restart.stamp`; open pages reload once it runs
+another commit.
 
 ```
 cd herdr-project-web && npm install

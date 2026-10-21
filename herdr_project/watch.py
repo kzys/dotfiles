@@ -251,11 +251,18 @@ def watch_workspace(herdr, pane, env):
 
 def web_command(web):
     """Returns the command that runs herdr-project-web from directory
-    web, or None if its packages aren't installed."""
+    web, or None if its packages aren't installed or it can't be
+    restarted. Node restarts it whenever restart.stamp there is touched,
+    which this creates if missing, without touching one that exists."""
     if not (web / "node_modules").is_dir():
         return None
-    return ["node", "--experimental-strip-types", "--disable-warning=ExperimentalWarning",
-            str(web / "server.ts")]
+    stamp = web / "restart.stamp"
+    try:
+        open(stamp, "a").close()
+    except OSError:
+        return None
+    return ["node", f"--watch-path={stamp}", "--experimental-strip-types",
+            "--disable-warning=ExperimentalWarning", str(web / "server.ts")]
 
 
 def start_web(command, log):
