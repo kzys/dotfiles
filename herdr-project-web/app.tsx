@@ -14,6 +14,9 @@ import type { State } from "./state.ts";
 import { Links } from "./ui.tsx";
 import { WatcherColumn } from "./watcher.tsx";
 
+// The commit the server runs, set when it bundles the page.
+declare const VERSION: string;
+
 // The watcher writes at least every five minutes while it runs.
 const STALE_MS = 11 * 60 * 1000;
 
@@ -92,6 +95,10 @@ function App() {
     events.onopen = () => setConnected(true);
     events.onerror = () => setConnected(false);
     events.onmessage = (e) => setState(JSON.parse(e.data));
+    // A server restarted on other code serves another page.
+    events.addEventListener("version", (e) => {
+      if (JSON.parse(e.data) !== VERSION) location.reload();
+    });
     const tick = setInterval(() => setNow(Date.now()), 30_000);
     return () => {
       events.close();
@@ -176,6 +183,9 @@ function App() {
             value={query}
             onInput={(e) => setQuery(e.currentTarget.value)}
           />
+          <span class="version" title="The commit the server runs">
+            {VERSION}
+          </span>
         </header>
         {at.view === "worktrees" ? (
           <WorktreeList query={q} />

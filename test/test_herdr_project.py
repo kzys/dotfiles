@@ -710,7 +710,10 @@ def test_remembers_watcher_where_zshrc_looks(tmp_path):
 def test_runs_the_web_page_only_once_installed(tmp_path):
     assert watch.web_command(tmp_path) is None
     (tmp_path / 'node_modules').mkdir()
-    assert watch.web_command(tmp_path)[-1] == str(tmp_path / 'server.ts')
+    command = watch.web_command(tmp_path)
+    assert command[-1] == str(tmp_path / 'server.ts')
+    assert f"--watch-path={tmp_path / 'restart.stamp'}" in command
+    assert (tmp_path / 'restart.stamp').exists()
 
 
 def test_starts_the_web_page_with_its_output_in_a_log(tmp_path):
