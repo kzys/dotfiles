@@ -22,7 +22,7 @@ const projectRoot = join(home, "project");
 const reposRoot = join(home, "repos");
 const port = Number(process.env.PORT || 9000);
 
-// The commit the server runs, for the page to show.
+// The commit the server runs.
 let version = "unknown";
 try {
   const { stdout } = await promisify(execFile)("git", ["rev-parse", "--short", "HEAD"], { cwd: here, timeout: 5000 });
@@ -192,6 +192,8 @@ const server = createServer((req, res) => {
     res.writeHead(403).end();
   } else if (path === "/api/state") {
     res.writeHead(200, { "Content-Type": "application/json" }).end(last);
+  } else if (path === "/api/version") {
+    json(res, 200, { version, pid: process.pid });
   } else if (path === "/api/events") {
     res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" });
     res.write(`event: version\ndata: ${JSON.stringify(version)}\n\n`);
