@@ -10,6 +10,7 @@ import { extname, join, relative } from "node:path";
 import { promisify } from "node:util";
 import { build } from "esbuild";
 import { HerdrEvents } from "./events.ts";
+import { HerdrError, request } from "./herdr.ts";
 import { highlightDiff } from "./highlight.ts";
 import { type Item, frontMatter } from "./inbox.ts";
 import { type Learnings, parseLearnings } from "./learnings.ts";
@@ -68,14 +69,31 @@ function watched(): Watched | null {
   return panes ? withPanes(lastReport(), ...panes) : lastReport();
 }
 
-/** Returns the parsed output of herdr with args, or null if it fails. */
-async function runHerdr(...args: string[]): Promise<any> {
+// Herdr's socket, found again after a request can't reach it.
+let socketPath: Promise<string> | null = null;
+
+/** Returns the result of method with params from Herdr, raising if it
+ * fails. Where the socket is gone, as when Herdr came back elsewhere, it
+ * finds it again and tries once more; the request never reached Herdr,
+ * so it isn't sent twice. */
+async function ask(method: string, params: object = {}, again = true): Promise<any> {
+  const path = (socketPath ??= herdrSocket());
   try {
-    const { stdout } = await promisify(execFile)("herdr", args, { timeout: 5000 });
-    return JSON.parse(stdout).result;
-  } catch {
-    return null;
+    return await request(await path, method, params);
+  } catch (e) {
+    if (e instanceof HerdrError) throw e;
+    // Unless another request found it again already.
+    if (socketPath === path) socketPath = null;
+    const code = (e as NodeJS.ErrnoException).code;
+    if (again && (code === "ENOENT" || code === "ECONNREFUSED")) return ask(method, params, false);
+    throw e;
   }
+}
+
+/** Returns the result of method with params from Herdr, or null if it
+ * fails. */
+function tryAsk(method: string, params: object = {}): Promise<any> {
+  return ask(method, params).catch(() => null);
 }
 
 // Read Herdr when its events say something changed. A read asked for
@@ -91,7 +109,7 @@ async function pollHerdr() {
   try {
     do {
       again = false;
-      const [w, p] = await Promise.all([runHerdr("workspace", "list"), runHerdr("pane", "list")]);
+      const [w, p] = await Promise.all([tryAsk("workspace.list"), tryAsk("pane.list")]);
       herdr = w && p ? { workspaces: w.workspaces, panes: p.panes } : null;
       events.update(herdr);
       refresh();
@@ -100,9 +118,12 @@ async function pollHerdr() {
     polling = false;
   }
 }
-// Herdr's socket, as its CLI finds it, for the session it reads.
+// Herdr's socket, as its CLI, $HERDR_BIN_PATH if set, finds it, for the
+// session it reads.
 async function herdrSocket(): Promise<string> {
-  const { stdout } = await promisify(execFile)("herdr", ["status", "server"], { timeout: 5000 });
+  const { stdout } = await promisify(execFile)(process.env.HERDR_BIN_PATH || "herdr", ["status", "server"], {
+    timeout: 5000,
+  });
   const path = stdout.match(/^socket: (.+)$/m)?.[1];
   if (!path) throw new Error("herdr status server names no socket");
   return path;
@@ -122,7 +143,7 @@ function refresh() {
   const text = title(found?.inbox);
   if (workspace && found && text !== titled) {
     titled = text;
-    runHerdr("workspace", "report-metadata", workspace, "--source", "watch", "--token", `title=${text}`).then(
+    tryAsk("workspace.report_metadata", { workspace_id: workspace, source: "watch", tokens: { title: text } }).then(
       (ok) => {
         // The next refresh tries again.
         if (!ok && titled === text) titled = "";
@@ -135,15 +156,11 @@ function refresh() {
 }
 onReport(refresh);
 
-/** Runs herdr, $HERDR_BIN_PATH if set, with args and returns its output,
- * raising if it fails. */
-async function herdrOut(...args: string[]): Promise<string> {
-  return (await promisify(execFile)(process.env.HERDR_BIN_PATH || "herdr", args, { timeout: 10_000 })).stdout;
-}
 const paneHerdr: PaneHerdr = {
-  list: async () => JSON.parse(await herdrOut("pane", "list")).result.panes,
-  read: (id) => herdrOut("pane", "read", id, "--source", "recent", "--lines", "50"),
-  run: async (id, text) => void (await herdrOut("pane", "run", id, text)),
+  list: async () => (await ask("pane.list")).panes,
+  read: async (id) => (await ask("pane.read", { pane_id: id, source: "recent", lines: 50 })).read.text,
+  // Typing the text and Enter, as herdr pane run does.
+  run: async (id, text) => void (await ask("pane.send_input", { pane_id: id, text, keys: ["Enter"] })),
 };
 
 // Check the panes five minutes after each check ends, so that two never
