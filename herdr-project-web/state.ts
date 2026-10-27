@@ -109,9 +109,10 @@ export type Herdr = {
   }[];
 };
 
-// What the watcher last reported: its sections and its inbox items by
-// source, in the form it sends them, and when, in ISO 8601.
-export type Watched = { sections: unknown; inbox: unknown; at: string };
+// What the watcher last reported: its sections, its inbox items by
+// source, and the projects of its pull requests by url, in the form it
+// sends them, and when, in ISO 8601.
+export type Watched = { sections: unknown; inbox: unknown; owners?: unknown; at: string };
 
 export type State = {
   // The watcher's sections, or null if it hasn't reported any.

@@ -33,8 +33,8 @@ export function readReports(reports: Readable) {
       return;
     }
     if (!report || typeof report !== "object" || Array.isArray(report)) return;
-    const { sections, inbox } = report as Record<string, unknown>;
-    watched = { sections, inbox, at: new Date().toISOString() };
+    const { sections, inbox, owners } = report as Record<string, unknown>;
+    watched = { sections, inbox, owners, at: new Date().toISOString() };
     for (const listener of listeners)
       try {
         listener();

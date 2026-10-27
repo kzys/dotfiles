@@ -13,7 +13,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from herdr_project import claude, headless, linear, pull_request, slack, watch
+from herdr_project import claude, pull_request, watch
 from herdr_project.herdr import ancestors, herdr, in_pane
 from herdr_project.inbox import Owner
 from herdr_project.match import clip, columns, spans, visible
@@ -517,94 +517,6 @@ def test_reads_open_pull_requests_beyond_the_recent_ones():
         (1, 'OPEN'), (3, 'OPEN'), (2, 'MERGED')]
 
 
-def conversation(channel_id, thread_ts, last_ts, waiting=False, links=(), done=False):
-    return {'channel_id': channel_id, 'thread_ts': thread_ts, 'channel': f'#{channel_id}',
-            'permalink': f'https://x.slack.com/archives/{channel_id}/p{thread_ts.replace(".", "")}',
-            'summary': f'about {thread_ts}', 'waiting_on_me': waiting, 'done': done,
-            'last_ts': last_ts,
-            'links': list(links)}
-
-
-def test_reads_structured_output():
-    found = [conversation('C1', '1.5', '2.0')]
-    assert headless.structured({'structured_output': {'conversations': found}},
-                               'conversations') == found
-    with pytest.raises(ValueError, match='denied'):
-        headless.structured({'is_error': True, 'result': 'denied'}, 'conversations')
-    with pytest.raises(ValueError):
-        headless.structured({'result': 'no schema'}, 'conversations')
-
-
-def test_finds_projects_of_slack_conversations():
-    texts = [('/p/a', 'main', 'Slack thread C1 p1700000000123456 asks for review'),
-             ('/p/b', None, 'see C2 for context'),
-             ('/p/c', 'dm', 'DM in D9 about the rollout')]
-    pr_owners = {'https://github.com/o/r/pull/1': Owner('/p/x')}
-
-    def find(c):
-        found = slack.owner(c, texts, pr_owners)
-        return found.project if found else None
-
-    assert find(conversation('C1', '1700000000123456.000000', '0')) is None
-    assert find(conversation('C1', '1700000000.123456', '0')) == '/p/a'
-    assert find(conversation('D9', '', '0')) == '/p/c'
-    assert find(conversation('C2', '17.5', '0', links=['https://github.com/o/r/pull/1'])) == '/p/x'
-    assert find(conversation('C3', '18.5', '0')) is None
-
-
-def test_reports_slack_conversations_waiting_on_me():
-    before = [conversation('C1', '1.0', '100', waiting=True), conversation('C2', '2.0', '100')]
-    assert slack.events(None, before) == []
-    old = slack.remember(None, before, now=200)
-    after = [conversation('C1', '1.0', '100', waiting=True),
-             conversation('C2', '2.0', '150', waiting=True),
-             conversation('C3', '3.0', '160', waiting=True),
-             conversation('C4', '4.0', '170')]
-    assert [c['channel_id'] for c in slack.events(old, after)] == ['C2', 'C3']
-    assert slack.remember(old, after, now=100 + 7 * 86400 + 10) == {
-        'C2/2.0': '150.000000', 'C3/3.0': '160.000000', 'C4/4.0': '170.000000'}
-
-
-def test_polls_slack(tmp_path):
-    (tmp_path / 'a').mkdir()
-    (tmp_path / 'a/README.md').write_text('---\nname: alpha\n---\n')
-    texts = [(str(tmp_path / 'a'), None, 'thread C1 p15')]
-    runs = [[conversation('C1', '1.5', '10')],
-            [conversation('C1', '1.5', '20', waiting=True), conversation('C2', '', '5')]]
-    calls = []
-    state = tmp_path / 'state/slack.json'
-
-    def fake_herdr(*args):
-        calls.append(args)
-        return {}
-
-    assert slack.poll(fake_herdr, texts, state, {}, fetch=lambda d: runs.pop(0))[0] == [
-        '  #C1 alpha about 1.5']
-    assert calls == []
-    lines, rows, items = slack.poll(fake_herdr, texts, state, {}, fetch=lambda d: runs.pop(0))
-    assert items == [{'project': str(tmp_path / 'a'), 'role': None, 'mark': 'slack',
-                      'text': 'Slack #C1: about 1.5'}]
-    assert lines == ['* #C1 alpha about 1.5', '#C2', '    about ']
-    assert rows == [
-        {'label': '#C1', 'title': 'about 1.5', 'url': 'https://x.slack.com/archives/C1/p15',
-         'waiting': True, 'done': False, 'project': 'alpha'},
-        {'label': '#C2', 'title': 'about ', 'url': 'https://x.slack.com/archives/C2/p',
-         'waiting': False, 'done': False, 'project': None}]
-    assert calls == [('notification', 'show', 'Slack #C1', '--body', 'about 1.5 (a)',
-                      '--sound', 'request')]
-
-
-def test_keeps_done_slack_conversations_out_of_the_way():
-    found = [conversation('C1', '1.5', '1', waiting=True, done=True),
-             conversation('C2', '2.5', '1'), conversation('C3', '3.5', '1', waiting=True)]
-    assert slack.table(found, {}) == ['#C3', '  * about 3.5', '#C2', '    about 2.5',
-                                      '#C1', '  ✓ about 1.5']
-    assert [(r['label'], r['waiting'], r['done']) for r in slack.entries(found, {})] == [
-        ('#C3', True, False), ('#C2', False, False), ('#C1', False, True)]
-    old = slack.remember(None, [], now=0)
-    assert [c['channel_id'] for c in slack.events(old, found)] == ['C3']
-
-
 def test_draws_watch_screen():
     at = datetime(2026, 10, 16, 15, 4, tzinfo=UTC)
     assert watch.screen([('PRs', at, ['a', 'b']), ('Slack', None, ['c'])]) == (
@@ -615,41 +527,12 @@ def test_draws_watch_screen():
 def test_keeps_watch_screen_for_other_viewers():
     at = datetime(2026, 10, 16, 15, 4, tzinfo=UTC)
     assert watch.screen_state([('PRs', at, ['a'], [{'label': 'app#1'}]), ('Slack', None, None),
-                               ('Panes', None, []), ('Failed', at, ['x'], None, None),
-                               ('Linear', at, ['A-1'], None, [{'label': 'A-1'}])],
+                               ('Panes', None, []), ('Failed', at, ['x'], None)],
                               {'PRs': at + timedelta(minutes=5)}) == [
         {'title': 'PRs', 'at': '2026-10-16T15:04:00+00:00', 'next': '2026-10-16T15:09:00+00:00',
          'lines': ['a'], 'pullRequests': [{'label': 'app#1'}]},
         {'title': 'Panes', 'at': None, 'next': None, 'lines': []},
-        {'title': 'Failed', 'at': '2026-10-16T15:04:00+00:00', 'next': None, 'lines': ['x']},
-        {'title': 'Linear', 'at': '2026-10-16T15:04:00+00:00', 'next': None,
-         'lines': ['A-1'], 'entries': [{'label': 'A-1'}]}]
-
-
-def test_checks_only_sources_with_connectors():
-    listing = ('Checking MCP server health…\n\n'
-               'claude.ai Gmail: https://gmailmcp.googleapis.com/mcp/v1 - ✔ Connected\n'
-               'claude.ai Slack: https://mcp.slack.com/mcp - ! Needs authentication\n'
-               'claude.ai Linear: https://mcp.linear.app/mcp - ✔ Connected\n'
-               'local: npx server - ✔ Connected\n')
-    names = headless.connected(listing)
-    assert names == {'Gmail', 'Linear'}
-    polled = []
-
-    def poll():
-        polled.append(1)
-        return ['a conversation'], [{'label': 'a'}], ['an item']
-
-    assert watch.check_queue(linear, names, poll) == (
-        ['a conversation'], [{'label': 'a'}], ['an item'])
-    # Without the connector, nothing runs, and its section and items go.
-    assert watch.check_queue(slack, names, poll) == (None, None, [])
-    assert watch.check_queue(slack, set(), poll) == (None, None, [])
-    # Listing failed: say so and keep the last items.
-    assert watch.check_queue(slack, None, poll) == (
-        ['Cannot list the claude.ai connectors.'], None, None)
-    assert polled == [1]
-    assert headless.connectors(command='false') is None
+        {'title': 'Failed', 'at': '2026-10-16T15:04:00+00:00', 'next': None, 'lines': ['x']}]
 
 
 def test_starts_the_watcher_once(tmp_path):
@@ -752,83 +635,6 @@ def test_becomes_the_web_page_with_its_output_in_a_log(tmp_path):
     assert log.read_text() == '["p", "--poll"]\n'
 
 
-def issue(identifier, updated_at, waiting=False, links=(), state='Backlog'):
-    return {'identifier': identifier, 'title': f'Title {identifier}', 'state': state,
-            'url': f'https://linear.app/x/issue/{identifier}', 'updated_at': updated_at,
-            'summary': f'about {identifier}', 'waiting_on_me': waiting, 'links': list(links)}
-
-
-def test_finds_projects_of_linear_issues():
-    texts = [('/p/a', 'main', 'tracks ABC-123 and ABC-12'), ('/p/b', None, 'XABC-7 XYZ-45')]
-    pr_owners = {'https://github.com/o/r/pull/1': Owner('/p/x')}
-
-    def find(i):
-        found = linear.owner(i, texts, pr_owners)
-        return found.project if found else None
-
-    assert find(issue('ABC-123', '')) == '/p/a'
-    assert find(issue('ABC-1', '')) is None
-    assert find(issue('ABC-7', '')) is None
-    assert find(issue('XYZ-45', '')) == '/p/b'
-    assert find(issue('ABC-9', '', links=['https://github.com/o/r/pull/1'])) == '/p/x'
-
-
-def test_polls_linear(tmp_path):
-    (tmp_path / 'a').mkdir()
-    texts = [(str(tmp_path / 'a'), 'main', 'ABC-2')]
-    runs = [[issue('ABC-1', '2026-10-15T00:00Z', waiting=True), issue('ABC-2', '2026-10-14T00:00Z')],
-            [issue('ABC-1', '2026-10-15T00:00Z', waiting=True),
-             issue('ABC-2', '2026-10-16T00:00Z', waiting=True, state='In Progress'),
-             issue('ABC-3', '2026-10-13T00:00Z')]]
-    calls = []
-    state = tmp_path / 'state/linear.json'
-
-    def fake_herdr(*args):
-        calls.append(args)
-        return {}
-
-    assert linear.poll(fake_herdr, texts, state, {}, fetch=lambda d: runs.pop(0),
-                       now=datetime(2026, 10, 16, tzinfo=UTC))[0] == [
-        f'* ABC-1     Backlog     {"":<20} about ABC-1',
-        f'  ABC-2     Backlog     {"a":<20} about ABC-2']
-    assert calls == []
-    lines, rows, _ = linear.poll(fake_herdr, texts, state, {}, fetch=lambda d: runs.pop(0),
-                                  now=datetime(2026, 10, 16, tzinfo=UTC))
-    assert lines == [
-        f'* ABC-2     In Progress {"a":<20} about ABC-2',
-        f'* ABC-1     Backlog     {"":<20} about ABC-1',
-        f'  ABC-3     Backlog     {"":<20} about ABC-3']
-    assert rows[0] == {'label': 'ABC-2', 'title': 'Title ABC-2', 'note': 'about ABC-2',
-                       'detail': 'In Progress', 'url': 'https://linear.app/x/issue/ABC-2',
-                       'waiting': True, 'project': 'a'}
-    assert [r['label'] for r in rows] == ['ABC-2', 'ABC-1', 'ABC-3']
-    assert calls == [('notification', 'show', 'Linear ABC-2', '--body', 'about ABC-2 (a)',
-                      '--sound', 'request')]
-
-
-def test_compares_times_however_claude_writes_them():
-    old = linear.remember(None, [issue('ABC-1', '2026-10-15T10:00:00.000Z', waiting=True),
-                                 issue('ABC-2', 'yesterday', waiting=True),
-                                 issue('ABC-3', '2026-08-01T00:00:00Z')],
-                          now=datetime(2026, 10, 16, tzinfo=UTC))
-    assert old == {'ABC-1': '2026-10-15T10:00:00', 'ABC-2': 'yesterday'}
-    again = [issue('ABC-1', '2026-10-15T03:00:00-07:00', waiting=True),
-             issue('ABC-2', 'yesterday', waiting=True)]
-    assert linear.events(old, again) == []
-    # One left out doesn't count as new when it is back.
-    assert linear.remember(old, [], now=datetime(2026, 10, 16, tzinfo=UTC)) == old
-
-    convs = [conversation('C1', '1.5', '1700000000.1', waiting=True)]
-    old = slack.remember(None, convs, now=1700000100)
-    assert slack.events(old, [conversation('C1', '1.5', '1700000000.100000', waiting=True)]) == []
-
-
-def test_matches_odd_thread_ts_literally():
-    texts = [('/p/a', None, 'p12(3')]
-    assert slack.owner(conversation('C1', '12(3', '0'), texts, {}).project == '/p/a'
-    assert slack.owner(conversation('C1', '1.2(', '0'), [], {}) is None
-
-
 def test_reports_errored_and_unnamed_checks():
     node = pr_node(1, 'a', checks='PENDING')
     old = pull_request.remember(None, pull_request.pull_requests(search(node)))
@@ -864,12 +670,15 @@ def test_reports_to_the_web_page():
     report = watch.reporter(env)
     # Children don't learn of the pipe.
     assert env == {'HOME': '/h'}
-    report([{'title': 'PRs', 'at': None, 'next': None, 'lines': ['a']}], {'PRs': [{'text': '1'}]})
+    report([{'title': 'PRs', 'at': None, 'next': None, 'lines': ['a']}], {'PRs': [{'text': '1'}]},
+           {'https://github.com/o/r/pull/1': Owner('/p/a', role='main'), 'https://x/2': None})
     del report  # Closes the pipe's end.
     with os.fdopen(read) as lines:
         assert json.loads(lines.readline()) == {
             'sections': [{'title': 'PRs', 'at': None, 'next': None, 'lines': ['a']}],
-            'inbox': {'PRs': [{'text': '1'}]}}
+            'inbox': {'PRs': [{'text': '1'}]},
+            'owners': {'https://github.com/o/r/pull/1': {'project': '/p/a', 'dir': None, 'role': 'main'},
+                       'https://x/2': None}}
 
 
 def test_lists_pull_requests_waiting_on_me():
@@ -887,21 +696,3 @@ def test_lists_pull_requests_waiting_on_me():
         (None, 'app#3 approved, ready to merge: PR 3')]
 
 
-def test_groups_slack_conversations_without_a_project_by_channel(tmp_path):
-    (tmp_path / 'a').mkdir()
-    (tmp_path / 'a/README.md').write_text('---\nname: alpha\n---\n')
-    owners = {'C1/1.5': pull_request.Owner(str(tmp_path / 'a'))}
-    found = [conversation('C1', '1.5', '1'), conversation('C2', '2.5', '1'),
-             conversation('C3', '3.5', '1', waiting=True), conversation('C2', '4.5', '1', waiting=True)]
-    found[1]['channel'], found[2]['channel'], found[3]['channel'] = '#general', '', 'general'
-    assert slack.table(found, owners) == [
-        '  #C1 alpha about 1.5',
-        'C3', '  * about 3.5',
-        'general', '  * about 4.5', '    about 2.5']
-    del found[1]['permalink']
-    assert [(r['label'], r['title'], r['url'], r['project'])
-            for r in slack.entries(found, owners)] == [
-        ('C3', 'about 3.5', 'https://x.slack.com/archives/C3/p35', None),
-        ('general', 'about 4.5', 'https://x.slack.com/archives/C2/p45', None),
-        ('#C1', 'about 1.5', 'https://x.slack.com/archives/C1/p15', 'alpha'),
-        ('#general', 'about 2.5', None, None)]
