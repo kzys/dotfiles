@@ -1,5 +1,5 @@
 // Running herdr-project --poll as the server's child, which polls the
-// pull requests, panes, Slack and Linear until those move here.
+// pull requests, Slack and Linear until those move here.
 
 import { type ChildProcess, spawn } from "node:child_process";
 import { closeSync, openSync } from "node:fs";

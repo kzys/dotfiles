@@ -10,11 +10,13 @@ import { extname, join, relative } from "node:path";
 import { promisify } from "node:util";
 import { build } from "esbuild";
 import { HerdrEvents } from "./events.ts";
+import { HerdrError, request } from "./herdr.ts";
 import { highlightDiff } from "./highlight.ts";
-import { frontMatter } from "./inbox.ts";
+import { type Item, frontMatter } from "./inbox.ts";
 import { type Learnings, parseLearnings } from "./learnings.ts";
+import { type PaneHerdr, checkPanes, title, watchWorkspace, withPanes } from "./panes.ts";
 import { lastReport, onReport } from "./poller.ts";
-import { type Herdr, openProjects, projectDirs, readProjectFile, readState } from "./state.ts";
+import { type Herdr, type Section, type Watched, openProjects, projectDirs, readProjectFile, readState } from "./state.ts";
 import { checkoutDirs, summarize, worktreeDiff, worktreeDirs } from "./worktrees.ts";
 
 const here = import.meta.dirname;
@@ -57,16 +59,41 @@ for (const f of bundle.outputFiles)
 
 const clients = new Set<ServerResponse>();
 let herdr: Herdr | null = null;
-let last = JSON.stringify(readState(lastReport(), stateDir, projectRoot));
+// The Panes section and its inbox items, once checked.
+let panes: [Section, Item[]] | null = null;
+let last = JSON.stringify(readState(watched(), stateDir, projectRoot));
 
-/** Returns the parsed output of herdr with args, or null if it fails. */
-async function runHerdr(...args: string[]): Promise<any> {
+/** Returns what the watcher found: the poller's last report with the
+ * panes checked here. */
+function watched(): Watched | null {
+  return panes ? withPanes(lastReport(), ...panes) : lastReport();
+}
+
+// Herdr's socket, found again after a request can't reach it.
+let socketPath: Promise<string> | null = null;
+
+/** Returns the result of method with params from Herdr, raising if it
+ * fails. Where the socket is gone, as when Herdr came back elsewhere, it
+ * finds it again and tries once more; the request never reached Herdr,
+ * so it isn't sent twice. */
+async function ask(method: string, params: object = {}, again = true): Promise<any> {
+  const path = (socketPath ??= herdrSocket());
   try {
-    const { stdout } = await promisify(execFile)("herdr", args, { timeout: 5000 });
-    return JSON.parse(stdout).result;
-  } catch {
-    return null;
+    return await request(await path, method, params);
+  } catch (e) {
+    if (e instanceof HerdrError) throw e;
+    // Unless another request found it again already.
+    if (socketPath === path) socketPath = null;
+    const code = (e as NodeJS.ErrnoException).code;
+    if (again && (code === "ENOENT" || code === "ECONNREFUSED")) return ask(method, params, false);
+    throw e;
   }
+}
+
+/** Returns the result of method with params from Herdr, or null if it
+ * fails. */
+function tryAsk(method: string, params: object = {}): Promise<any> {
+  return ask(method, params).catch(() => null);
 }
 
 // Read Herdr when its events say something changed. A read asked for
@@ -82,7 +109,7 @@ async function pollHerdr() {
   try {
     do {
       again = false;
-      const [w, p] = await Promise.all([runHerdr("workspace", "list"), runHerdr("pane", "list")]);
+      const [w, p] = await Promise.all([tryAsk("workspace.list"), tryAsk("pane.list")]);
       herdr = w && p ? { workspaces: w.workspaces, panes: p.panes } : null;
       events.update(herdr);
       refresh();
@@ -91,9 +118,12 @@ async function pollHerdr() {
     polling = false;
   }
 }
-// Herdr's socket, as its CLI finds it, for the session it reads.
+// Herdr's socket, as its CLI, $HERDR_BIN_PATH if set, finds it, for the
+// session it reads.
 async function herdrSocket(): Promise<string> {
-  const { stdout } = await promisify(execFile)("herdr", ["status", "server"], { timeout: 5000 });
+  const { stdout } = await promisify(execFile)(process.env.HERDR_BIN_PATH || "herdr", ["status", "server"], {
+    timeout: 5000,
+  });
   const path = stdout.match(/^socket: (.+)$/m)?.[1];
   if (!path) throw new Error("herdr status server names no socket");
   return path;
@@ -103,13 +133,55 @@ pollHerdr();
 // Panes' directories change without events, and Herdr may be away.
 setInterval(pollHerdr, 60_000);
 
+// The title Herdr has, or is being told.
+let titled = "";
 function refresh() {
-  const next = JSON.stringify(readState(lastReport(), stateDir, projectRoot, herdr));
+  const found = watched();
+  const next = JSON.stringify(readState(found, stateDir, projectRoot, herdr));
+  // Tell Herdr how much waits on the user only as it changes.
+  const workspace = watchWorkspace(process.env, herdr);
+  const text = title(found?.inbox);
+  if (workspace && found && text !== titled) {
+    titled = text;
+    tryAsk("workspace.report_metadata", { workspace_id: workspace, source: "watch", tokens: { title: text } }).then(
+      (ok) => {
+        // The next refresh tries again.
+        if (!ok && titled === text) titled = "";
+      },
+    );
+  }
   if (next === last) return;
   last = next;
   for (const res of clients) res.write(`data: ${next}\n\n`);
 }
 onReport(refresh);
+
+const paneHerdr: PaneHerdr = {
+  list: async () => (await ask("pane.list")).panes,
+  read: async (id) => (await ask("pane.read", { pane_id: id, source: "recent", lines: 50 })).read.text,
+  // Typing the text and Enter, as herdr pane run does.
+  run: async (id, text) => void (await ask("pane.send_input", { pane_id: id, text, keys: ["Enter"] })),
+};
+
+// Check the panes five minutes after each check ends, so that two never
+// tell an agent at once, keeping the last items when one fails. Only the
+// watcher's server checks, so that another one doesn't tell agents twice.
+const PANE_INTERVAL = 300_000;
+async function watchPanes() {
+  const at = new Date();
+  let lines: string[];
+  let items = panes?.[1] ?? [];
+  try {
+    ({ lines, items } = await checkPanes(paneHerdr, projectRoot, join(stateDir, "panes.json"), at));
+  } catch (e) {
+    lines = [`Cannot check panes: ${String(e).split("\n")[0]}`];
+  }
+  const next = new Date(Date.now() + PANE_INTERVAL).toISOString();
+  panes = [{ title: "Panes", at: at.toISOString(), next, lines }, items];
+  refresh();
+  setTimeout(watchPanes, PANE_INTERVAL);
+}
+if (process.env.HERDR_PROJECT_POLLER) watchPanes();
 
 let timer: ReturnType<typeof setTimeout> | undefined;
 function changed() {

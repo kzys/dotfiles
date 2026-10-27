@@ -99,6 +99,7 @@ export type Herdr = {
   panes: {
     pane_id: string;
     workspace_id: string;
+    tab_id?: string;
     cwd?: string;
     foreground_cwd?: string;
     agent?: string | null;
