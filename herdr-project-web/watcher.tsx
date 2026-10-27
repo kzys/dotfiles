@@ -246,7 +246,7 @@ export function WatcherColumn({ state, query, now }: { state: State; query: stri
         ))
       ) : (
         <p class="empty">
-          No screen.json yet. Run <code>herdr-project --watch</code>.
+          Nothing from the watcher yet. Run <code>herdr-project --watch</code>.
         </p>
       )}
     </div>

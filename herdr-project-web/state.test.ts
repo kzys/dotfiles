@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { linkParts } from "./inbox.ts";
 import {
-  type Herdr, namedCheckouts, projectFiles, pullRequestLinks, readProjectFile, readState, workspaceLabels,
+  type Herdr, type Watched, namedCheckouts, projectFiles, pullRequestLinks, readProjectFile, readState, workspaceLabels,
 } from "./state.ts";
 
 test("lists a project's files and reads only those", () => {
@@ -30,7 +30,7 @@ test("lists a project's files and reads only those", () => {
   assert.deepEqual(projectFiles(join(dir, "gone")), []);
 });
 
-test("reads the watcher's files and the projects' notes", () => {
+test("reads the watcher's report and the projects' notes", () => {
   const root = mkdtempSync(join(tmpdir(), "herdr-project-web-"));
   const state = join(root, "state");
   const projects = join(root, "project");
@@ -48,24 +48,21 @@ test("reads the watcher's files and the projects' notes", () => {
   mkdirSync(join(p1, "repo"));
   writeFileSync(join(p1, "repo", ".git"), "gitdir: elsewhere\n");
   mkdirSync(join(p1, "logs"));
-  writeFileSync(
-    join(state, "screen.json"),
-    JSON.stringify([{ title: "Panes", at: null, lines: [" 85% w2:p1    20261019-z", "  2d w3:p1    a", " 90% w9:p1    /tmp/x"] }]),
-  );
-  writeFileSync(
-    join(state, "inbox.json"),
-    JSON.stringify({
+  const watched: Watched = {
+    sections: [{ title: "Panes", at: null, lines: [" 85% w2:p1    20261019-z", "  2d w3:p1    a", " 90% w9:p1    /tmp/x"] }],
+    inbox: {
       Panes: [{ project: p1, role: "main", mark: "ctx", text: "context 90% full" }],
       Slack: [{ project: join(projects, "gone"), role: null, mark: "slack", text: "hi" },
               { project: null, role: null, mark: "slack", text: "dm" }],
       "Pull requests": [{ project: closed, role: null, mark: "pr", text: "c#1 failed" }],
-    }),
-  );
+    },
+    at: "2026-10-26T12:00:00.000Z",
+  };
 
-  const s = readState(state, projects);
+  const s = readState(watched, state, projects);
   // Without Herdr, which panes are in projects isn't known.
   assert.deepEqual(s.sections?.[0].lines.length, 3);
-  assert.notEqual(s.watchedAt, null);
+  assert.equal(s.watchedAt, "2026-10-26T12:00:00.000Z");
   // The worktree's repository is gone, so git can't name its last commit.
   assert.deepEqual(s.projects.map((p) => [p.name, p.title, p.worktrees, p.items.map((i) => i.text)]), [
     ["a", "Do A", [{ dir: join(p1, "repo"), subject: null }], ["Pick one", "context 90% full"]],
@@ -91,7 +88,7 @@ test("reads the watcher's files and the projects' notes", () => {
       { pane_id: "w5:p1", workspace_id: "w5", cwd: closed },
     ],
   };
-  const withHerdr = readState(state, projects, herdr);
+  const withHerdr = readState(watched, state, projects, herdr);
   assert.deepEqual(withHerdr.projects.map((p) => [p.name, p.workspaces, p.panes]), [
     ["20261019-z", ["zed"], [{ id: "w2:p1", role: "main", status: "idle", ctx: 85 },
                              { id: "w2:p2", role: null, status: "working", ctx: null }]],
@@ -104,19 +101,18 @@ test("reads the watcher's files and the projects' notes", () => {
   // A closed project has no items, so the watcher's stay unowned.
   assert.deepEqual(withHerdr.unowned.map((i) => i.text), ["hi", "dm", "c#1 failed"]);
   assert.deepEqual(withHerdr.sections, [{ title: "Panes", at: null, lines: [" 90% w9:p1    /tmp/x"] }]);
-  writeFileSync(
-    join(state, "screen.json"),
-    JSON.stringify([{ title: "Panes", at: null, lines: [" 85% w2:p1    20261019-z"] },
-                    { title: "Slack", at: null, lines: ["Nothing to clean up."] }]),
+  // The report itself keeps all its lines for the next read.
+  assert.equal((watched.sections as { lines: string[] }[])[0].lines.length, 3);
+  const sections = (...list: unknown[]): Watched => ({ ...watched, sections: list });
+  assert.deepEqual(
+    readState(sections({ title: "Panes", at: null, lines: [" 85% w2:p1    20261019-z"] },
+                       { title: "Slack", at: null, lines: ["Nothing to clean up."] }), state, projects, herdr).sections,
+    [{ title: "Slack", at: null, lines: ["Nothing to clean up."] }],
   );
-  assert.deepEqual(readState(state, projects, herdr).sections, [
-    { title: "Slack", at: null, lines: ["Nothing to clean up."] },
-  ]);
-  writeFileSync(join(state, "screen.json"), JSON.stringify([{ title: "Panes", at: null, lines: ["Nothing to clean up."] }]));
-  assert.deepEqual(readState(state, projects).sections, []);
+  assert.deepEqual(readState(sections({ title: "Panes", at: null, lines: ["Nothing to clean up."] }), state, projects).sections, []);
   assert.deepEqual(s.unowned.map((i) => i.text), ["hi", "dm", "c#1 failed"]);
 
-  assert.deepEqual(readState(join(root, "none"), join(root, "none")), {
+  assert.deepEqual(readState(null, join(root, "none"), join(root, "none")), {
     sections: null, watchedAt: null, projects: [], unowned: [], links: {}, agents: null,
   });
 });
@@ -145,7 +141,7 @@ test("lists the checkouts a project works in after its worktrees", () => {
   writeFileSync(join(p1, "AGENT-main.md"), "## Remaining\n- [you] Pick one\n");
   writeFileSync(join(p2, "AGENT-main.md"), "## Remaining\n- [you] Check ~/repos/o/r1\n");
 
-  const s = readState(join(root, "state"), projects, null, root);
+  const s = readState(null, join(root, "state"), projects, null, root);
   assert.deepEqual(s.projects.map((p) => p.worktrees.map((w) => w.dir)), [
     [join(p1, "wt"), join(root, "repos/o/r2")],
     [join(root, "repos/o/r1")],

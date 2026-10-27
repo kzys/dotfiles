@@ -13,7 +13,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from herdr_project import claude, headless, inbox, linear, pull_request, slack, watch
+from herdr_project import claude, headless, linear, pull_request, slack, watch
 from herdr_project.herdr import ancestors, herdr, in_pane
 from herdr_project.inbox import Owner
 from herdr_project.match import clip, columns, spans, visible
@@ -873,16 +873,19 @@ def test_keeps_state(tmp_path):
     assert load_state(path) is None
 
 
-def test_keeps_watched_items(tmp_path):
-    path = tmp_path / 'inbox.json'
-    assert inbox.read_sources(path) == {}
-    one = {'project': '/p/a', 'role': None, 'mark': 'pr', 'text': '1'}
-    two = {'project': None, 'role': None, 'mark': 'slack', 'text': '2'}
-    inbox.write_sources(path, {'a': [one], 'b': [two]})
-    assert inbox.read_sources(path) == {'a': [one], 'b': [two]}
-    assert [p.name for p in tmp_path.iterdir()] == ['inbox.json']
-    path.write_text('[]')
-    assert inbox.read_sources(path) == {}
+def test_reports_to_the_web_page():
+    assert watch.reporter({}) is None
+    read, write = os.pipe()
+    env = {'HERDR_PROJECT_REPORT_FD': str(write), 'HOME': '/h'}
+    report = watch.reporter(env)
+    # Children don't learn of the pipe.
+    assert env == {'HOME': '/h'}
+    report([{'title': 'PRs', 'at': None, 'next': None, 'lines': ['a']}], {'PRs': [{'text': '1'}]})
+    del report  # Closes the pipe's end.
+    with os.fdopen(read) as lines:
+        assert json.loads(lines.readline()) == {
+            'sections': [{'title': 'PRs', 'at': None, 'next': None, 'lines': ['a']}],
+            'inbox': {'PRs': [{'text': '1'}]}}
 
 
 def test_lists_pull_requests_waiting_on_me():

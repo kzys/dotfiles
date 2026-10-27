@@ -1,7 +1,7 @@
 // Reading what the watcher and the agents' notes say into one state
 // for the page.
 
-import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, readSync, readdirSync, statSync } from "node:fs";
+import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, readSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { FULL_AT, type Item, frontMatter, projectItems, watchedItems } from "./inbox.ts";
@@ -108,10 +108,14 @@ export type Herdr = {
   }[];
 };
 
+// What the watcher last reported: its sections and its inbox items by
+// source, in the form it sends them, and when, in ISO 8601.
+export type Watched = { sections: unknown; inbox: unknown; at: string };
+
 export type State = {
-  // The watcher's sections, or null if it hasn't written any.
+  // The watcher's sections, or null if it hasn't reported any.
   sections: Section[] | null;
-  // When the watcher last wrote them, in ISO 8601.
+  // When the watcher last reported them, in ISO 8601.
   watchedAt: string | null;
   projects: Project[];
   // What the watcher found that belongs to no project.
@@ -335,8 +339,8 @@ export function agentStates(herdr: Herdr | null): Record<string, string> | null 
   return agents;
 }
 
-/** Returns the state for the page from the watcher's files in stateDir
- * and the projects under projectRoot that are open or still have a
+/** Returns the state for the page from watched, what the watcher last
+ * reported, its pull requests in stateDir, and the projects under projectRoot that are open or still have a
  * workspace in herdr, naming their workspaces, if known. Projects with an agent whose context is at least
  * FULL_AT percent full come first, then those with a workspace or
  * something waiting on the user, newest first within each group. The
@@ -345,17 +349,15 @@ export function agentStates(herdr: Herdr | null): Record<string, string> | null 
  * in home's ~/repos that the "repositories" field of its README.md
  * names, or else that it or its notes name. */
 export function readState(
+  watched: Watched | null,
   stateDir: string,
   projectRoot: string,
   herdr: Herdr | null = null,
   home: string = homedir(),
 ): State {
-  const raw = readJSON(join(stateDir, "screen.json"));
-  const sections = Array.isArray(raw) ? (raw as Section[]) : null;
-  let watchedAt: string | null = null;
-  try {
-    watchedAt = statSync(join(stateDir, "screen.json")).mtime.toISOString();
-  } catch {}
+  // Copies, since the Panes section is trimmed below.
+  const sections = Array.isArray(watched?.sections) ? (watched.sections as Section[]).map((s) => ({ ...s })) : null;
+  const watchedAt = watched?.at ?? null;
 
   const open = openProjects(projectRoot, herdr);
   const known = new Set(
@@ -363,7 +365,7 @@ export function readState(
   );
   const byProject = new Map<string, Item[]>();
   const unowned: Item[] = [];
-  for (const item of watchedItems(readJSON(join(stateDir, "inbox.json")))) {
+  for (const item of watchedItems(watched?.inbox)) {
     // Items of projects since removed or closed belong to none.
     if (item.project === null || !known.has(item.project)) unowned.push(item);
     else byProject.set(item.project, [...(byProject.get(item.project) ?? []), item]);

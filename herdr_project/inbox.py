@@ -3,21 +3,6 @@ herdr-project-web adds what the agents' notes say to it."""
 
 from dataclasses import dataclass
 
-from herdr_project.state import load_state, save_state
-
-
-def read_sources(path):
-    """Returns the inbox items the watcher kept in path by source, or {}
-    if it hasn't run."""
-    sources = load_state(path)
-    return sources if isinstance(sources, dict) else {}
-
-
-def write_sources(path, sources):
-    """Keeps the inbox items in sources, by source, in path, replacing
-    it whole so that readers never see half of it."""
-    save_state(path, sources)
-
 
 @dataclass(frozen=True)
 class Owner:

@@ -12,8 +12,7 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from herdr_project import headless, inbox, linear, panes, pull_request, slack
-from herdr_project.state import save_state
+from herdr_project import headless, linear, panes, pull_request, slack
 
 
 def state_dir(env):
@@ -97,7 +96,7 @@ def screen(sections):
 
 def screen_state(sections, nexts=None):
     """Returns sections, (title, time, lines) tuples, as screen shows
-    them, in the form kept in screen.json for other viewers: a list of
+    them, in the form reported to other viewers: a list of
     dicts with the title, the time in ISO 8601 or None, when the section
     is checked again, from nexts, those times by title, or None, and the
     lines. A section may have a fourth item, the pull requests it lists,
@@ -126,17 +125,39 @@ def title(items):
     return " · ".join(counts) or "Nothing waiting"
 
 
+def reporter(env):
+    """Returns the function that sends what the watcher shows to
+    herdr-project-web, which runs it with the pipe in
+    $HERDR_PROJECT_REPORT_FD from env, or None without one. It takes
+    the sections, as screen_state returns them, and the inbox items by
+    source, and writes them as one line of JSON, which waits while the
+    page's pipe is full. The variable goes from env, so that this
+    process's children don't take the pipe for theirs."""
+    fd = env.pop("HERDR_PROJECT_REPORT_FD", None)
+    if not fd:
+        return None
+    out = os.fdopen(int(fd), "w", buffering=1)
+    lock = threading.Lock()
+
+    def report(sections, items):
+        line = json.dumps({"sections": sections, "inbox": items}) + "\n"
+        with lock:
+            out.write(line)
+
+    return report
+
+
 def watch(herdr, root, state, orgs=(), pr_interval=300, queue_interval=1800,
-          connectors=headless.connectors, workspace=None):
+          connectors=headless.connectors, workspace=None, report=None):
     """Polls the pull requests in orgs, or all without orgs, and the
     Herdr panes every pr_interval seconds, and the Slack conversations
     and Linear issues every queue_interval seconds, those in the
     background since Claude takes a while, each only while its claude.ai
     connector is among those connectors returns. It prints them all
-    until interrupted, keeps what waits on the user in inbox.json for
-    the inbox, and reports how much does as the title of Herdr workspace
-    workspace, if any. Failures show instead of their lines, keeping
-    their last inbox items."""
+    until interrupted, passes them and what waits on the user to report,
+    if any, as reporter's function takes them, and reports how much does
+    as the title of Herdr workspace workspace, if any. Failures show
+    instead of their lines, keeping their last inbox items."""
     lock = threading.Lock()
     prs = ["Pull requests", None, ["Checking…"], None]
     pane_section = ["Panes", None, ["Checking…"]]
@@ -152,16 +173,11 @@ def watch(herdr, root, state, orgs=(), pr_interval=300, queue_interval=1800,
                 listing[:] = [time.monotonic(), connectors()]
             return listing[1]
 
-    # Keep the last run's items until each source finds new ones.
-    items = inbox.read_sources(state / "inbox.json")
+    items = {}
 
     def found(source, new):
         """Keeps the inbox items new of source. Call with lock held."""
         items[source] = new
-        try:
-            inbox.write_sources(state / "inbox.json", items)
-        except OSError:
-            pass  # The pane still shows them, and the next poll retries.
         if workspace:
             try:
                 herdr("workspace", "report-metadata", workspace, "--source", "watch",
@@ -186,8 +202,11 @@ def watch(herdr, root, state, orgs=(), pr_interval=300, queue_interval=1800,
                         *(tuple(section) for _, section, _ in queues)]
             sys.stdout.write("\033[H\033[2J" + screen(sections))
             sys.stdout.flush()
+            shown = screen_state(sections, nexts), dict(items)
+        # Outside the lock, so that a page slow to read stalls only this.
+        if report:
             try:
-                save_state(state / "screen.json", screen_state(sections, nexts))
+                report(*shown)
             except OSError:
                 pass  # The pane still shows them.
 
@@ -339,7 +358,8 @@ def poll(herdr, orgs=(), pane=None):
         signal.signal(sig, lambda *_: sys.exit(0))
     try:
         watch(herdr, Path.home() / "project", state_dir(os.environ), orgs,
-              workspace=watch_workspace(herdr, pane, os.environ))
+              workspace=watch_workspace(herdr, pane, os.environ),
+              report=reporter(os.environ))
     except KeyboardInterrupt:
         if pane:
             watcher_file(pane, os.environ).unlink(missing_ok=True)

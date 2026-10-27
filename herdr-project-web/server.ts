@@ -1,5 +1,6 @@
 // A localhost-only page showing what herdr-project --watch and the
-// agents' notes say waits on the user, updated as their files change.
+// agents' notes say waits on the user, updated as they report and their
+// files change.
 
 import { execFile } from "node:child_process";
 import { type FSWatcher, readFileSync, readdirSync, watch } from "node:fs";
@@ -12,6 +13,7 @@ import { HerdrEvents } from "./events.ts";
 import { highlightDiff } from "./highlight.ts";
 import { frontMatter } from "./inbox.ts";
 import { type Learnings, parseLearnings } from "./learnings.ts";
+import { lastReport, onReport } from "./poller.ts";
 import { type Herdr, openProjects, projectDirs, readProjectFile, readState } from "./state.ts";
 import { checkoutDirs, summarize, worktreeDiff, worktreeDirs } from "./worktrees.ts";
 
@@ -55,7 +57,7 @@ for (const f of bundle.outputFiles)
 
 const clients = new Set<ServerResponse>();
 let herdr: Herdr | null = null;
-let last = JSON.stringify(readState(stateDir, projectRoot));
+let last = JSON.stringify(readState(lastReport(), stateDir, projectRoot));
 
 /** Returns the parsed output of herdr with args, or null if it fails. */
 async function runHerdr(...args: string[]): Promise<any> {
@@ -102,11 +104,12 @@ pollHerdr();
 setInterval(pollHerdr, 60_000);
 
 function refresh() {
-  const next = JSON.stringify(readState(stateDir, projectRoot, herdr));
+  const next = JSON.stringify(readState(lastReport(), stateDir, projectRoot, herdr));
   if (next === last) return;
   last = next;
   for (const res of clients) res.write(`data: ${next}\n\n`);
 }
+onReport(refresh);
 
 let timer: ReturnType<typeof setTimeout> | undefined;
 function changed() {
@@ -117,8 +120,9 @@ function changed() {
   }, 100);
 }
 
-// Watch the state directory, ~/project, and each project in it, but not
-// their worktrees, which can hold many files.
+// Watch the state directory, for the pull requests the watcher keeps,
+// ~/project, and each project in it, but not their worktrees, which can
+// hold many files.
 const watchers = new Map<string, FSWatcher>();
 function rewatch() {
   const wanted = new Set([stateDir, projectRoot, ...projectDirs(projectRoot)]);
