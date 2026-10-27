@@ -1,16 +1,12 @@
-// The monospace font comes with the page, which may be used offline.
-import "@fontsource/ibm-plex-mono/latin-400.css";
 import "./style.css";
 import { render } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
-import { blobPath, blobPoints } from "./blob.ts";
 import { WorktreeDiffView, WorktreeList } from "./diffs.tsx";
 import { FileView } from "./files.tsx";
 import { halMessage } from "./hal.ts";
 import { LearningsView } from "./learnings.tsx";
 import { pageTitle, route, tab } from "./pages.ts";
-import { ProjectsColumn, pressing, prime } from "./projects.tsx";
-import { statusState } from "./pulls.ts";
+import { ProjectsColumn, pressing } from "./projects.tsx";
 import type { State } from "./state.ts";
 import { Links } from "./ui.tsx";
 import { WatcherColumn } from "./watcher.tsx";
@@ -21,18 +17,6 @@ declare const VERSION: string;
 // The watcher writes at least every five minutes while it runs.
 const STALE_MS = 11 * 60 * 1000;
 
-const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-/** Returns a short, relative form of the time iso, from now. */
-function ago(iso: string | null, now: number): string {
-  if (!iso) return "never";
-  const s = Math.max(0, Math.round((now - Date.parse(iso)) / 1000));
-  if (s < 60) return "just now";
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  return `${Math.floor(s / 86400)}d ago`;
-}
-
 /** Returns text as HAL's readout. */
 function Readout({ text }: { text: string }) {
   return (
@@ -41,26 +25,6 @@ function Readout({ text }: { text: string }) {
         {text}
       </span>
     </p>
-  );
-}
-
-/** Returns the blob that stands for the page's state, wobbling while
- * working. */
-function Blob({ working }: { working: boolean }) {
-  const [t, setT] = useState(0);
-  useEffect(() => {
-    if (!working || reducedMotion()) return;
-    const start = performance.now() - t * 1000;
-    let frame = requestAnimationFrame(function tick(now) {
-      setT((now - start) / 1000);
-      frame = requestAnimationFrame(tick);
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [working]);
-  return (
-    <svg class="blob" viewBox="0 0 32 32" aria-hidden="true">
-      <path d={blobPath(blobPoints(t, 32, working ? 1 : 0.5))} />
-    </svg>
   );
 }
 
@@ -125,50 +89,22 @@ function App() {
   const waiting = [...(state?.projects ?? []).flatMap((p) => p.items), ...(state?.unowned ?? [])]
     .filter(pressing).length;
 
-  const [booting, setBooting] = useState(true);
-  useEffect(() => {
-    if (!state || prime()) return;
-    const timer = setTimeout(() => setBooting(false), 1500);
-    return () => clearTimeout(timer);
-  }, [state]);
-
   useEffect(() => {
     document.title = title;
   }, [title]);
 
   const stale = state?.watchedAt ? now - Date.parse(state.watchedAt) > STALE_MS : true;
-  // What Herdr said last says nothing once the server is gone.
-  const working = connected
-    ? Object.values(state?.agents ?? {}).filter((s) => statusState(s) === "working").length
-    : 0;
-  // The blob says how things stand: lit while live, and brighter if
-  // agents work, dimmed while the watcher is quiet, dark without the
-  // server, and moving while agents work.
-  const blobTitle = [
-    connected ? "Live" : "Reconnecting",
-    state?.sections ? `watcher updated ${ago(state.watchedAt, now)}` : "watcher not running",
-    ...(working ? [`${working} agent${working === 1 ? "" : "s"} working`] : []),
-  ].join(" · ");
   const message = halMessage({
     connected,
     running: !!state?.sections,
     stale,
     waiting,
-    hour: new Date(now).getHours(),
   });
 
   return (
     <Links.Provider value={state?.links ?? {}}>
-      <div class={booting ? "page booting" : "page"}>
+      <div class="page">
         <header class="top">
-          <a
-            href="#"
-            class={`status ${!connected || !state ? "off" : stale ? "stale" : "on"}${working ? " working" : ""}`}
-            title={blobTitle}
-            aria-label={`Projects · ${blobTitle}`}
-          >
-            <Blob working={working > 0} />
-          </a>
           <Readout text={message} />
           <nav>
             {TABS.map(([t, href, label]) => (

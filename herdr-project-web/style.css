@@ -14,7 +14,7 @@
   --ok: #2f6f57;
   --amber: #c8860d;
   --sans: system-ui, sans-serif;
-  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
   /* The page's only text sizes. */
   --large: 15px;
   --normal: 13px;
@@ -67,22 +67,6 @@ a:hover { color: var(--accent); }
 }
 .top .version { flex: none; font: var(--small) var(--mono); color: var(--faint); }
 .top input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
-
-/* The blob: lit while live, and brighter while agents work, dimmed while
-   the watcher is quiet, dark without the server. It leads to the
-   projects. */
-.status {
-  flex: none;
-  display: inline-flex;
-  /* Spill into the bar's padding, so the blob doesn't make it taller. */
-  margin: -6px 0;
-}
-.status:active .blob { transform: scale(0.94); }
-.blob { width: 40px; height: 40px; overflow: visible; }
-.blob path { fill: #3a3a3d; transition: fill 0.6s; }
-.status.on .blob path { fill: var(--accent); }
-.status.on.working .blob path { fill: #2f7ae6; }
-.status.stale .blob path { fill: #6a85ad; opacity: 0.7; }
 
 main {
   display: grid;
@@ -352,7 +336,7 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
 .empty { margin: 0; color: var(--muted); font-weight: 300; }
 code { font-family: var(--mono); font-size: var(--normal); }
 
-/* The readout, beside the blob. */
+/* The readout, at the start of the bar. */
 .readout {
   flex: 1;
   min-width: 0;
@@ -366,65 +350,8 @@ code { font-family: var(--mono); font-size: var(--normal); }
 }
 .readout-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* Where nothing waits, the monolith stands. */
-.monolith-scene {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 18px;
-  padding: 40px 0 24px;
-  background: radial-gradient(240px 120px at 50% 85%, rgba(0, 0, 0, 0.07), transparent 70%);
-}
-.monolith {
-  width: 36px;
-  height: 160px;
-  background: linear-gradient(100deg, #000 0%, #1c1c20 45%, #050506 55%, #000 100%);
-  box-shadow: 0 30px 30px -20px rgba(0, 0, 0, 0.35);
-  position: relative;
-}
-.monolith::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(100deg, transparent 40%, rgba(255, 255, 255, 0.18) 50%, transparent 60%);
-  background-size: 300% 100%;
-  animation: gleam 7s ease-in-out infinite;
-}
-@keyframes gleam {
-  0%, 60% { background-position: 100% 0; }
-  100% { background-position: -100% 0; }
-}
-.monolith-scene p {
-  margin: 0;
-  font-size: var(--small);
-  font-weight: 500;
-  letter-spacing: 0.32em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-/* Panels power up in turn as the page opens. */
-.booting .card, .booting .watch { animation: power-up 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
-.column > :nth-child(2) { animation-delay: 0.05s; }
-.column > :nth-child(3) { animation-delay: 0.12s; }
-.column > :nth-child(4) { animation-delay: 0.19s; }
-.column > :nth-child(5) { animation-delay: 0.26s; }
-.column > :nth-child(n + 6) { animation-delay: 0.33s; }
-@keyframes power-up {
-  from { opacity: 0; transform: translateY(8px); filter: brightness(1.15); }
-}
-
-/* An item that arrives while the page is open flashes. */
-.item.fresh { animation: arrive 2.4s ease-out; }
-@keyframes arrive {
-  0%, 15% { background: rgba(33, 96, 196, 0.12); box-shadow: inset 3px 0 0 var(--accent); }
-  100% { background: transparent; box-shadow: inset 3px 0 0 transparent; }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .booting .card, .booting .watch, .item.fresh, .checks-pending, .monolith::after {
-    animation: none;
-  }
+  .checks-pending { animation: none; }
 }
 
 /* The views along the console strip. */
