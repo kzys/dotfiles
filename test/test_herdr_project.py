@@ -18,7 +18,7 @@ from herdr_project.herdr import ancestors, herdr, in_pane
 from herdr_project.inbox import Owner
 from herdr_project.match import clip, columns, spans, visible
 from herdr_project.notes import front_matter, notes, report_title, reported_role
-from herdr_project.remaining import fit, follow_remaining, remember_follower
+from herdr_project.remaining import fit, follow_remaining, forget_follower, remember_follower
 from herdr_project.screen import Loading, follow
 from herdr_project.state import load_state, save_state
 
@@ -139,6 +139,23 @@ def test_remembers_follower_where_zshrc_looks(tmp_path):
         env={'HOME': str(tmp_path), 'HERDR_PANE_ID': 'w1:p2'},
         stdout=subprocess.PIPE, text=True, check=True).stdout
     assert found == 'w1:p1'
+
+
+@pytest.mark.parametrize(('script', 'kept'), [
+    ('echo \'{"error":{"code":"pane_not_found"}}\' >&2; exit 1', False),
+    ('echo \'{"error":{"code":"server_not_running"}}\' >&2; exit 1', True),
+    ('echo garbage >&2; exit 1', True),
+    ('echo \'{"result":{"pane":{}}}\'', True),
+])
+def test_forgets_follower_only_when_its_pane_is_gone(tmp_path, script, kept):
+    fake = tmp_path / 'herdr'
+    fake.write_text(f'#!/bin/sh\n{script}\n')
+    fake.chmod(0o755)
+    env = {'HOME': str(tmp_path)}
+    remember_follower('w1:p2', 'w1:p1', env)
+    forget_follower('w1:p2', 'w1:p1',
+                    lambda *args: herdr(*args, stderr=subprocess.PIPE, command=fake), env)
+    assert (tmp_path / '.local/state/herdr-project/remaining/w1:p2').exists() == kept
 
 
 def test_runs_herdr(tmp_path):

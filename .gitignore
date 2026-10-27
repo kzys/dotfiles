@@ -7,6 +7,7 @@ ido.last
 *~
 emacs.d/session.*
 .claude/
+.cloudflare/
 
 
 emacs.d/init/private-*.el
