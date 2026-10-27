@@ -652,22 +652,6 @@ def test_checks_only_sources_with_connectors():
     assert headless.connectors(command='false') is None
 
 
-def test_titles_only_the_watch_workspace():
-    def herdr(*args):
-        return {'result': {'workspace': {'label': {'w1': 'watch', 'w2': 'proj'}[args[2]]}}}
-
-    assert watch.watch_workspace(herdr, 'w1:p1', {'HERDR_WORKSPACE_ID': 'w1'}) == 'w1'
-    assert watch.watch_workspace(herdr, 'w2:p1', {'HERDR_WORKSPACE_ID': 'w2'}) is None
-    assert watch.watch_workspace(herdr, None, {'HERDR_WORKSPACE_ID': 'w1'}) is None
-    assert watch.watch_workspace(herdr, 'w1:p1', {}) is None
-
-
-def test_titles_the_watch_workspace():
-    assert watch.title({'Pull requests': [{}, {}], 'Panes': [], 'Slack': [{}]}) == (
-        'Pull requests: 2 · Slack: 1')
-    assert watch.title({'Panes': [], 'x': 'junk'}) == 'Nothing waiting'
-
-
 def test_starts_the_watcher_once(tmp_path):
     env = {'HOME': str(tmp_path)}
     panes = set()
