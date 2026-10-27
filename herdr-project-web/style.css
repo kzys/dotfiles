@@ -72,7 +72,6 @@ a:hover { color: var(--accent); }
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
   color: var(--fg);
   font: 400 var(--normal) var(--sans);
-  letter-spacing: 0.04em;
 }
 .top .version { flex: none; font: var(--small) var(--mono); color: var(--faint); }
 .top input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
@@ -97,12 +96,11 @@ h2 {
   margin: 0 0 var(--space-4);
   font-size: var(--small);
   font-weight: 500;
-  letter-spacing: 0.32em;
   text-transform: uppercase;
   color: var(--muted);
 }
 h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
-.count { color: var(--accent); font-weight: 600; letter-spacing: 0.1em; }
+.count { color: var(--accent); font-weight: 600; }
 
 /* Panels. */
 .card, .watch {
@@ -119,7 +117,7 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
   padding: var(--space-3) var(--space-5);
   border-bottom: 1px solid var(--panel-edge);
 }
-.card .name { font-weight: 600; letter-spacing: 0.02em; }
+.card .name { font-weight: 600; }
 /* Projects with no workspace and nothing waiting on the user. */
 .card.quiet .name { font-weight: 400; color: var(--muted); }
 .card > header:last-child, .card > .wt-links:last-child { border-bottom: 0; }
@@ -128,7 +126,6 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
   background: var(--fg);
   color: var(--panel);
   font: 500 var(--small)/20px var(--sans);
-  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 .card .workspace + .name { font-weight: 400; color: var(--muted); }
@@ -148,7 +145,6 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
   background: var(--well);
   color: var(--muted);
   font: 500 var(--small) var(--sans);
-  letter-spacing: 0.13em;
   text-transform: uppercase;
   cursor: pointer;
 }
@@ -164,7 +160,7 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
   border-bottom: 1px solid var(--panel-edge);
 }
 .pane { display: inline-flex; align-items: baseline; gap: var(--space-3); }
-.pane .pr-agent { color: var(--muted); font-size: var(--normal); letter-spacing: 0.02em; text-transform: none; }
+.pane .pr-agent { color: var(--muted); font-size: var(--normal); text-transform: none; }
 .pane .pr-agent.agent-blocked { color: var(--red); }
 .ctx { font: var(--normal) var(--mono); color: var(--muted); }
 .ctx-full { color: var(--red); font-weight: 600; }
@@ -188,7 +184,6 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
 .item .role {
   font-size: var(--small);
   font-weight: 500;
-  letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--faint);
 }
@@ -201,7 +196,6 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
   min-width: 57px;
   padding: 0 var(--space-2);
   font: 500 var(--small)/17px var(--sans);
-  letter-spacing: 0.12em;
   text-align: center;
   text-transform: uppercase;
   color: var(--muted);
@@ -219,11 +213,10 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
   padding: var(--space-3) var(--space-5);
   font-size: var(--normal);
   font-weight: 500;
-  letter-spacing: 0.2em;
   text-transform: uppercase;
   border-bottom: 1px solid var(--panel-edge);
 }
-.watch .checked { font: 400 var(--small) var(--mono); letter-spacing: 0.08em; text-transform: none; color: var(--muted); }
+.watch .checked { font: 400 var(--small) var(--mono); text-transform: none; color: var(--muted); }
 /* What still comes as terminal lines reads like a ship's readout. */
 .watch pre {
   margin: var(--space-3);
@@ -250,7 +243,7 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
   color: var(--muted);
 }
 .pr-label { font: var(--normal) var(--mono); }
-.pr-agent { font-size: var(--small); letter-spacing: 0.14em; text-transform: uppercase; }
+.pr-agent { font-size: var(--small); text-transform: uppercase; }
 .pr-agent::before {
   content: "";
   display: inline-block;
@@ -297,7 +290,6 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
   border: 1px solid var(--panel-edge);
   font-size: var(--small);
   font-weight: 500;
-  letter-spacing: 0.14em;
   line-height: 17px;
   text-transform: uppercase;
   color: var(--muted);
@@ -337,10 +329,10 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
 }
 @keyframes crawl { to { background-position: 11.3px 0; } }
 @media (prefers-reduced-motion: reduce) { .run-running { animation: none; } }
-.runs-count { font: var(--small) var(--mono); letter-spacing: 0.04em; }
+.runs-count { font: var(--small) var(--mono); }
 .runs-failed { color: var(--red); }
 .runs-running { color: var(--amber); }
-.runs-done { color: var(--ok); letter-spacing: 0.14em; text-transform: uppercase; font-size: var(--small); }
+.runs-done { color: var(--ok); text-transform: uppercase; font-size: var(--small); }
 .runs a { border-bottom: 1px solid currentColor; }
 
 .empty { margin: 0; color: var(--muted); font-weight: 300; }
@@ -370,7 +362,6 @@ code { font-family: var(--mono); font-size: var(--normal); }
   padding: var(--space-1) var(--space-4);
   font-size: var(--small);
   font-weight: 500;
-  letter-spacing: 0.24em;
   text-transform: uppercase;
   color: var(--muted);
 }
@@ -379,7 +370,7 @@ code { font-family: var(--mono); font-size: var(--normal); }
 /* Worktrees and their diffs. */
 .diffs { margin-top: var(--space-6); }
 .diffs h2 a:hover { color: var(--accent); }
-.diffs h2 .copy { order: 1; letter-spacing: 0.08em; }
+.diffs h2 .copy { order: 1; }
 .stat { flex: none; font: var(--normal) var(--mono); }
 .stat-add { color: var(--ok); }
 .stat-del { color: var(--red); }
@@ -459,7 +450,6 @@ code { font-family: var(--mono); font-size: var(--normal); }
   background: none;
   color: var(--muted);
   font: 500 var(--small) var(--sans);
-  letter-spacing: 0.13em;
   text-transform: uppercase;
   cursor: pointer;
 }
@@ -509,7 +499,6 @@ code { font-family: var(--mono); font-size: var(--normal); }
   margin: var(--space-4) 0 var(--space-2);
   color: var(--fg);
   font: 600 var(--normal) var(--sans);
-  letter-spacing: normal;
   text-transform: none;
 }
 .markdown h1, .markdown h2 { font-size: var(--large); }
