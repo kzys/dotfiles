@@ -1,6 +1,21 @@
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
-import { parseLearnings } from "./learnings.ts";
+import { parseLearnings, readLearnings } from "./learnings.ts";
+
+test("reads the LEARNINGS.md of each organization", () => {
+  const root = mkdtempSync(join(tmpdir(), "herdr-project-web-"));
+  for (const org of ["b", "a", "none"]) mkdirSync(join(root, org));
+  writeFileSync(join(root, "b", "LEARNINGS.md"), "## B\n\n- b\n");
+  writeFileSync(join(root, "a", "LEARNINGS.md"), "## A\n\n- a\n");
+  assert.deepEqual(readLearnings(root), [
+    { org: "a", path: join(root, "a", "LEARNINGS.md"), topics: [{ heading: "A", items: ["- a"] }] },
+    { org: "b", path: join(root, "b", "LEARNINGS.md"), topics: [{ heading: "B", items: ["- b"] }] },
+  ]);
+  assert.deepEqual(readLearnings(join(root, "gone")), []);
+});
 
 test("reads the topics of a LEARNINGS.md", () => {
   const text = [

@@ -2,8 +2,9 @@
 // projects' notes and the pull requests it links to.
 
 import { readFileSync, readdirSync } from "node:fs";
-import { basename, join } from "node:path";
-import { type Item, frontMatter } from "./inbox.ts";
+import { join } from "node:path";
+import type { Item } from "./inbox.ts";
+import { projectLabels } from "./state.ts";
 
 // Who works on something: the project directory, the worktree in it, if
 // known, and the role of the agent, if known.
@@ -70,11 +71,11 @@ export function projectOf(
 /** Returns the short name of the project in dir: the name in the front
  * matter of its README.md, else the directory's name. */
 export function projectName(dir: string): string {
+  let readme: string | null = null;
   try {
-    return frontMatter(readFileSync(join(dir, "README.md"), "utf8"), "name") || basename(dir);
-  } catch {
-    return basename(dir);
-  }
+    readme = readFileSync(join(dir, "README.md"), "utf8");
+  } catch {}
+  return projectLabels(dir, readme).name;
 }
 
 /** Returns an inbox item for text with mark, belonging to found, or to

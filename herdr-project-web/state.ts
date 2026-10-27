@@ -161,6 +161,16 @@ export function openProjects(root: string, herdr: Herdr | null = null): [string,
   });
 }
 
+/** Returns the name and title of the project in dir, from the front
+ * matter of readme, its README.md, if any, else its directory's name and
+ * "(no title)". */
+export function projectLabels(dir: string, readme: string | null): { name: string; title: string } {
+  return {
+    name: (readme && frontMatter(readme, "name")) || dir.split("/").pop()!,
+    title: (readme && frontMatter(readme, "title")) || "(no title)",
+  };
+}
+
 /** Returns urls, those of pull requests, by their labels: owner/name#N,
  * and name#N as the watcher shows them, unless two share it. */
 export function pullRequestLinks(urls: string[] | undefined): Record<string, string> {
@@ -271,13 +281,17 @@ export function namedCheckouts(text: string, home: string): string[] {
   return [...new Set(dirs)];
 }
 
+/** Reports whether cwd, if any, is dir or under it. */
+function inside(dir: string, cwd?: string): boolean {
+  return !!cwd && (cwd === dir || cwd.startsWith(dir + "/"));
+}
+
 /** Returns the labels of the workspaces in herdr with a pane in dir or
  * under it, in the order herdr lists them. */
 export function workspaceLabels(dir: string, herdr: Herdr | null): string[] {
   if (!herdr) return [];
-  const inside = (cwd?: string) => !!cwd && (cwd === dir || cwd.startsWith(dir + "/"));
   const ids = new Set(
-    herdr.panes.filter((p) => inside(p.cwd) || inside(p.foreground_cwd)).map((p) => p.workspace_id),
+    herdr.panes.filter((p) => inside(dir, p.cwd) || inside(dir, p.foreground_cwd)).map((p) => p.workspace_id),
   );
   return herdr.workspaces
     .filter((w) => ids.has(w.workspace_id))
@@ -289,8 +303,7 @@ export function workspaceLabels(dir: string, herdr: Herdr | null): string[] {
  * reads it, else Herdr's. */
 function panesIn(dir: string, herdr: Herdr | null): Herdr["panes"] {
   if (!herdr) return [];
-  const inside = (cwd?: string) => !!cwd && (cwd === dir || cwd.startsWith(dir + "/"));
-  return herdr.panes.filter((p) => inside(p.tokens?.cwd || p.cwd) || inside(p.foreground_cwd));
+  return herdr.panes.filter((p) => inside(dir, p.tokens?.cwd || p.cwd) || inside(dir, p.foreground_cwd));
 }
 
 /** Returns the agent panes in herdr working in dir or under it, in the
@@ -367,8 +380,7 @@ export function readState(
       (readme && frontMatter(readme, "repositories")) || [readme ?? "", ...notes.map(([, t]) => t)].join("\n");
     projects.push({
       dir,
-      name: (readme && frontMatter(readme, "name")) || dir.split("/").pop()!,
-      title: (readme && frontMatter(readme, "title")) || "(no title)",
+      ...projectLabels(dir, readme),
       workspaces: workspaceLabels(dir, herdr),
       panes: projectPanes(dir, herdr),
       worktrees: [...worktreeDirs(dir), ...namedCheckouts(named, home).filter(isCheckout)].map((d) => ({

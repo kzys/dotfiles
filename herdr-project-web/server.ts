@@ -3,7 +3,7 @@
 // change.
 
 import { execFile } from "node:child_process";
-import { type FSWatcher, openSync, readFileSync, readdirSync, watch, writeSync } from "node:fs";
+import { type FSWatcher, openSync, readFileSync, watch, writeSync } from "node:fs";
 import { type ServerResponse, createServer } from "node:http";
 import { homedir } from "node:os";
 import { extname, join, relative } from "node:path";
@@ -13,15 +13,16 @@ import { HerdrEvents } from "./events.ts";
 import * as github from "./github.ts";
 import { HerdrError, request } from "./herdr.ts";
 import { highlightDiff } from "./highlight.ts";
-import { frontMatter } from "./inbox.ts";
-import { type Learnings, parseLearnings } from "./learnings.ts";
+import { readLearnings } from "./learnings.ts";
 import { connectors } from "./headless.ts";
 import * as linear from "./linear.ts";
 import { type Owner, notesTexts } from "./owners.ts";
 import { type PaneHerdr, checkPanes } from "./panes.ts";
 import { type Checked, checkQueue } from "./queues.ts";
 import * as slack from "./slack.ts";
-import { type Herdr, type Watched, openProjects, projectDirs, readProjectFile, readState } from "./state.ts";
+import {
+  type Herdr, type Watched, openProjects, projectDirs, projectLabels, readProjectFile, readState,
+} from "./state.ts";
 import { type Found, title, watchWorkspace, watchedFrom } from "./watched.ts";
 import { checkoutDirs, summarize, worktreeDiff, worktreeDirs } from "./worktrees.ts";
 
@@ -318,31 +319,11 @@ function projectWorktrees() {
   return [
     ...openProjects(projectRoot, herdr).map(([dir, readme]) => ({
       dir,
-      name: (readme && frontMatter(readme, "name")) || dir.split("/").pop()!,
-      title: (readme && frontMatter(readme, "title")) || "(no title)",
+      ...projectLabels(dir, readme),
       worktrees: worktreeDirs(dir),
     })),
     { dir: reposRoot, name: "repos", title: "Checkouts in ~/repos", worktrees: checkoutDirs(reposRoot) },
   ].filter((p) => p.worktrees.length);
-}
-
-/** Returns the LEARNINGS.md of each organization in ~/repos, by
- * organization name. */
-function readLearnings(): Learnings[] {
-  let orgs: string[];
-  try {
-    orgs = readdirSync(reposRoot).sort();
-  } catch {
-    return [];
-  }
-  return orgs.flatMap((org) => {
-    const path = join(reposRoot, org, "LEARNINGS.md");
-    try {
-      return [{ org, path, topics: parseLearnings(readFileSync(path, "utf8")) }];
-    } catch {
-      return [];
-    }
-  });
 }
 
 function json(res: ServerResponse, status: number, body: unknown) {
@@ -394,7 +375,7 @@ const server = createServer((req, res) => {
     else json(res, 200, file);
   } else if (path === "/api/learnings") {
     // They are small and change rarely, so they are read each time.
-    json(res, 200, readLearnings());
+    json(res, 200, readLearnings(reposRoot));
   } else if (assets[path]) {
     const [type, body] = assets[path];
     res.writeHead(200, { "Content-Type": type }).end(body);
