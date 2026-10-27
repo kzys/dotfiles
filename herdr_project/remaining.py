@@ -183,7 +183,8 @@ def follow_remaining(pane, herdr, socket_path=None, own=None):
                     fitted = len(wrapped)
             except Exception:  # noqa: BLE001, S110 - fitting must not close the pane.
                 pass
-        sys.stdout.write("\033[H\033[2J" + "\n".join(wrapped[:rows]))
+        # Clear the scrollback too, where resizing pushes earlier copies.
+        sys.stdout.write("\033[H\033[2J\033[3J" + "\n".join(wrapped[:rows]))
         sys.stdout.flush()
         if watch.closed(5):
             return
