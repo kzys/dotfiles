@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { type PaneHerdr, checkPanes, ctx, projectDir, title, wakeMessage, watchWorkspace, withPanes } from "./panes.ts";
+import { type PaneHerdr, checkPanes, ctx, projectDir, wakeMessage } from "./panes.ts";
 import type { Herdr } from "./state.ts";
 
 type HerdrPane = Herdr["panes"][number];
@@ -172,37 +172,4 @@ test("reads ctx", () => {
   assert.equal(ctx(pane("p", "t", {}, { ctx: "x" })), null);
   assert.equal(ctx(pane("p", "t", {}, { ctx: "85.5%" })), null);
   assert.equal(ctx({ pane_id: "p", workspace_id: "w" }), null);
-});
-
-test("puts the panes after the pull requests", () => {
-  const section = { title: "Panes", at: "2026-10-16T09:00:00.000Z", lines: ["a"] };
-  const item = { project: null, role: null, mark: "idle", text: "x" };
-  const report = {
-    sections: [{ title: "Pull requests", at: null, lines: [] }, { title: "Slack", at: null, lines: [] }],
-    inbox: { Slack: [item] },
-    at: "2026-10-16T10:00:00.000Z",
-  };
-  assert.deepEqual(withPanes(report, section, [item]), {
-    sections: [report.sections[0], section, report.sections[1]],
-    inbox: { Slack: [item], Panes: [item] },
-    at: report.at,
-  });
-  // Before the poller reports, the panes stand alone.
-  assert.deepEqual(withPanes(null, section, []), { sections: [section], inbox: { Panes: [] }, at: section.at });
-});
-
-test("titles the watch workspace", () => {
-  assert.equal(title({ "Pull requests": [{}, {}], Panes: [], Slack: [{}] }), "Pull requests: 2 · Slack: 1");
-  assert.equal(title({ Panes: [], x: "junk" }), "Nothing waiting");
-  assert.equal(title(null), "Nothing waiting");
-
-  const herdr: Herdr = {
-    workspaces: [{ workspace_id: "w1", label: "watch" }, { workspace_id: "w2", label: "proj" }],
-    panes: [],
-  };
-  assert.equal(watchWorkspace({ HERDR_PANE_ID: "w1:p1", HERDR_WORKSPACE_ID: "w1" }, herdr), "w1");
-  assert.equal(watchWorkspace({ HERDR_PANE_ID: "w2:p1", HERDR_WORKSPACE_ID: "w2" }, herdr), null);
-  assert.equal(watchWorkspace({ HERDR_WORKSPACE_ID: "w1" }, herdr), null);
-  assert.equal(watchWorkspace({ HERDR_PANE_ID: "w1:p1" }, herdr), null);
-  assert.equal(watchWorkspace({ HERDR_PANE_ID: "w1:p1", HERDR_WORKSPACE_ID: "w1" }, null), null);
 });

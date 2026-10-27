@@ -1,6 +1,7 @@
-"""Watching the user's pull requests, Slack conversations and Linear
-issues together, each at its own pace, in one pane."""
+"""Watching the user's pull requests in one pane, for herdr-project-web,
+which watches the rest."""
 
+import dataclasses
 import fcntl
 import json
 import os
@@ -12,7 +13,7 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from herdr_project import headless, linear, pull_request, slack
+from herdr_project import pull_request
 
 
 def state_dir(env):
@@ -66,21 +67,6 @@ def start(herdr, env):
         return True
 
 
-def check_queue(module, names, poll):
-    """Returns the lines, the rows and the inbox items of the source
-    in module, which a headless Claude session checks with its claude.ai
-    connector, by calling poll if the connector is among names, the
-    connected ones. Without the connector, there are no lines or rows,
-    hiding the source, and no items. If names is None, as when listing
-    the connectors failed, the lines say so, there are no rows, and the
-    items are None, keeping the last ones."""
-    if names is None:
-        return ["Cannot list the claude.ai connectors."], None, None
-    if module.CONNECTOR not in names:
-        return None, None, []
-    return poll()
-
-
 def screen(sections):
     """Returns the text of the pane for sections, (title, time, lines,
     ...) tuples, where time is when the lines were made or None, leaving
@@ -101,8 +87,7 @@ def screen_state(sections, nexts=None):
     is checked again, from nexts, those times by title, or None, and the
     lines. A section may have a fourth item, the pull requests it lists,
     as pull_request.listed returns them, kept as pullRequests unless
-    None, and a fifth, the rows of a queue as its entries function
-    returns them, kept as entries unless None."""
+    None."""
     out = []
     for title, at, lines, *rest in sections:
         if lines is None:
@@ -112,8 +97,6 @@ def screen_state(sections, nexts=None):
                     "next": upcoming.isoformat() if upcoming else None, "lines": lines})
         if rest and rest[0] is not None:
             out[-1]["pullRequests"] = rest[0]
-        if len(rest) > 1 and rest[1] is not None:
-            out[-1]["entries"] = rest[1]
     return out
 
 
@@ -121,9 +104,10 @@ def reporter(env):
     """Returns the function that sends what the watcher shows to
     herdr-project-web, which runs it with the pipe in
     $HERDR_PROJECT_REPORT_FD from env, or None without one. It takes
-    the sections, as screen_state returns them, and the inbox items by
-    source, and writes them as one line of JSON, which waits while the
-    page's pipe is full. The variable goes from env, so that this
+    the sections, as screen_state returns them, the inbox items by
+    source, and the Owner of each pull request by url, or None, and
+    writes them as one line of JSON, which waits while the page's pipe
+    is full. The variable goes from env, so that this
     process's children don't take the pipe for theirs."""
     fd = env.pop("HERDR_PROJECT_REPORT_FD", None)
     if not fd:
@@ -131,101 +115,42 @@ def reporter(env):
     out = os.fdopen(int(fd), "w", buffering=1)
     lock = threading.Lock()
 
-    def report(sections, items):
-        line = json.dumps({"sections": sections, "inbox": items}) + "\n"
+    def report(sections, items, owners):
+        owners = {url: o and dataclasses.asdict(o) for url, o in owners.items()}
+        line = json.dumps({"sections": sections, "inbox": items, "owners": owners}) + "\n"
         with lock:
             out.write(line)
 
     return report
 
 
-def watch(herdr, root, state, orgs=(), pr_interval=300, queue_interval=1800,
-          connectors=headless.connectors, report=None):
+def watch(herdr, root, state, orgs=(), interval=300, report=None):
     """Polls the pull requests in orgs, or all without orgs, every
-    pr_interval seconds, and the Slack conversations and Linear issues
-    every queue_interval seconds, those in the background since Claude
-    takes a while, each only while its claude.ai connector is among
-    those connectors returns. It prints them all until interrupted, and
-    passes them and what waits on the user to report, if any, as
-    reporter's function takes them. Failures show instead of their
-    lines, keeping their last inbox items."""
-    lock = threading.Lock()
-    prs = ["Pull requests", None, ["Checking…"], None]
-    queues = [(slack, ["Slack", None, None], "slack.json"),
-              (linear, ["Linear", None, None], "linear.json")]
-    pr_owners = {}
-    # The queues start together; one listing serves both.
-    listing_lock, listing = threading.Lock(), []
-
-    def connected():
-        with listing_lock:
-            if not listing or time.monotonic() - listing[0] > 60:
-                listing[:] = [time.monotonic(), connectors()]
-            return listing[1]
-
-    items = {}
-
-    def found(source, new):
-        """Keeps the inbox items new of source. Call with lock held."""
-        items[source] = new
-
-    # When each section is checked again, by title, set as its loop
-    # goes to sleep.
-    nexts = {}
-
-    def sleep(seconds, *titles):
-        with lock:
-            for t in titles:
-                nexts[t] = datetime.now().astimezone() + timedelta(seconds=seconds)
-        show()
-        time.sleep(seconds)
-
-    def show():
-        with lock:
-            sections = [tuple(prs), *(tuple(section) for _, section, _ in queues)]
-            sys.stdout.write("\033[H\033[2J" + screen(sections))
-            sys.stdout.flush()
-            shown = screen_state(sections, nexts), dict(items)
-        # Outside the lock, so that a page slow to read stalls only this.
-        if report:
-            try:
-                report(*shown)
-            except OSError:
-                pass  # The pane still shows them.
-
-    def queue_loop(module, section, name):
-        while True:
-            with lock:
-                owners = dict(pr_owners)
-            try:
-                lines, rows, new = check_queue(
-                    module, connected(), lambda owners=owners: module.poll(
-                        herdr, pull_request.notes_texts(root), state / name, owners))
-            except Exception as e:  # noqa: BLE001 - shown rather than ending the thread.
-                lines, rows, new = [f"Cannot check {section[0]}: {e!r}"], None, None
-            with lock:
-                section[1:] = [datetime.now().astimezone(), lines, None, rows]
-                if new is not None:
-                    found(section[0], new)
-            sleep(queue_interval, section[0])
-
-    # The queues start after the first pull requests, whose projects they use.
-    threads = [threading.Thread(target=queue_loop, args=q, daemon=True) for q in queues]
+    interval seconds. It prints them until interrupted, and passes them,
+    what waits on the user and their projects to report, if any, as
+    reporter's function takes them. A failure shows instead of the
+    lines, keeping the last inbox items and projects."""
+    section = ["Pull requests", None, ["Checking…"], None]
+    items, pr_owners = {}, {}
     while True:
         try:
             lines, owners, new, rows = pull_request.poll(
                 herdr, root, state / "pull-requests.json", orgs=orgs)
         except Exception as e:  # noqa: BLE001 - shown rather than ending the watcher.
             lines, owners, new, rows = [f"Cannot check pull requests: {e!r}"], {}, None, None
-        with lock:
-            prs[1:] = [datetime.now().astimezone(), lines, rows]
-            pr_owners.update(owners)
-            if new is not None:
-                found(prs[0], new)
-        for t in threads:
-            if t.ident is None:
-                t.start()
-        sleep(pr_interval, prs[0])
+        section[1:] = [datetime.now().astimezone(), lines, rows]
+        pr_owners.update(owners)
+        if new is not None:
+            items[section[0]] = new
+        nexts = {section[0]: datetime.now().astimezone() + timedelta(seconds=interval)}
+        sys.stdout.write("\033[H\033[2J" + screen([tuple(section)]))
+        sys.stdout.flush()
+        if report:
+            try:
+                report(screen_state([tuple(section)], nexts), items, pr_owners)
+            except OSError:
+                pass  # The pane still shows them.
+        time.sleep(interval)
 
 
 def web_command(web, node_version=None):
@@ -289,12 +214,13 @@ def exec_web(command, poller, log, env):
 
 
 def main(herdr, orgs=(), pane=None, poller=None):
-    """Watches the pull requests in orgs, or all without orgs, Slack
-    conversations and Linear issues of the projects under ~/project.
-    pane is the Herdr pane it runs in, if any, where zshrc resumes it
+    """Watches the pull requests in orgs, or all without orgs, of the
+    projects under ~/project. pane is the Herdr pane it runs in, if any, where zshrc resumes it
     after Herdr restores the session, unless it was interrupted. Once its
     packages are installed, herdr-project-web takes this process's place
-    and runs poller, the command line that calls poll, as its child."""
+    and runs poller, the command line that calls poll, as its child,
+    adding the rest it watches, such as Slack and Linear; without it,
+    only the pull requests are watched."""
     if pane:
         try:
             remember_watcher(pane, orgs, os.environ)

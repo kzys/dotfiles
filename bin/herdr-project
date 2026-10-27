@@ -12,15 +12,15 @@ by the role token the agent reports, until the pane is gone, and fits
 its own pane to the section.
 
 herdr-project --watch [<org>...] lists the user's open pull requests,
-in the given GitHub organizations if any, and active Slack conversations
-and Linear issues, if the user has those claude.ai connectors. It tells the user, and the agent working on each pull
-request, when its checks, review or state change, and the user when a
-conversation or issue waits on them. herdr-project-web takes its place
-once installed, serving a page of it, and runs herdr-project --poll
-[<org>...], which does the polling, as its child. The page also lists
-agents whose context is nearly full, asking each once to update its
-notes, and shell panes idle for a day, and titles the watch workspace
-with how much waits on the user.
+in the given GitHub organizations if any. It tells the user, and the
+agent working on each pull request, when its checks, review or state
+change. herdr-project-web takes its place once installed, serving a
+page of it, and runs herdr-project --poll [<org>...], which does the
+polling, as its child. The page also lists active Slack conversations
+and Linear issues, if the user has those claude.ai connectors, telling
+the user when one waits on them; agents whose context is nearly full,
+asking each once to update its notes; and shell panes idle for a day.
+It titles the watch workspace with how much waits on the user.
 
 herdr-project --start-watch starts the watcher in a new Herdr workspace
 named watch, unless a pane already has it.

@@ -2,10 +2,12 @@
 // panes that have long been idle.
 
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from "node:fs";
+import { realpathSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
-import { FULL_AT, type Item, frontMatter } from "./inbox.ts";
-import type { Herdr, Section, Watched } from "./state.ts";
+import { FULL_AT, type Item } from "./inbox.ts";
+import { projectName } from "./owners.ts";
+import type { Herdr } from "./state.ts";
+import { loadState, saveState } from "./statefile.ts";
 
 type HerdrPane = Herdr["panes"][number];
 
@@ -105,16 +107,6 @@ function real(path: string): string {
   }
 }
 
-/** Returns the short name of the project in dir: the name in the front
- * matter of its README.md, else the directory's name. */
-function projectName(dir: string): string {
-  try {
-    return frontMatter(readFileSync(join(dir, "README.md"), "utf8"), "name") || basename(dir);
-  } catch {
-    return basename(dir);
-  }
-}
-
 /** Returns what to tell the agent in pane about its full context. */
 export function wakeMessage(pane: HerdrPane): string {
   return `Your context is ${ctx(pane)}% full. Update your notes so that a new session can pick up from them, then tell the user.`;
@@ -124,22 +116,6 @@ export function wakeMessage(pane: HerdrPane): string {
 export function days(span: number): string {
   const hours = Math.floor(span / 3600_000);
   return hours >= 24 ? `${Math.floor(hours / 24)}d` : `${hours}h`;
-}
-
-function loadState(path: string): unknown {
-  try {
-    return JSON.parse(readFileSync(path, "utf8"));
-  } catch {
-    return null;
-  }
-}
-
-/** Keeps state in path, replacing it whole so that a check after a
- * failed write never sees half of it. */
-function saveState(path: string, state: PaneState) {
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(`${path}.tmp`, JSON.stringify(state, null, 1));
-  renameSync(`${path}.tmp`, path);
 }
 
 // What checkPanes needs from Herdr: the panes it lists, the recent text
@@ -197,38 +173,4 @@ export async function checkPanes(herdr: PaneHerdr, root: string, path: string, n
                    text: `shell pane ${p.pane_id} idle for ${days(span)}` });
   }
   return { lines: lines.length ? lines : ["Nothing to clean up."], items };
-}
-
-/** Returns watched, what the poller last reported, if anything, with
- * section, the Panes section, after its pull requests, and items, the
- * Panes inbox items. Without a report, it is when section was checked. */
-export function withPanes(watched: Watched | null, section: Section, items: Item[]): Watched {
-  const sections = (Array.isArray(watched?.sections) ? (watched.sections as Section[]) : []).filter(
-    (s) => s.title !== "Panes",
-  );
-  const after = sections.findIndex((s) => s.title === "Pull requests") + 1;
-  const inbox = watched?.inbox && typeof watched.inbox === "object" ? watched.inbox : {};
-  return {
-    sections: [...sections.slice(0, after), section, ...sections.slice(after)],
-    inbox: { ...inbox, Panes: items },
-    at: watched?.at ?? section.at ?? new Date().toISOString(),
-  };
-}
-
-/** Returns the title for the watcher's workspace from inbox, the inbox
- * items by source: how many wait on the user from each. */
-export function title(inbox: unknown): string {
-  const counts = Object.entries(inbox && typeof inbox === "object" ? inbox : {})
-    .filter(([, found]) => Array.isArray(found) && found.length)
-    .map(([source, found]) => `${source}: ${found.length}`);
-  return counts.join(" · ") || "Nothing waiting";
-}
-
-/** Returns the id of the Herdr workspace named watch that the pane in
- * env runs in, by herdr, or null. Only that one takes the watcher's
- * title. */
-export function watchWorkspace(env: NodeJS.ProcessEnv, herdr: Herdr | null): string | null {
-  const id = env.HERDR_WORKSPACE_ID;
-  if (!env.HERDR_PANE_ID || !id || !herdr) return null;
-  return herdr.workspaces.some((w) => w.workspace_id === id && w.label === "watch") ? id : null;
 }

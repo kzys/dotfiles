@@ -27,7 +27,7 @@ test("keeps what the poller last reported", async () => {
   const script = `const fd = Number(process.env.HERDR_PROJECT_REPORT_FD);
 const fs = require("fs");
 fs.writeSync(fd, '{"sections": [1], "inbox": {"a": []}}\\nnot json\\n[2]\\n');
-fs.writeSync(fd, '{"sections": [3], "inbox": {}}\\n');`;
+fs.writeSync(fd, '{"sections": [3], "inbox": {}, "owners": {"u": null}}\\n');`;
   const poller = startPoller({ HERDR_PROJECT_POLLER: JSON.stringify([process.execPath, "-e", script]) })!;
   let heard = 0;
   onReport(() => heard++);
@@ -35,7 +35,7 @@ fs.writeSync(fd, '{"sections": [3], "inbox": {}}\\n');`;
   readReports(poller.stdio[3] as Readable);
   await once(poller.stdio[3]!, "close");
   assert.equal(heard, 2);
-  assert.deepEqual({ ...lastReport(), at: undefined }, { sections: [3], inbox: {}, at: undefined });
+  assert.deepEqual({ ...lastReport(), at: undefined }, { sections: [3], inbox: {}, owners: { u: null }, at: undefined });
 });
 
 /** Starts a server that runs a poller, which records its pid and runs

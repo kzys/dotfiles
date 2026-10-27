@@ -12,11 +12,17 @@ import { build } from "esbuild";
 import { HerdrEvents } from "./events.ts";
 import { HerdrError, request } from "./herdr.ts";
 import { highlightDiff } from "./highlight.ts";
-import { type Item, frontMatter } from "./inbox.ts";
+import { frontMatter } from "./inbox.ts";
 import { type Learnings, parseLearnings } from "./learnings.ts";
-import { type PaneHerdr, checkPanes, title, watchWorkspace, withPanes } from "./panes.ts";
+import { connectors } from "./headless.ts";
+import * as linear from "./linear.ts";
+import { type Owner, notesTexts } from "./owners.ts";
+import { type PaneHerdr, checkPanes } from "./panes.ts";
 import { lastReport, onReport } from "./poller.ts";
-import { type Herdr, type Section, type Watched, openProjects, projectDirs, readProjectFile, readState } from "./state.ts";
+import { type Checked, checkQueue } from "./queues.ts";
+import * as slack from "./slack.ts";
+import { type Herdr, type Watched, openProjects, projectDirs, readProjectFile, readState } from "./state.ts";
+import { type Found, title, watchWorkspace, withFound } from "./watched.ts";
 import { checkoutDirs, summarize, worktreeDiff, worktreeDirs } from "./worktrees.ts";
 
 const here = import.meta.dirname;
@@ -59,14 +65,17 @@ for (const f of bundle.outputFiles)
 
 const clients = new Set<ServerResponse>();
 let herdr: Herdr | null = null;
-// The Panes section and its inbox items, once checked.
-let panes: [Section, Item[]] | null = null;
+// What the checks here found, by title, once they have checked, shown in
+// this order.
+const ORDER = ["Panes", "Slack", "Linear"];
+const found = new Map<string, Found>();
 let last = JSON.stringify(readState(watched(), stateDir, projectRoot));
 
-/** Returns what the watcher found: the poller's last report with the
- * panes checked here. */
+/** Returns what the watcher found: the poller's last report with what
+ * the checks here found. */
 function watched(): Watched | null {
-  return panes ? withPanes(lastReport(), ...panes) : lastReport();
+  const ours = ORDER.flatMap((t) => found.get(t) ?? []);
+  return ours.length ? withFound(lastReport(), ours) : lastReport();
 }
 
 // Herdr's socket, found again after a request can't reach it.
@@ -170,18 +179,58 @@ const PANE_INTERVAL = 300_000;
 async function watchPanes() {
   const at = new Date();
   let lines: string[];
-  let items = panes?.[1] ?? [];
+  let items = found.get("Panes")?.items ?? [];
   try {
     ({ lines, items } = await checkPanes(paneHerdr, projectRoot, join(stateDir, "panes.json"), at));
   } catch (e) {
     lines = [`Cannot check panes: ${String(e).split("\n")[0]}`];
   }
   const next = new Date(Date.now() + PANE_INTERVAL).toISOString();
-  panes = [{ title: "Panes", at: at.toISOString(), next, lines }, items];
+  found.set("Panes", { title: "Panes", section: { title: "Panes", at: at.toISOString(), next, lines }, items });
   refresh();
   setTimeout(watchPanes, PANE_INTERVAL);
 }
 if (process.env.HERDR_PROJECT_POLLER) watchPanes();
+
+// The connected claude.ai connectors; the queues start together, so one
+// listing a minute serves both.
+let listing: [number, Promise<Set<string> | null>] | null = null;
+function connected(): Promise<Set<string> | null> {
+  if (!listing || Date.now() - listing[0] > 60_000) listing = [Date.now(), connectors()];
+  return listing[1];
+}
+
+/** Shows a Herdr notification asking for the user. */
+const notify = (title: string, body: string) => ask("notification.show", { title, body, sound: "request" });
+
+/** Returns the projects of the poller's pull requests by url. */
+function prOwners(): Record<string, Owner | null> {
+  const owners = lastReport()?.owners;
+  return owners && typeof owners === "object" ? (owners as Record<string, Owner | null>) : {};
+}
+
+// Check Slack and Linear every half hour, in the background since Claude
+// takes a while, starting once the poller has reported the projects of
+// its pull requests, which they use.
+const QUEUE_INTERVAL = 1_800_000;
+const queues: [string, string, (texts: ReturnType<typeof notesTexts>) => Promise<Checked>][] = [
+  ["Slack", slack.CONNECTOR, (texts) => slack.poll(notify, texts, join(stateDir, "slack.json"), prOwners())],
+  ["Linear", linear.CONNECTOR, (texts) => linear.poll(notify, texts, join(stateDir, "linear.json"), prOwners())],
+];
+async function watchQueue(title: string, connector: string, check: (texts: ReturnType<typeof notesTexts>) => Promise<Checked>) {
+  const names = await connected();
+  const result = await checkQueue(title, connector, names, () => check(notesTexts(projectRoot)), found.get(title) ?? null,
+                                  () => new Date(), QUEUE_INTERVAL);
+  found.set(title, result);
+  refresh();
+  setTimeout(() => watchQueue(title, connector, check), QUEUE_INTERVAL);
+}
+let queuing = false;
+onReport(() => {
+  if (queuing || !process.env.HERDR_PROJECT_POLLER || !lastReport()?.owners) return;
+  queuing = true;
+  for (const q of queues) watchQueue(...q);
+});
 
 let timer: ReturnType<typeof setTimeout> | undefined;
 function changed() {
