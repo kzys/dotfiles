@@ -17,7 +17,9 @@ and Linear issues, if the user has those claude.ai connectors. It tells the user
 request, when its checks, review or state change, and the user when a
 conversation or issue waits on them. It also lists agents whose context
 is nearly full, asking each once to update its notes, and shell panes
-idle for a day.
+idle for a day. herdr-project-web takes its place once installed,
+serving a page of it, and runs herdr-project --poll [<org>...], which
+does the polling, as its child.
 
 herdr-project --start-watch starts the watcher in a new Herdr workspace
 named watch, unless a pane already has it.
@@ -91,7 +93,11 @@ def main(argv):
 
     if argv[:1] == ["--watch"]:
         pane = os.environ["HERDR_PANE_ID"] if in_pane(os.environ, ancestors()) else None
-        return watch.main(herdr, argv[1:], pane)
+        return watch.main(herdr, argv[1:], pane, [str(SELF), "--poll", *argv[1:]])
+
+    if argv[:1] == ["--poll"]:
+        pane = os.environ["HERDR_PANE_ID"] if in_pane(os.environ, ancestors()) else None
+        return watch.poll(herdr, argv[1:], pane)
 
     if argv == ["--start-watch"]:
         try:

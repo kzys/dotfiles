@@ -725,21 +725,39 @@ def test_remembers_watcher_where_zshrc_looks(tmp_path):
 
 
 def test_runs_the_web_page_only_once_installed(tmp_path):
-    assert watch.web_command(tmp_path) is None
+    assert watch.web_command(tmp_path, 'v24.8.0\n') is None
     (tmp_path / 'node_modules').mkdir()
-    command = watch.web_command(tmp_path)
-    assert command[-1] == str(tmp_path / 'server.ts')
+    assert watch.web_command(tmp_path, 'v22.5.1\n') is None
+    assert watch.web_command(tmp_path, 'junk') is None
+    command = watch.web_command(tmp_path, 'v22.6.0\n')
+    assert command[-1] == str(tmp_path / 'main.ts')
     assert f"--watch-path={tmp_path / 'restart.stamp'}" in command
     assert (tmp_path / 'restart.stamp').exists()
 
 
-def test_starts_the_web_page_with_its_output_in_a_log(tmp_path):
+def test_passes_the_poller_to_the_web_page():
+    env = watch.web_env({'HOME': '/h'}, ['herdr-project', '--poll', 'org'], '/dev/ttys001')
+    assert env == {'HOME': '/h', 'HERDR_PROJECT_POLLER': '["herdr-project", "--poll", "org"]',
+                   'HERDR_PROJECT_TTY': '/dev/ttys001'}
+    assert 'HERDR_PROJECT_TTY' not in watch.web_env({}, [], None)
+
+
+def test_becomes_the_web_page_with_its_output_in_a_log(tmp_path):
     log = tmp_path / 'state/web.log'
-    web = watch.start_web([sys.executable, '-c', 'print("on 9000")'], log)
-    assert web.wait(timeout=10) == 0
-    assert log.read_text() == 'on 9000\n'
-    assert watch.start_web(None, log) is None
-    assert watch.start_web([str(tmp_path / 'missing')], log) is None
+    script = ('import os, sys\n'
+              'from pathlib import Path\n'
+              f'sys.path.insert(0, {str(Path(__file__).parent.parent)!r})\n'
+              'from herdr_project import watch\n'
+              'try:\n'
+              f'    watch.exec_web([{str(tmp_path / "missing")!r}], [], Path({str(log)!r}), {{}})\n'
+              'except OSError:\n'
+              '    print("still here", flush=True)\n'
+              f'watch.exec_web([sys.executable, "-c", "import os; print(os.environ[\'HERDR_PROJECT_POLLER\'])"], '
+              f'["p", "--poll"], Path({str(log)!r}), {{}})\n')
+    out = subprocess.run([sys.executable, '-c', script], stdout=subprocess.PIPE, text=True,
+                         check=True).stdout
+    assert out == 'still here\n'
+    assert log.read_text() == '["p", "--poll"]\n'
 
 
 def issue(identifier, updated_at, waiting=False, links=(), state='Backlog'):

@@ -2,6 +2,7 @@
 and Linear issues together, each at its own pace, in one pane."""
 
 import fcntl
+import json
 import os
 import signal
 import subprocess
@@ -249,12 +250,24 @@ def watch_workspace(herdr, pane, env):
     return workspace if label == "watch" else None
 
 
-def web_command(web):
+def web_command(web, node_version=None):
     """Returns the command that runs herdr-project-web from directory
-    web, or None if its packages aren't installed or it can't be
-    restarted. Node restarts it whenever restart.stamp there is touched,
-    which this creates if missing, without touching one that exists."""
+    web, or None if its packages aren't installed, node_version, by
+    default node's, is older than 22.6, or it can't be restarted. Node
+    restarts it whenever restart.stamp there is touched, which this
+    creates if missing, without touching one that exists."""
     if not (web / "node_modules").is_dir():
+        return None
+    if node_version is None:
+        try:
+            node_version = subprocess.run(["node", "--version"], stdout=subprocess.PIPE,
+                                          text=True, check=True, timeout=10).stdout
+        except (OSError, subprocess.SubprocessError):
+            return None
+    try:
+        if tuple(int(n) for n in node_version.strip().lstrip("v").split(".")[:2]) < (22, 6):
+            return None
+    except ValueError:
         return None
     stamp = web / "restart.stamp"
     try:
@@ -262,39 +275,66 @@ def web_command(web):
     except OSError:
         return None
     return ["node", f"--watch-path={stamp}", "--experimental-strip-types",
-            "--disable-warning=ExperimentalWarning", str(web / "server.ts")]
+            "--disable-warning=ExperimentalWarning", str(web / "main.ts")]
 
 
-def start_web(command, log):
-    """Starts command, if any, writing its output to the file log, and
-    returns its process, or None if it can't start. It stays in the
-    watcher's process group, so that Ctrl-C reaches it too."""
-    if not command:
-        return None
+def web_env(env, poller, tty):
+    """Returns env for herdr-project-web, which runs poller, the command
+    line that polls without serving, as its child, writing to the
+    terminal tty if not None."""
+    out = {**env, "HERDR_PROJECT_POLLER": json.dumps(poller)}
+    if tty:
+        out["HERDR_PROJECT_TTY"] = tty
+    return out
+
+
+def exec_web(command, poller, log, env):
+    """Replaces this process with command, herdr-project-web, which runs
+    poller as its child with env, writing its own output to the file
+    log, and leaving this process's terminal, if any, to poller. Raises
+    if it can't."""
+    tty = os.ttyname(1) if os.isatty(1) else None
+    log.parent.mkdir(parents=True, exist_ok=True)
+    out = os.open(log, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
+    saved = os.dup(1), os.dup(2)
+    os.dup2(out, 1)
+    os.dup2(out, 2)
     try:
-        log.parent.mkdir(parents=True, exist_ok=True)
-        with open(log, "w") as out:
-            return subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=out,
-                                    stderr=subprocess.STDOUT)
+        os.execvpe(command[0], command, web_env(env, poller, tty))
     except OSError:
-        return None
+        os.dup2(saved[0], 1)
+        os.dup2(saved[1], 2)
+        raise
+    finally:
+        for fd in (out, *saved):
+            os.close(fd)
 
 
-def main(herdr, orgs=(), pane=None):
+def main(herdr, orgs=(), pane=None, poller=None):
     """Watches the pull requests in orgs, or all without orgs, Slack
-    conversations and Linear issues of the projects under ~/project,
-    serving them with herdr-project-web while it runs. pane is the Herdr
-    pane it runs in, if any, where zshrc resumes it after Herdr restores
-    the session, unless it was interrupted."""
+    conversations and Linear issues of the projects under ~/project.
+    pane is the Herdr pane it runs in, if any, where zshrc resumes it
+    after Herdr restores the session, unless it was interrupted. Once its
+    packages are installed, herdr-project-web takes this process's place
+    and runs poller, the command line that calls poll, as its child."""
     if pane:
         try:
             remember_watcher(pane, orgs, os.environ)
         except OSError:
             pass
-    web = start_web(web_command(Path(__file__).resolve().parent.parent / "herdr-project-web"),
-                    state_dir(os.environ) / "web.log")
-    # Stop the page too when the watcher is killed or its pane closes,
-    # or it keeps the port from the next watcher's.
+    command = web_command(Path(__file__).resolve().parent.parent / "herdr-project-web")
+    if command and poller:
+        try:
+            exec_web(command, poller, state_dir(os.environ) / "web.log", os.environ)
+        except OSError:
+            pass
+    return poll(herdr, orgs, pane)
+
+
+def poll(herdr, orgs=(), pane=None):
+    """Watches as main does, without serving the page. pane is the Herdr
+    pane it runs in, if any, whose record main keeps; an interrupt
+    forgets it."""
     for sig in (signal.SIGTERM, signal.SIGHUP):
         signal.signal(sig, lambda *_: sys.exit(0))
     try:
@@ -303,7 +343,4 @@ def main(herdr, orgs=(), pane=None):
     except KeyboardInterrupt:
         if pane:
             watcher_file(pane, os.environ).unlink(missing_ok=True)
-    finally:
-        if web:
-            web.terminate()
     return 0
