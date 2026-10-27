@@ -1,12 +1,33 @@
 // The LEARNINGS.md files in ~/repos, one for each GitHub organization,
 // where finished projects leave what a later task would need.
 
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { md } from "./markdown.ts";
 
 // A heading of a LEARNINGS.md and the blocks under it, as Markdown.
 export type Topic = { heading: string; items: string[] };
 
 export type Learnings = { org: string; path: string; topics: Topic[] };
+
+/** Returns the LEARNINGS.md of each organization in reposRoot, laid out
+ * as <org>/LEARNINGS.md, in order of the organizations' names. */
+export function readLearnings(reposRoot: string): Learnings[] {
+  let orgs: string[];
+  try {
+    orgs = readdirSync(reposRoot).sort();
+  } catch {
+    return [];
+  }
+  return orgs.flatMap((org) => {
+    const path = join(reposRoot, org, "LEARNINGS.md");
+    try {
+      return [{ org, path, topics: parseLearnings(readFileSync(path, "utf8")) }];
+    } catch {
+      return [];
+    }
+  });
+}
 
 /** Returns the topics of a LEARNINGS.md, by its second-level headings.
  * Text before the first of them, such as its title, is left out. Each
