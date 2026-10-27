@@ -29,8 +29,8 @@ try {
   version = stdout.trim();
 } catch {}
 
-// Bundle the page, its styles and fonts once at start; they are small
-// enough to keep in memory.
+// Bundle the page and its styles once at start; they are small enough to
+// keep in memory.
 const outdir = join(here, "out");
 const bundle = await build({
   entryPoints: [join(here, "app.tsx")],
@@ -41,16 +41,11 @@ const bundle = await build({
   write: false,
   jsx: "automatic",
   jsxImportSource: "preact",
-  loader: { ".woff2": "file", ".woff": "file" },
-  assetNames: "fonts/[name]",
-  publicPath: "/",
   define: { VERSION: JSON.stringify(version) },
 });
 const types: Record<string, string> = {
   ".js": "text/javascript",
   ".css": "text/css",
-  ".woff2": "font/woff2",
-  ".woff": "font/woff",
 };
 const assets: Record<string, [string, string | Uint8Array]> = {
   "/": ["text/html; charset=utf-8", readFileSync(join(here, "index.html"))],

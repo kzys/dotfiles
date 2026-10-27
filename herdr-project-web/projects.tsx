@@ -9,20 +9,6 @@ import { statusState } from "./pulls.ts";
 import type { Pane, Project, State } from "./state.ts";
 import { Linked, matches } from "./ui.tsx";
 
-// The items the page has shown, by key. Those that appear after the
-// first state flash as they arrive; those that only reappear, as after
-// filtering, don't.
-const seen = new Set<string>();
-let primed = false;
-
-/** Marks the page as having shown its first state, so that items new
- * after it flash, and reports whether it already was. */
-export function prime(): boolean {
-  const was = primed;
-  primed = true;
-  return was;
-}
-
 const MARKS: Record<string, string> = {
   you: "you",
   "?": "likely",
@@ -36,14 +22,9 @@ function Mark({ mark }: { mark: string }) {
   return <span class={`mark mark-${MARKS[mark] ?? "other"}`}>{MARKS[mark] ?? mark}</span>;
 }
 
-function ItemRow({ item, id }: { item: Item; id: string }) {
-  const [fresh] = useState(() => {
-    const isNew = primed && !seen.has(id);
-    seen.add(id);
-    return isNew;
-  });
+function ItemRow({ item }: { item: Item }) {
   return (
-    <li class={fresh ? "item fresh" : "item"}>
+    <li class="item">
       <Mark mark={item.mark} />
       {item.role && <span class="role">{item.role}</span>}
       <span class="text">
@@ -125,22 +106,12 @@ function ProjectCard({ project }: { project: Project }) {
         <ul>
           {uniqueKeys(project.items.map((i) => `${project.dir}:${i.role}:${i.mark}:${i.text}`)).map(
             (id, n) => (
-              <ItemRow key={id} id={id} item={project.items[n]} />
+              <ItemRow key={id} item={project.items[n]} />
             ),
           )}
         </ul>
       )}
     </section>
-  );
-}
-
-/** Returns the monolith that stands where nothing waits. */
-function Monolith() {
-  return (
-    <div class="monolith-scene">
-      <div class="monolith" />
-      <p>Nothing waiting.</p>
-    </div>
   );
 }
 
@@ -176,12 +147,12 @@ export function ProjectsColumn({ state, query, waiting }: { state: State; query:
           </header>
           <ul>
             {uniqueKeys(unowned.map((i) => `:${i.mark}:${i.text}`)).map((id, n) => (
-              <ItemRow key={id} id={id} item={unowned[n]} />
+              <ItemRow key={id} item={unowned[n]} />
             ))}
           </ul>
         </section>
       )}
-      {!query && !unowned.length && !projects.some((p) => p.items.length) && <Monolith />}
+      {!query && !unowned.length && !projects.some((p) => p.items.length) && <p class="empty">Nothing waiting.</p>}
       {projects.map((p) => (
         <ProjectCard key={p.dir} project={p} />
       ))}
