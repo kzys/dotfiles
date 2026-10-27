@@ -30,6 +30,10 @@ rows = [
   ["branch", "git_status"],
 ]
 
+# Pop up when an agent in another tab finishes or needs input.
+[ui.toast]
+delivery = "herdr"
+
 [keys]
 # The default prefix, C-b, is backward-char.
 prefix = "ctrl+z"
