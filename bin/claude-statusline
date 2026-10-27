@@ -8,7 +8,8 @@ plus $bg when it runs as a background session, and the full working
 directory as $cwd for opening new tabs there.
 
 It also leaves the context window usage in the session's project
-directory, in claude-<session>.json, for the project picker."""
+directory under ~/project, if any, in claude-<session>.json, for the
+project picker."""
 
 import json
 import math
@@ -20,6 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from herdr_project.herdr import ancestors, herdr, in_pane
+from herdr_project.instructions import project_dir
 
 # How far from the end of the transcript to look for the last prompt.
 TRANSCRIPT_TAIL = 262144
@@ -112,12 +114,15 @@ def status(data, pct, now, clock):
     return " · ".join(parts)
 
 
-def usage(data):
+def usage(data, projects):
     """Returns the file that leaves the context window usage in the
-    project for the picker, and its contents, or None."""
+    project for the picker, and its contents, or None if the session
+    isn't in a project directory under projects."""
     session = get(data, "session_id")
     project = string(either(get(data, "workspace", "project_dir"), get(data, "cwd")))
     if not session or not project or not os.path.isdir(project):
+        return None
+    if project_dir(project, projects) is None:
         return None
     window = get(data, "context_window")
     contents = {
@@ -193,7 +198,7 @@ def main():
     if pct is None:
         return
 
-    found = usage(data)
+    found = usage(data, Path.home() / "project")
     if found:
         try:
             found[0].write_text(found[1] + "\n")

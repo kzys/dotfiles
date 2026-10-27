@@ -57,12 +57,18 @@ def test_status_leaves_out_malformed_parts():
 
 
 def test_usage(tmp_path):
-    data = {'session_id': 's', 'workspace': {'project_dir': str(tmp_path)},
+    project = tmp_path / 'project' / '20261026-a'
+    (project / 'worktree').mkdir(parents=True)
+    data = {'session_id': 's', 'workspace': {'project_dir': str(project / 'worktree')},
             'context_window': {'used_percentage': 12.7, 'context_window_size': 1000}}
-    path, contents = statusline.usage(data)
-    assert path == tmp_path / 'claude-s.json'
+    path, contents = statusline.usage(data, tmp_path / 'project')
+    assert path == project / 'worktree' / 'claude-s.json'
     assert json.loads(contents) == {'used_percentage': 12.7, 'context_window_size': 1000}
-    assert statusline.usage({'session_id': 's', 'cwd': str(tmp_path / 'gone')}) is None
+    assert statusline.usage({'session_id': 's', 'cwd': str(project / 'gone')},
+                            tmp_path / 'project') is None
+    # Outside a project, such as in a checkout, it leaves nothing.
+    assert statusline.usage({'session_id': 's', 'cwd': str(tmp_path)},
+                            tmp_path / 'project') is None
 
 
 def run(script, data, tmp_path):
@@ -92,7 +98,7 @@ def test_hook_survives_bad_input(tmp_path):
 
 def test_usage_follows_jq_alternatives(tmp_path):
     data = {'session_id': 's', 'workspace': {'project_dir': ''}, 'cwd': str(tmp_path)}
-    assert statusline.usage(data) is None
+    assert statusline.usage(data, tmp_path.parent) is None
 
 
 def test_last_prompt(tmp_path):
