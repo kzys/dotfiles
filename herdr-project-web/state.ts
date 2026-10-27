@@ -109,10 +109,9 @@ export type Herdr = {
   }[];
 };
 
-// What the watcher last reported: its sections, its inbox items by
-// source, and the projects of its pull requests by url, in the form it
-// sends them, and when, in ISO 8601.
-export type Watched = { sections: unknown; inbox: unknown; owners?: unknown; at: string };
+// What the watcher found: its sections, its inbox items by source, the
+// URLs of the open pull requests it last found, and when, in ISO 8601.
+export type Watched = { sections: unknown; inbox: unknown; urls?: string[]; at: string };
 
 export type State = {
   // The watcher's sections, or null if it hasn't reported any.
@@ -132,16 +131,6 @@ export type State = {
 function read(path: string): string | null {
   try {
     return readFileSync(path, "utf8");
-  } catch {
-    return null;
-  }
-}
-
-function readJSON(path: string): unknown {
-  const text = read(path);
-  if (text === null) return null;
-  try {
-    return JSON.parse(text);
   } catch {
     return null;
   }
@@ -172,14 +161,12 @@ export function openProjects(root: string, herdr: Herdr | null = null): [string,
   });
 }
 
-/** Returns the URLs of the pull requests in prs, what the watcher kept
- * in pull-requests.json, by their labels: owner/name#N, and name#N as
- * the watcher shows them, unless two share it. */
-export function pullRequestLinks(prs: unknown): Record<string, string> {
+/** Returns urls, those of pull requests, by their labels: owner/name#N,
+ * and name#N as the watcher shows them, unless two share it. */
+export function pullRequestLinks(urls: string[] | undefined): Record<string, string> {
   const links: Record<string, string> = {};
-  if (!prs || typeof prs !== "object") return links;
   const shared = new Set<string>();
-  for (const url of Object.keys(prs)) {
+  for (const url of urls ?? []) {
     const m = url.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)$/);
     if (!m) continue;
     links[`${m[1]}/${m[2]}#${m[3]}`] = url;
@@ -341,8 +328,8 @@ export function agentStates(herdr: Herdr | null): Record<string, string> | null 
   return agents;
 }
 
-/** Returns the state for the page from watched, what the watcher last
- * reported, its pull requests in stateDir, and the projects under projectRoot that are open or still have a
+/** Returns the state for the page from watched, what the watcher
+ * found, and the projects under projectRoot that are open or still have a
  * workspace in herdr, naming their workspaces, if known. Projects with an agent whose context is at least
  * FULL_AT percent full come first, then those with a workspace or
  * something waiting on the user, newest first within each group. The
@@ -352,7 +339,6 @@ export function agentStates(herdr: Herdr | null): Record<string, string> | null 
  * names, or else that it or its notes name. */
 export function readState(
   watched: Watched | null,
-  stateDir: string,
   projectRoot: string,
   herdr: Herdr | null = null,
   home: string = homedir(),
@@ -402,6 +388,6 @@ export function readState(
   for (const section of sections ?? [])
     if (section.title === "Panes") section.lines = panesElsewhere(section.lines, ids);
   const shown = sections?.filter((s) => s.title !== "Panes" || s.lines.length) ?? null;
-  const links = pullRequestLinks(readJSON(join(stateDir, "pull-requests.json")));
+  const links = pullRequestLinks(watched?.urls);
   return { sections: shown, watchedAt, projects, unowned, links, agents: agentStates(herdr) };
 }
