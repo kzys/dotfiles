@@ -9,7 +9,8 @@ import { projectName } from "./owners.ts";
 import type { Herdr } from "./state.ts";
 import { loadState, saveState } from "./statefile.ts";
 
-type HerdrPane = Herdr["panes"][number];
+// A pane as herdr pane list shows it.
+export type HerdrPane = Herdr["panes"][number];
 
 // How long a shell pane's text may stay the same before it counts as
 // idle, in milliseconds.

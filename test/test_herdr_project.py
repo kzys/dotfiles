@@ -6,21 +6,18 @@ import subprocess
 import sys
 import threading
 import time
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from herdr_project import claude, pull_request, watch
+from herdr_project import claude, watch
 from herdr_project.herdr import ancestors, herdr, in_pane
-from herdr_project.inbox import Owner
 from herdr_project.match import clip, columns, spans, visible
 from herdr_project.notes import front_matter, notes, report_title, reported_role
 from herdr_project.remaining import fit, follow_remaining, forget_follower, remember_follower
 from herdr_project.screen import Loading, follow
-from herdr_project.state import load_state, save_state
 
 
 def test_filters_sessions_by_project():
@@ -264,277 +261,6 @@ def test_ancestors_walks_up_from_pid():
             child.kill()
 
 
-def pr_node(number, branch, state='OPEN', checks=None, failed=(), review=None,
-            repo='org/app', head=None):
-    contexts = [{'__typename': 'CheckRun', 'name': n, 'conclusion': 'FAILURE'} for n in failed]
-    contexts.append({'__typename': 'StatusContext', 'context': 'ok', 'state': 'SUCCESS'})
-    rollup = {'state': checks, 'contexts': {'nodes': contexts}} if checks else None
-    return {'number': number, 'title': f'PR {number}',
-            'url': f'https://github.com/{repo}/pull/{number}', 'state': state,
-            'isDraft': False, 'headRefName': branch, 'reviewDecision': review,
-            'repository': {'nameWithOwner': repo},
-            'headRepository': {'nameWithOwner': head or repo},
-            'commits': {'nodes': [{'commit': {'statusCheckRollup': rollup}}]}}
-
-
-def search(*nodes):
-    return {'data': {'search': {'nodes': list(nodes)}}}
-
-
-def test_reads_pull_requests():
-    prs = pull_request.pull_requests(search(
-        pr_node(1, 'a', checks='FAILURE', failed=['test', 'lint']), pr_node(2, 'b'), {}))
-    assert [(p['number'], p['checks'], p['failed']) for p in prs] == [
-        (1, 'FAILURE', ['lint', 'test']), (2, None, [])]
-    assert prs[0]['repo'] == 'org/app'
-    assert prs[0]['branch'] == 'a'
-    assert [(r['name'], r['state']) for r in prs[0]['runs']] == [
-        ('lint', 'failed'), ('ok', 'passed'), ('test', 'failed')]
-
-
-def test_reads_how_each_check_went():
-    assert pull_request.runs([
-        {'__typename': 'CheckRun', 'name': 'build', 'conclusion': None,
-         'detailsUrl': 'https://ci/1'},
-        {'__typename': 'CheckRun', 'name': 'docs', 'conclusion': 'SKIPPED'},
-        {'__typename': 'StatusContext', 'context': 'deploy', 'state': 'PENDING',
-         'targetUrl': 'https://ci/2'},
-        {'__typename': 'CheckRun', 'name': 'e2e', 'conclusion': 'TIMED_OUT'},
-        {'__typename': 'CheckRun', 'name': 'old', 'conclusion': 'CANCELLED'},
-    ]) == [
-        {'name': 'build', 'state': 'running', 'url': 'https://ci/1'},
-        {'name': 'deploy', 'state': 'running', 'url': 'https://ci/2'},
-        {'name': 'docs', 'state': 'skipped', 'url': None},
-        {'name': 'e2e', 'state': 'failed', 'url': None},
-        {'name': 'old', 'state': 'cancelled', 'url': None}]
-
-
-def test_reads_repo_names():
-    assert pull_request.repo_name('git@github.com:org/app.git') == 'org/app'
-    assert pull_request.repo_name('https://github.com/org/app') == 'org/app'
-    assert pull_request.repo_name('https://github.com/org/app.git\n') == 'org/app'
-    assert pull_request.repo_name('ssh://git@github.com/org/app.git') == 'org/app'
-    assert pull_request.repo_name('git@gitlab.com:org/app.git') is None
-
-
-def git_checkout(path, branch, remote='git@github.com:org/app.git'):
-    path.mkdir(parents=True)
-    run = lambda *args: subprocess.run(['git', '-C', str(path), *args], check=True,
-                                       stdout=subprocess.DEVNULL)
-    run('init', '-q', '-b', branch)
-    run('remote', 'add', 'origin', remote)
-
-
-def test_finds_agents_in_checkouts_of_pull_requests(tmp_path):
-    git_checkout(tmp_path / 'repos/org/app', 'me/one')
-    (tmp_path / 'repos/org/app/sub').mkdir()
-    git_checkout(tmp_path / 'repos/org/other', 'me/one', 'git@github.com:org/other.git')
-    git_checkout(tmp_path / 'repos/me/app', 'main', 'git@github.com:me/app.git')
-    prs = pull_request.pull_requests(search(
-        pr_node(1, 'me/one'), pr_node(2, 'me/two'),
-        # From a fork's main, which the upstream's main isn't.
-        pr_node(3, 'main', head='me/app')))
-    panes = [
-        {'pane_id': 'w1:p1', 'agent': None, 'cwd': str(tmp_path / 'repos/org/app')},
-        {'pane_id': 'w1:p2', 'agent': 'claude', 'cwd': str(tmp_path / 'repos/org/other')},
-        {'pane_id': 'w1:p3', 'agent': 'claude', 'cwd': str(tmp_path / 'repos/org/app/sub')},
-        {'pane_id': 'w1:p4', 'agent': 'codex', 'cwd': str(tmp_path / 'repos/org/app')},
-        {'pane_id': 'w1:p5', 'agent': 'claude', 'cwd': str(tmp_path / 'gone')},
-        {'pane_id': 'w1:p6', 'agent': 'claude', 'cwd': str(tmp_path / 'repos/me/app')},
-    ]
-    found = pull_request.checkout_panes(panes, prs)
-    assert {url: p['pane_id'] for url, p in found.items()} == {
-        'https://github.com/org/app/pull/1': 'w1:p3',
-        'https://github.com/org/app/pull/3': 'w1:p6'}
-
-
-def test_wakes_the_agent_in_the_checkout_over_one_in_the_project(tmp_path):
-    # Only GitHub is replaced; git, the notes and the state file are real.
-    (tmp_path / 'project/20261001-a').mkdir(parents=True)
-    (tmp_path / 'project/20261001-a/AGENT-main.md').write_text('- watch app#1\n')
-    git_checkout(tmp_path / 'repos/org/app', 'me/one')
-    responses = tmp_path / 'responses'
-    responses.mkdir()
-    gh = tmp_path / 'gh'
-    gh.write_text(f'#!/bin/sh\nf=$(ls {responses} | head -1)\ncat {responses}/$f\n'
-                  f'[ $(ls {responses} | wc -l) -gt 1 ] && rm {responses}/$f\nexit 0\n')
-    gh.chmod(0o755)
-    (responses / '1').write_text(json.dumps(search(pr_node(1, 'me/one', checks='PENDING'))))
-    (responses / '2').write_text(json.dumps(search(pr_node(1, 'me/one', checks='FAILURE'))))
-    calls = []
-
-    def fake_herdr(*args):
-        calls.append(args)
-        if args[:2] == ('pane', 'list'):
-            return {'result': {'panes': [
-                {'pane_id': 'w1:p1', 'agent': 'claude', 'agent_status': 'idle',
-                 'cwd': str(tmp_path / 'project/20261001-a'), 'tokens': {}},
-                {'pane_id': 'w2:p1', 'agent': 'claude', 'agent_status': 'idle',
-                 'cwd': str(tmp_path / 'repos/org/app'), 'tokens': {}}]}}
-        return {}
-
-    state = tmp_path / 'state/pull-requests.json'
-    _, _, _, rows = pull_request.poll(fake_herdr, tmp_path / 'project', state, gh=str(gh))
-    assert [(r['project'], r['agent'], r['pane']) for r in rows] == [('20261001-a', True, 'w2:p1')]
-    pull_request.poll(fake_herdr, tmp_path / 'project', state, gh=str(gh))
-    assert [c[2] for c in calls if c[:2] == ('pane', 'run')] == ['w2:p1']
-
-
-def test_finds_projects_of_pull_requests(tmp_path):
-    git_checkout(tmp_path / '20261001-a/app', 'me/one')
-    git_checkout(tmp_path / '20261001-a/other', 'me/two', 'git@github.com:org/other.git')
-    (tmp_path / '20261002-b').mkdir()
-    (tmp_path / '20261002-b/AGENT-prs.md').write_text('- app#3 and app#40 wait for review\n')
-    (tmp_path / '20261002-b/README.md').write_text('app#3\n')
-    (tmp_path / '20261003-c').mkdir()
-    (tmp_path / '20261003-c/AGENT-main.md').write_text('https://github.com/org/app/pull/5 done\n')
-    trees = pull_request.worktrees(tmp_path)
-    texts = pull_request.notes_texts(tmp_path)
-    prs = {p['number']: p for p in pull_request.pull_requests(search(
-        pr_node(1, 'me/one'), pr_node(2, 'me/two'), pr_node(3, 'x'), pr_node(4, 'y'),
-        pr_node(5, 'z')))}
-
-    def found(n):
-        return pull_request.owner(prs[n], trees, texts)
-
-    assert found(1) == Owner(str(tmp_path / '20261001-a'), str(tmp_path / '20261001-a/app'))
-    # The checkout on me/two is of another repository.
-    assert found(2) is None
-    assert found(3) == Owner(str(tmp_path / '20261002-b'), role='prs')
-    assert found(4) is None
-    assert found(5).project == str(tmp_path / '20261003-c')
-
-
-def test_finds_agent_panes():
-    def pane(id, cwd, role=None, agent='claude'):
-        return {'pane_id': id, 'agent': agent, 'cwd': '/p/a',
-                'tokens': {'cwd': cwd, **({'role': role} if role else {})}}
-
-    panes = [pane('shell', '/p/a/app', agent=None), pane('main', '/p/a', 'main'),
-             pane('prs', '/p/a', 'prs'), pane('app', '/p/a/app/sub'), pane('b', '/p/ab')]
-    find = lambda **f: (pull_request.agent_pane(panes, Owner(**{'project': '/p/a', **f}))
-                        or {}).get('pane_id')
-    assert find(dir='/p/a/app') == 'app'
-    assert find(role='prs') == 'prs'
-    assert find(role='gone') == 'main'
-    assert find(project='/p/c') is None
-
-
-def test_reports_pull_request_changes():
-    def prs(*nodes):
-        return pull_request.pull_requests(search(*nodes))
-
-    before = prs(pr_node(1, 'a', checks='PENDING'), pr_node(2, 'b', checks='PENDING'),
-                 pr_node(3, 'c', checks='SUCCESS'), pr_node(4, 'd', checks='FAILURE'))
-    assert pull_request.events(None, before) == []
-    old = pull_request.remember(None, before)
-    after = prs(pr_node(1, 'a', checks='FAILURE', failed=['test']),
-                pr_node(2, 'b', checks='SUCCESS', review='APPROVED'),
-                pr_node(3, 'c', state='MERGED', checks='SUCCESS'),
-                pr_node(4, 'd', checks='FAILURE'),
-                pr_node(5, 'e', checks='FAILURE', failed=['lint']),
-                pr_node(6, 'f', checks='PENDING'))
-    assert [(p['number'], m, w) for p, m, w in pull_request.events(old, after)] == [
-        (1, 'checks failed: test', True), (2, 'checks passed', False),
-        (2, 'approved', False), (3, 'merged', False), (5, 'checks failed: lint', True)]
-    assert sorted(pull_request.remember(old, after)) == [
-        f'https://github.com/org/app/pull/{n}' for n in (1, 2, 4, 5, 6)]
-
-
-def test_polls_pull_requests(tmp_path):
-    # Only GitHub is replaced; git, the notes and the state file are real.
-    git_checkout(tmp_path / 'project/20261001-a/app', 'me/one')
-    (tmp_path / 'project/20261001-a/README.md').write_text('---\nname: one\n---\n')
-    responses = tmp_path / 'responses'
-    responses.mkdir()
-    gh = tmp_path / 'gh'
-    gh.write_text(f'#!/bin/sh\nf=$(ls {responses} | head -1)\ncat {responses}/$f\n'
-                  f'[ $(ls {responses} | wc -l) -gt 1 ] && rm {responses}/$f\nexit 0\n')
-    gh.chmod(0o755)
-    (responses / '1').write_text(json.dumps(search(pr_node(1, 'me/one', checks='PENDING'))))
-    (responses / '2').write_text(json.dumps(search(
-        pr_node(1, 'me/one', checks='FAILURE', failed=['test']))))
-    calls = []
-    status = ['idle']
-
-    def fake_herdr(*args):
-        calls.append(args)
-        if args[:2] == ('pane', 'list'):
-            return {'result': {'panes': [
-                {'pane_id': 'w1:p1', 'agent': 'claude', 'agent_status': status[0],
-                 'cwd': str(tmp_path / 'project/20261001-a'), 'tokens': {}}]}}
-        return {}
-
-    state = tmp_path / 'state/pull-requests.json'
-    lines, owners, items, rows = pull_request.poll(
-        fake_herdr, tmp_path / 'project', state, gh=str(gh))
-    assert items == []
-    # The agent is in the project but not the checkout, so may be busy
-    # with something else.
-    assert [(r['label'], r['project'], r['agent'], r['pane'], r['checks']) for r in rows] == [
-        ('app#1', 'one', True, None, 'PENDING')]
-    assert owners['https://github.com/org/app/pull/1'].project == str(
-        tmp_path / 'project/20261001-a')
-    assert lines == [f'… ● {"app#1":<24} {"one":<20} PR 1']
-    assert calls == [('pane', 'list')]
-    calls.clear()
-    lines, _, items, _ = pull_request.poll(fake_herdr, tmp_path / 'project', state, gh=str(gh))
-    assert items == [{'project': str(tmp_path / 'project/20261001-a'), 'role': None,
-                      'mark': 'pr', 'text': 'app#1 checks failed: test: PR 1'}]
-    assert lines[0].startswith('✗ ● app#1')
-    url = 'https://github.com/org/app/pull/1'
-    assert calls[1:] == [
-        ('notification', 'show', 'app#1 checks failed: test', '--body', 'PR 1 (20261001-a)',
-         '--sound', 'request'),
-        ('pane', 'run', 'w1:p1', pull_request.wake_message(
-            pull_request.pull_requests(search(pr_node(1, 'me/one')))[0],
-            'checks failed: test'))]
-    assert json.loads(state.read_text())[url]['checks'] == 'FAILURE'
-
-
-def test_shows_why_gh_failed(tmp_path):
-    gh = tmp_path / 'gh'
-    gh.write_text('#!/bin/sh\necho "HTTP 502: Bad Gateway" >&2\nexit 1\n')
-    gh.chmod(0o755)
-    with pytest.raises(RuntimeError, match='^HTTP 502: Bad Gateway$'):
-        pull_request.fetch(str(gh))
-
-
-def test_searches_pull_requests_in_orgs():
-    since = datetime(2026, 10, 2, tzinfo=UTC)
-    assert pull_request.search_query(since) == (
-        'is:pr author:@me archived:false updated:>=2026-10-02 sort:updated-desc')
-    assert pull_request.search_query(since, ['a', 'b']) == (
-        'is:pr author:@me archived:false org:a org:b updated:>=2026-10-02 sort:updated-desc')
-    assert pull_request.search_query(since, ['a'], only_open=True) == (
-        'is:pr author:@me archived:false is:open org:a updated:>=2026-10-02 sort:updated-desc')
-
-
-def test_reads_open_pull_requests_beyond_the_recent_ones():
-    data = search(pr_node(2, 'me/one', state='MERGED'), pr_node(1, 'me/one'))
-    data['data']['open'] = {'nodes': [pr_node(1, 'me/one'), pr_node(3, 'me/two')]}
-    assert [(pr['number'], pr['state']) for pr in pull_request.pull_requests(data)] == [
-        (1, 'OPEN'), (3, 'OPEN'), (2, 'MERGED')]
-
-
-def test_draws_watch_screen():
-    at = datetime(2026, 10, 16, 15, 4, tzinfo=UTC)
-    assert watch.screen([('PRs', at, ['a', 'b']), ('Slack', None, ['c'])]) == (
-        'PRs at 15:04\na\nb\n\nSlack\nc')
-    assert watch.screen([('PRs', at, ['a']), ('Slack', None, None)]) == 'PRs at 15:04\na'
-
-
-def test_keeps_watch_screen_for_other_viewers():
-    at = datetime(2026, 10, 16, 15, 4, tzinfo=UTC)
-    assert watch.screen_state([('PRs', at, ['a'], [{'label': 'app#1'}]), ('Slack', None, None),
-                               ('Panes', None, []), ('Failed', at, ['x'], None)],
-                              {'PRs': at + timedelta(minutes=5)}) == [
-        {'title': 'PRs', 'at': '2026-10-16T15:04:00+00:00', 'next': '2026-10-16T15:09:00+00:00',
-         'lines': ['a'], 'pullRequests': [{'label': 'app#1'}]},
-        {'title': 'Panes', 'at': None, 'next': None, 'lines': []},
-        {'title': 'Failed', 'at': '2026-10-16T15:04:00+00:00', 'next': None, 'lines': ['x']}]
-
-
 def test_starts_the_watcher_once(tmp_path):
     env = {'HOME': str(tmp_path)}
     panes = set()
@@ -602,11 +328,11 @@ def test_runs_the_web_page_only_once_installed(tmp_path):
     assert (tmp_path / 'restart.stamp').exists()
 
 
-def test_passes_the_poller_to_the_web_page():
-    env = watch.web_env({'HOME': '/h'}, ['herdr-project', '--poll', 'org'], '/dev/ttys001')
-    assert env == {'HOME': '/h', 'HERDR_PROJECT_POLLER': '["herdr-project", "--poll", "org"]',
-                   'HERDR_PROJECT_TTY': '/dev/ttys001'}
-    assert 'HERDR_PROJECT_TTY' not in watch.web_env({}, [], None)
+def test_tells_the_web_page_what_to_watch(tmp_path):
+    env = watch.web_env({'HOME': '/h'}, ['org'], '/dev/ttys001', tmp_path / 'w1:p1')
+    assert env == {'HOME': '/h', 'HERDR_PROJECT_ORGS': '["org"]', 'HERDR_PROJECT_TTY': '/dev/ttys001',
+                   'HERDR_PROJECT_WATCHER_FILE': str(tmp_path / 'w1:p1')}
+    assert watch.web_env({}, (), None, None) == {'HERDR_PROJECT_ORGS': '[]'}
 
 
 # exec_web replaces the process that calls it, so it runs in one of its own:
@@ -620,8 +346,8 @@ try:
     watch.exec_web([sys.argv[2]], [], Path(sys.argv[3]), {})
 except OSError:
     print("still here", flush=True)
-watch.exec_web([sys.executable, "-c", "import os; print(os.environ['HERDR_PROJECT_POLLER'])"],
-               ["p", "--poll"], Path(sys.argv[3]), {})
+watch.exec_web([sys.executable, "-c", "import os; print(os.environ['HERDR_PROJECT_ORGS'])"],
+               ["org"], Path(sys.argv[3]), {})
 """
 
 
@@ -632,67 +358,6 @@ def test_becomes_the_web_page_with_its_output_in_a_log(tmp_path):
                          stdout=subprocess.PIPE, text=True, check=True).stdout
     # Failing to exec leaves the output where it was.
     assert out == 'still here\n'
-    assert log.read_text() == '["p", "--poll"]\n'
-
-
-def test_reports_errored_and_unnamed_checks():
-    node = pr_node(1, 'a', checks='PENDING')
-    old = pull_request.remember(None, pull_request.pull_requests(search(node)))
-    node = pr_node(1, 'a', checks='ERROR')
-    node['commits']['nodes'][0]['commit']['statusCheckRollup']['contexts']['nodes'].append(
-        {'__typename': 'StatusContext', 'state': 'ERROR'})
-    [(_, message, wake)] = pull_request.events(old, pull_request.pull_requests(search(node)))
-    assert (message, wake) == ('checks failed: ?', True)
-
-
-def test_needs_the_pull_requests_repo_in_the_worktree():
-    pr = pull_request.pull_requests(search(pr_node(1, 'me/one', repo='Org/App')))[0]
-    def tree(repo):
-        return [{'project': '/p/a', 'dir': '/p/a/app', 'branch': 'me/one', 'repo': repo}]
-    assert pull_request.owner(pr, tree('org/app'), []).dir == '/p/a/app'
-    assert pull_request.owner(pr, tree(None), []) is None
-
-
-def test_keeps_state(tmp_path):
-    path = tmp_path / 'state/x.json'
-    assert load_state(path) is None
-    save_state(path, {'a': [1]})
-    assert load_state(path) == {'a': [1]}
-    assert [p.name for p in path.parent.iterdir()] == ['x.json']
-    path.write_text('{"a": ')
-    assert load_state(path) is None
-
-
-def test_reports_to_the_web_page():
-    assert watch.reporter({}) is None
-    read, write = os.pipe()
-    env = {'HERDR_PROJECT_REPORT_FD': str(write), 'HOME': '/h'}
-    report = watch.reporter(env)
-    # Children don't learn of the pipe.
-    assert env == {'HOME': '/h'}
-    report([{'title': 'PRs', 'at': None, 'next': None, 'lines': ['a']}], {'PRs': [{'text': '1'}]},
-           {'https://github.com/o/r/pull/1': Owner('/p/a', role='main'), 'https://x/2': None})
-    del report  # Closes the pipe's end.
-    with os.fdopen(read) as lines:
-        assert json.loads(lines.readline()) == {
-            'sections': [{'title': 'PRs', 'at': None, 'next': None, 'lines': ['a']}],
-            'inbox': {'PRs': [{'text': '1'}]},
-            'owners': {'https://github.com/o/r/pull/1': {'project': '/p/a', 'dir': None, 'role': 'main'},
-                       'https://x/2': None}}
-
-
-def test_lists_pull_requests_waiting_on_me():
-    prs = pull_request.pull_requests(search(
-        pr_node(1, 'a', checks='FAILURE', failed=['test']),
-        pr_node(2, 'b', checks='SUCCESS', review='CHANGES_REQUESTED'),
-        pr_node(3, 'c', checks='SUCCESS', review='APPROVED'),
-        pr_node(4, 'd', checks='PENDING', review='APPROVED'),
-        pr_node(5, 'e', state='MERGED', checks='FAILURE'),
-        pr_node(6, 'f', checks='SUCCESS')))
-    owners = {prs[0]['url']: Owner('/p/a', '/p/a/app')}
-    assert [(i['project'], i['text']) for i in pull_request.waiting_items(prs, owners)] == [
-        ('/p/a', 'app#1 checks failed: test: PR 1'),
-        (None, 'app#2 changes requested: PR 2'),
-        (None, 'app#3 approved, ready to merge: PR 3')]
+    assert log.read_text() == '["org"]\n'
 
 

@@ -1,14 +1,19 @@
-// Runs the watcher's polls, then serves the page. The polls keep running
-// even if the page fails, as when its code is broken or its port taken.
+// Serves the page, and as the watcher, run by herdr-project --watch,
+// checks what waits on the user. The checks keep running even if the
+// page fails, as when its port is taken.
 
-import type { Readable } from "node:stream";
-import { readReports, startPoller, stayWithPoller } from "./poller.ts";
+import { unlinkSync } from "node:fs";
 
-const poller = startPoller(process.env);
-if (poller) {
-  readReports(poller.stdio[3] as Readable);
-  stayWithPoller(poller);
+if (process.env.HERDR_PROJECT_ORGS) {
   process.on("uncaughtException", (e) => console.error("herdr-project-web:", e));
   process.on("unhandledRejection", (e) => console.error("herdr-project-web:", e));
+  // Ctrl-C stops the watcher for good: zshrc no longer resumes it in its
+  // pane, which $HERDR_PROJECT_WATCHER_FILE records.
+  process.on("SIGINT", () => {
+    try {
+      if (process.env.HERDR_PROJECT_WATCHER_FILE) unlinkSync(process.env.HERDR_PROJECT_WATCHER_FILE);
+    } catch {}
+    process.exit(0);
+  });
 }
 await import("./server.ts");

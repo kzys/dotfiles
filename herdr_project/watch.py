@@ -1,19 +1,11 @@
-"""Watching the user's pull requests in one pane, for herdr-project-web,
-which watches the rest."""
+"""Running herdr-project-web as the watcher, in a pane of its own."""
 
-import dataclasses
 import fcntl
 import json
 import os
 import signal
 import subprocess
-import sys
-import threading
-import time
-from datetime import datetime, timedelta
 from pathlib import Path
-
-from herdr_project import pull_request
 
 
 def state_dir(env):
@@ -67,92 +59,6 @@ def start(herdr, env):
         return True
 
 
-def screen(sections):
-    """Returns the text of the pane for sections, (title, time, lines,
-    ...) tuples, where time is when the lines were made or None, leaving
-    out those whose lines are None."""
-    out = []
-    for title, at, lines, *_ in sections:
-        if lines is None:
-            continue
-        stamp = f" at {at:%H:%M}" if at else ""
-        out += [f"{title}{stamp}", *lines, ""]
-    return "\n".join(out).rstrip("\n")
-
-
-def screen_state(sections, nexts=None):
-    """Returns sections, (title, time, lines) tuples, as screen shows
-    them, in the form reported to other viewers: a list of
-    dicts with the title, the time in ISO 8601 or None, when the section
-    is checked again, from nexts, those times by title, or None, and the
-    lines. A section may have a fourth item, the pull requests it lists,
-    as pull_request.listed returns them, kept as pullRequests unless
-    None."""
-    out = []
-    for title, at, lines, *rest in sections:
-        if lines is None:
-            continue
-        upcoming = (nexts or {}).get(title)
-        out.append({"title": title, "at": at.isoformat() if at else None,
-                    "next": upcoming.isoformat() if upcoming else None, "lines": lines})
-        if rest and rest[0] is not None:
-            out[-1]["pullRequests"] = rest[0]
-    return out
-
-
-def reporter(env):
-    """Returns the function that sends what the watcher shows to
-    herdr-project-web, which runs it with the pipe in
-    $HERDR_PROJECT_REPORT_FD from env, or None without one. It takes
-    the sections, as screen_state returns them, the inbox items by
-    source, and the Owner of each pull request by url, or None, and
-    writes them as one line of JSON, which waits while the page's pipe
-    is full. The variable goes from env, so that this
-    process's children don't take the pipe for theirs."""
-    fd = env.pop("HERDR_PROJECT_REPORT_FD", None)
-    if not fd:
-        return None
-    out = os.fdopen(int(fd), "w", buffering=1)
-    lock = threading.Lock()
-
-    def report(sections, items, owners):
-        owners = {url: o and dataclasses.asdict(o) for url, o in owners.items()}
-        line = json.dumps({"sections": sections, "inbox": items, "owners": owners}) + "\n"
-        with lock:
-            out.write(line)
-
-    return report
-
-
-def watch(herdr, root, state, orgs=(), interval=300, report=None):
-    """Polls the pull requests in orgs, or all without orgs, every
-    interval seconds. It prints them until interrupted, and passes them,
-    what waits on the user and their projects to report, if any, as
-    reporter's function takes them. A failure shows instead of the
-    lines, keeping the last inbox items and projects."""
-    section = ["Pull requests", None, ["Checking…"], None]
-    items, pr_owners = {}, {}
-    while True:
-        try:
-            lines, owners, new, rows = pull_request.poll(
-                herdr, root, state / "pull-requests.json", orgs=orgs)
-        except Exception as e:  # noqa: BLE001 - shown rather than ending the watcher.
-            lines, owners, new, rows = [f"Cannot check pull requests: {e!r}"], {}, None, None
-        section[1:] = [datetime.now().astimezone(), lines, rows]
-        pr_owners.update(owners)
-        if new is not None:
-            items[section[0]] = new
-        nexts = {section[0]: datetime.now().astimezone() + timedelta(seconds=interval)}
-        sys.stdout.write("\033[H\033[2J" + screen([tuple(section)]))
-        sys.stdout.flush()
-        if report:
-            try:
-                report(screen_state([tuple(section)], nexts), items, pr_owners)
-            except OSError:
-                pass  # The pane still shows them.
-        time.sleep(interval)
-
-
 def web_command(web, node_version=None):
     """Returns the command that runs herdr-project-web from directory
     web, or None if its packages aren't installed, node_version, by
@@ -181,21 +87,24 @@ def web_command(web, node_version=None):
             "--disable-warning=ExperimentalWarning", str(web / "main.ts")]
 
 
-def web_env(env, poller, tty):
-    """Returns env for herdr-project-web, which runs poller, the command
-    line that polls without serving, as its child, writing to the
-    terminal tty if not None."""
-    out = {**env, "HERDR_PROJECT_POLLER": json.dumps(poller)}
+def web_env(env, orgs, tty, watcher):
+    """Returns env for herdr-project-web as the watcher of the pull
+    requests in orgs, or all without orgs, showing them on the terminal
+    tty if not None, and forgetting the watcher's pane, whose record is
+    the file watcher if not None, when interrupted."""
+    out = {**env, "HERDR_PROJECT_ORGS": json.dumps(list(orgs))}
     if tty:
         out["HERDR_PROJECT_TTY"] = tty
+    if watcher:
+        out["HERDR_PROJECT_WATCHER_FILE"] = str(watcher)
     return out
 
 
-def exec_web(command, poller, log, env):
-    """Replaces this process with command, herdr-project-web, which runs
-    poller as its child with env, writing its own output to the file
-    log, and leaving this process's terminal, if any, to poller. Raises
-    if it can't."""
+def exec_web(command, orgs, log, env, watcher=None):
+    """Replaces this process with command, herdr-project-web, as web_env
+    describes it, with env, writing its output to the file log and
+    leaving this process's terminal, if any, to the pull requests.
+    Raises if it can't."""
     tty = os.ttyname(1) if os.isatty(1) else None
     log.parent.mkdir(parents=True, exist_ok=True)
     out = os.open(log, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
@@ -203,7 +112,7 @@ def exec_web(command, poller, log, env):
     os.dup2(out, 1)
     os.dup2(out, 2)
     try:
-        os.execvpe(command[0], command, web_env(env, poller, tty))
+        os.execvpe(command[0], command, web_env(env, orgs, tty, watcher))
     except OSError:
         os.dup2(saved[0], 1)
         os.dup2(saved[1], 2)
@@ -213,38 +122,34 @@ def exec_web(command, poller, log, env):
             os.close(fd)
 
 
-def main(herdr, orgs=(), pane=None, poller=None):
+def main(orgs=(), pane=None):
     """Watches the pull requests in orgs, or all without orgs, of the
-    projects under ~/project. pane is the Herdr pane it runs in, if any, where zshrc resumes it
-    after Herdr restores the session, unless it was interrupted. Once its
-    packages are installed, herdr-project-web takes this process's place
-    and runs poller, the command line that calls poll, as its child,
-    adding the rest it watches, such as Slack and Linear; without it,
-    only the pull requests are watched."""
+    projects under ~/project, and the rest herdr-project-web watches, by
+    becoming it. pane is the Herdr pane it runs in, if any, where zshrc
+    resumes it after Herdr restores the session, unless it was
+    interrupted. Without herdr-project-web, it says so until interrupted,
+    so that its pane stays rather than another opening."""
+    watcher = None
     if pane:
         try:
             remember_watcher(pane, orgs, os.environ)
+            watcher = watcher_file(pane, os.environ)
         except OSError:
             pass
-    command = web_command(Path(__file__).resolve().parent.parent / "herdr-project-web")
-    if command and poller:
+    web = Path(__file__).resolve().parent.parent / "herdr-project-web"
+    command = web_command(web)
+    if command:
         try:
-            exec_web(command, poller, state_dir(os.environ) / "web.log", os.environ)
-        except OSError:
-            pass
-    return poll(herdr, orgs, pane)
-
-
-def poll(herdr, orgs=(), pane=None):
-    """Watches as main does, without serving the page. pane is the Herdr
-    pane it runs in, if any, whose record main keeps; an interrupt
-    forgets it."""
-    for sig in (signal.SIGTERM, signal.SIGHUP):
-        signal.signal(sig, lambda *_: sys.exit(0))
+            exec_web(command, orgs, state_dir(os.environ) / "web.log", os.environ, watcher)
+        except OSError as e:
+            print(f"herdr-project --watch can't run herdr-project-web: {e}", flush=True)
+    else:
+        print(f"herdr-project --watch needs herdr-project-web: run npm install in {web}, "
+              "with Node 22.6 or later.", flush=True)
     try:
-        watch(herdr, Path.home() / "project", state_dir(os.environ), orgs,
-              report=reporter(os.environ))
+        while True:
+            signal.pause()
     except KeyboardInterrupt:
-        if pane:
-            watcher_file(pane, os.environ).unlink(missing_ok=True)
-    return 0
+        if watcher:
+            watcher.unlink(missing_ok=True)
+    return 1

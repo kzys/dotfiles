@@ -1,15 +1,16 @@
-// A localhost-only page showing what herdr-project --watch and the
-// agents' notes say waits on the user, updated as they report and their
-// files change.
+// A localhost-only page showing what the watcher's checks and the agents'
+// notes say waits on the user, updated as they check and their files
+// change.
 
 import { execFile } from "node:child_process";
-import { type FSWatcher, readFileSync, readdirSync, watch } from "node:fs";
+import { type FSWatcher, openSync, readFileSync, readdirSync, watch, writeSync } from "node:fs";
 import { type ServerResponse, createServer } from "node:http";
 import { homedir } from "node:os";
 import { extname, join, relative } from "node:path";
 import { promisify } from "node:util";
 import { build } from "esbuild";
 import { HerdrEvents } from "./events.ts";
+import * as github from "./github.ts";
 import { HerdrError, request } from "./herdr.ts";
 import { highlightDiff } from "./highlight.ts";
 import { frontMatter } from "./inbox.ts";
@@ -18,11 +19,10 @@ import { connectors } from "./headless.ts";
 import * as linear from "./linear.ts";
 import { type Owner, notesTexts } from "./owners.ts";
 import { type PaneHerdr, checkPanes } from "./panes.ts";
-import { lastReport, onReport } from "./poller.ts";
 import { type Checked, checkQueue } from "./queues.ts";
 import * as slack from "./slack.ts";
 import { type Herdr, type Watched, openProjects, projectDirs, readProjectFile, readState } from "./state.ts";
-import { type Found, title, watchWorkspace, withFound } from "./watched.ts";
+import { type Found, title, watchWorkspace, watchedFrom } from "./watched.ts";
 import { checkoutDirs, summarize, worktreeDiff, worktreeDirs } from "./worktrees.ts";
 
 const here = import.meta.dirname;
@@ -31,6 +31,10 @@ const stateDir = join(process.env.XDG_STATE_HOME || join(home, ".local/state"), 
 const projectRoot = join(home, "project");
 const reposRoot = join(home, "repos");
 const port = Number(process.env.PORT || 9000);
+// The GitHub organizations whose pull requests to watch, or all if none,
+// when this is the watcher's server. Only that one checks, so that
+// another doesn't tell the user and agents twice.
+const orgs: string[] | null = process.env.HERDR_PROJECT_ORGS ? JSON.parse(process.env.HERDR_PROJECT_ORGS) : null;
 
 // The commit the server runs.
 let version = "unknown";
@@ -65,17 +69,20 @@ for (const f of bundle.outputFiles)
 
 const clients = new Set<ServerResponse>();
 let herdr: Herdr | null = null;
-// What the checks here found, by title, once they have checked, shown in
-// this order.
-const ORDER = ["Panes", "Slack", "Linear"];
+// What the checks found, by title, once they have checked, shown in this
+// order.
+const ORDER = ["Pull requests", "Panes", "Slack", "Linear"];
 const found = new Map<string, Found>();
-let last = JSON.stringify(readState(watched(), stateDir, projectRoot));
+// The URLs of the open pull requests, and the projects of the pull
+// requests by url, as last found.
+let prUrls: string[] = [];
+const prOwners: Record<string, Owner | null> = {};
+let last = JSON.stringify(readState(watched(), projectRoot));
 
-/** Returns what the watcher found: the poller's last report with what
- * the checks here found. */
+/** Returns what the checks found, or null before any has. */
 function watched(): Watched | null {
   const ours = ORDER.flatMap((t) => found.get(t) ?? []);
-  return ours.length ? withFound(lastReport(), ours) : lastReport();
+  return ours.length ? watchedFrom(ours, prUrls) : null;
 }
 
 // Herdr's socket, found again after a request can't reach it.
@@ -146,7 +153,7 @@ setInterval(pollHerdr, 60_000);
 let titled = "";
 function refresh() {
   const found = watched();
-  const next = JSON.stringify(readState(found, stateDir, projectRoot, herdr));
+  const next = JSON.stringify(readState(found, projectRoot, herdr));
   // Tell Herdr how much waits on the user only as it changes.
   const workspace = watchWorkspace(process.env, herdr);
   const text = title(found?.inbox);
@@ -163,8 +170,6 @@ function refresh() {
   last = next;
   for (const res of clients) res.write(`data: ${next}\n\n`);
 }
-onReport(refresh);
-
 const paneHerdr: PaneHerdr = {
   list: async () => (await ask("pane.list")).panes,
   read: async (id) => (await ask("pane.read", { pane_id: id, source: "recent", lines: 50 })).read.text,
@@ -173,8 +178,7 @@ const paneHerdr: PaneHerdr = {
 };
 
 // Check the panes five minutes after each check ends, so that two never
-// tell an agent at once, keeping the last items when one fails. Only the
-// watcher's server checks, so that another one doesn't tell agents twice.
+// tell an agent at once, keeping the last items when one fails.
 const PANE_INTERVAL = 300_000;
 async function watchPanes() {
   const at = new Date();
@@ -190,7 +194,7 @@ async function watchPanes() {
   refresh();
   setTimeout(watchPanes, PANE_INTERVAL);
 }
-if (process.env.HERDR_PROJECT_POLLER) watchPanes();
+if (orgs) watchPanes();
 
 // The connected claude.ai connectors; the queues start together, so one
 // listing a minute serves both.
@@ -203,19 +207,13 @@ function connected(): Promise<Set<string> | null> {
 /** Shows a Herdr notification asking for the user. */
 const notify = (title: string, body: string) => ask("notification.show", { title, body, sound: "request" });
 
-/** Returns the projects of the poller's pull requests by url. */
-function prOwners(): Record<string, Owner | null> {
-  const owners = lastReport()?.owners;
-  return owners && typeof owners === "object" ? (owners as Record<string, Owner | null>) : {};
-}
-
 // Check Slack and Linear every half hour, in the background since Claude
-// takes a while, starting once the poller has reported the projects of
-// its pull requests, which they use.
+// takes a while, starting once the pull requests have been checked, whose
+// projects they use.
 const QUEUE_INTERVAL = 1_800_000;
 const queues: [string, string, (texts: ReturnType<typeof notesTexts>) => Promise<Checked>][] = [
-  ["Slack", slack.CONNECTOR, (texts) => slack.poll(notify, texts, join(stateDir, "slack.json"), prOwners())],
-  ["Linear", linear.CONNECTOR, (texts) => linear.poll(notify, texts, join(stateDir, "linear.json"), prOwners())],
+  ["Slack", slack.CONNECTOR, (texts) => slack.poll(notify, texts, join(stateDir, "slack.json"), prOwners)],
+  ["Linear", linear.CONNECTOR, (texts) => linear.poll(notify, texts, join(stateDir, "linear.json"), prOwners)],
 ];
 async function watchQueue(title: string, connector: string, check: (texts: ReturnType<typeof notesTexts>) => Promise<Checked>) {
   const names = await connected();
@@ -225,12 +223,63 @@ async function watchQueue(title: string, connector: string, check: (texts: Retur
   refresh();
   setTimeout(() => watchQueue(title, connector, check), QUEUE_INTERVAL);
 }
+
+const prHerdr: github.PollHerdr = {
+  panes: paneHerdr.list,
+  notify: (title, body, sound) => ask("notification.show", { title, body, sound }),
+  run: paneHerdr.run,
+};
+// The terminal of the watcher's pane, which shows the pull requests.
+let tty: number | null = null;
+try {
+  if (orgs && process.env.HERDR_PROJECT_TTY) tty = openSync(process.env.HERDR_PROJECT_TTY, "w");
+} catch (e) {
+  console.error("herdr-project-web:", e);
+}
+
+// Check the pull requests five minutes after each check ends, keeping the
+// last items, and the URLs the page links, when one fails.
+const PR_INTERVAL = 300_000;
 let queuing = false;
-onReport(() => {
-  if (queuing || !process.env.HERDR_PROJECT_POLLER || !lastReport()?.owners) return;
-  queuing = true;
-  for (const q of queues) watchQueue(...q);
-});
+async function watchPullRequests() {
+  try {
+    await checkPullRequests();
+  } catch (e) {
+    console.error("herdr-project-web:", e);
+  }
+  if (!queuing) {
+    queuing = true;
+    for (const q of queues) watchQueue(...q);
+  }
+  setTimeout(watchPullRequests, PR_INTERVAL);
+}
+async function checkPullRequests() {
+  const title = "Pull requests";
+  const at = new Date();
+  let lines: string[];
+  let rows: github.Row[] | undefined;
+  let items = found.get(title)?.items ?? [];
+  try {
+    let owners: Record<string, Owner | null>;
+    ({ lines, rows, items, owners, urls: prUrls } = await github.poll(
+      prHerdr, projectRoot, join(stateDir, "pull-requests.json"), orgs!));
+    Object.assign(prOwners, owners);
+  } catch (e) {
+    lines = [`Cannot check pull requests: ${String(e).split("\n")[0]}`];
+  }
+  const next = new Date(Date.now() + PR_INTERVAL).toISOString();
+  found.set(title, {
+    title,
+    section: { title, at: at.toISOString(), next, lines, ...(rows ? { pullRequests: rows } : {}) },
+    items,
+  });
+  refresh();
+  if (tty !== null)
+    try {
+      writeSync(tty, `\x1b[H\x1b[2J${github.screen(title, at, lines)}`);
+    } catch {} // The page still shows them.
+}
+if (orgs) watchPullRequests();
 
 let timer: ReturnType<typeof setTimeout> | undefined;
 function changed() {
@@ -241,12 +290,11 @@ function changed() {
   }, 100);
 }
 
-// Watch the state directory, for the pull requests the watcher keeps,
-// ~/project, and each project in it, but not their worktrees, which can
+// Watch ~/project and each project in it, but not their worktrees, which can
 // hold many files.
 const watchers = new Map<string, FSWatcher>();
 function rewatch() {
-  const wanted = new Set([stateDir, projectRoot, ...projectDirs(projectRoot)]);
+  const wanted = new Set([projectRoot, ...projectDirs(projectRoot)]);
   for (const [dir, w] of watchers)
     if (!wanted.has(dir)) {
       w.close();
@@ -260,7 +308,7 @@ function rewatch() {
   }
 }
 rewatch();
-// Catch what the watches miss, such as the state directory appearing.
+// Catch what the watches miss, such as ~/project appearing.
 setInterval(changed, 30_000);
 
 /** Returns the projects that are open or still have a workspace in

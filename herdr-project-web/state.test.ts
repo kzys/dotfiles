@@ -30,16 +30,15 @@ test("lists a project's files and reads only those", () => {
   assert.deepEqual(projectFiles(join(dir, "gone")), []);
 });
 
-test("reads the watcher's report and the projects' notes", () => {
+test("reads what the watcher found and the projects' notes", () => {
   const root = mkdtempSync(join(tmpdir(), "herdr-project-web-"));
-  const state = join(root, "state");
   const projects = join(root, "project");
   const p1 = join(projects, "20261018-a");
   const p2 = join(projects, "20261017-b");
   const p3 = join(projects, "20261019-z");
   const closed = join(projects, "20261016-c");
   const hidden = join(projects, ".trash");
-  for (const d of [state, p1, p2, p3, closed, hidden]) mkdirSync(d, { recursive: true });
+  for (const d of [p1, p2, p3, closed, hidden]) mkdirSync(d, { recursive: true });
   writeFileSync(join(closed, "README.md"), "---\nclosed: done\n---\n");
   writeFileSync(join(hidden, "AGENT-main.md"), "## Remaining\n- [you] Old\n");
   writeFileSync(join(p1, "README.md"), "---\ntitle: Do A\nname: a\n---\n");
@@ -56,10 +55,12 @@ test("reads the watcher's report and the projects' notes", () => {
               { project: null, role: null, mark: "slack", text: "dm" }],
       "Pull requests": [{ project: closed, role: null, mark: "pr", text: "c#1 failed" }],
     },
+    urls: ["https://github.com/o/r/pull/1"],
     at: "2026-10-26T12:00:00.000Z",
   };
 
-  const s = readState(watched, state, projects);
+  const s = readState(watched, projects);
+  assert.deepEqual(s.links, { "o/r#1": "https://github.com/o/r/pull/1", "r#1": "https://github.com/o/r/pull/1" });
   // Without Herdr, which panes are in projects isn't known.
   assert.deepEqual(s.sections?.[0].lines.length, 3);
   assert.equal(s.watchedAt, "2026-10-26T12:00:00.000Z");
@@ -88,7 +89,7 @@ test("reads the watcher's report and the projects' notes", () => {
       { pane_id: "w5:p1", workspace_id: "w5", cwd: closed },
     ],
   };
-  const withHerdr = readState(watched, state, projects, herdr);
+  const withHerdr = readState(watched, projects, herdr);
   assert.deepEqual(withHerdr.projects.map((p) => [p.name, p.workspaces, p.panes]), [
     ["20261019-z", ["zed"], [{ id: "w2:p1", role: "main", status: "idle", ctx: 85 },
                              { id: "w2:p2", role: null, status: "working", ctx: null }]],
@@ -106,13 +107,13 @@ test("reads the watcher's report and the projects' notes", () => {
   const sections = (...list: unknown[]): Watched => ({ ...watched, sections: list });
   assert.deepEqual(
     readState(sections({ title: "Panes", at: null, lines: [" 85% w2:p1    20261019-z"] },
-                       { title: "Slack", at: null, lines: ["Nothing to clean up."] }), state, projects, herdr).sections,
+                       { title: "Slack", at: null, lines: ["Nothing to clean up."] }), projects, herdr).sections,
     [{ title: "Slack", at: null, lines: ["Nothing to clean up."] }],
   );
-  assert.deepEqual(readState(sections({ title: "Panes", at: null, lines: ["Nothing to clean up."] }), state, projects).sections, []);
+  assert.deepEqual(readState(sections({ title: "Panes", at: null, lines: ["Nothing to clean up."] }), projects).sections, []);
   assert.deepEqual(s.unowned.map((i) => i.text), ["hi", "dm", "c#1 failed"]);
 
-  assert.deepEqual(readState(null, join(root, "none"), join(root, "none")), {
+  assert.deepEqual(readState(null, join(root, "none")), {
     sections: null, watchedAt: null, projects: [], unowned: [], links: {}, agents: null,
   });
 });
@@ -141,7 +142,7 @@ test("lists the checkouts a project works in after its worktrees", () => {
   writeFileSync(join(p1, "AGENT-main.md"), "## Remaining\n- [you] Pick one\n");
   writeFileSync(join(p2, "AGENT-main.md"), "## Remaining\n- [you] Check ~/repos/o/r1\n");
 
-  const s = readState(null, join(root, "state"), projects, null, root);
+  const s = readState(null, projects, null, root);
   assert.deepEqual(s.projects.map((p) => p.worktrees.map((w) => w.dir)), [
     [join(p1, "wt"), join(root, "repos/o/r2")],
     [join(root, "repos/o/r1")],
@@ -161,19 +162,19 @@ test("names the workspaces with panes in a project", () => {
 });
 
 test("links pull requests by their labels", () => {
-  const links = pullRequestLinks({
-    "https://github.com/kzys/dotfiles/pull/80": { state: "OPEN" },
-    "https://github.com/kzys/containerd/pull/12": { state: "OPEN" },
-    "https://github.com/containerd/containerd/pull/12": { state: "OPEN" },
-    "https://example.com/x": {},
-  });
+  const links = pullRequestLinks([
+    "https://github.com/kzys/dotfiles/pull/80",
+    "https://github.com/kzys/containerd/pull/12",
+    "https://github.com/containerd/containerd/pull/12",
+    "https://example.com/x",
+  ]);
   assert.deepEqual(links, {
     "kzys/dotfiles#80": "https://github.com/kzys/dotfiles/pull/80",
     "dotfiles#80": "https://github.com/kzys/dotfiles/pull/80",
     "kzys/containerd#12": "https://github.com/kzys/containerd/pull/12",
     "containerd/containerd#12": "https://github.com/containerd/containerd/pull/12",
   });
-  assert.deepEqual(pullRequestLinks(null), {});
+  assert.deepEqual(pullRequestLinks(undefined), {});
 
   assert.deepEqual(linkParts("✓ ● dotfiles#80     dotfiles   Add it", links), [
     ["✓ ● "], ["dotfiles#80", "https://github.com/kzys/dotfiles/pull/80"],

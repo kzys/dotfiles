@@ -14,9 +14,8 @@ its own pane to the section.
 herdr-project --watch [<org>...] lists the user's open pull requests,
 in the given GitHub organizations if any. It tells the user, and the
 agent working on each pull request, when its checks, review or state
-change. herdr-project-web takes its place once installed, serving a
-page of it, and runs herdr-project --poll [<org>...], which does the
-polling, as its child. The page also lists active Slack conversations
+change. It runs herdr-project-web, which must be installed, serving a
+page of it. The page also lists active Slack conversations
 and Linear issues, if the user has those claude.ai connectors, telling
 the user when one waits on them; agents whose context is nearly full,
 asking each once to update its notes; and shell panes idle for a day.
@@ -94,11 +93,7 @@ def main(argv):
 
     if argv[:1] == ["--watch"]:
         pane = os.environ["HERDR_PANE_ID"] if in_pane(os.environ, ancestors()) else None
-        return watch.main(herdr, argv[1:], pane, [str(SELF), "--poll", *argv[1:]])
-
-    if argv[:1] == ["--poll"]:
-        pane = os.environ["HERDR_PANE_ID"] if in_pane(os.environ, ancestors()) else None
-        return watch.poll(herdr, argv[1:], pane)
+        return watch.main(argv[1:], pane)
 
     if argv == ["--start-watch"]:
         try:
