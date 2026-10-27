@@ -19,6 +19,15 @@
   --large: 15px;
   --normal: 13px;
   --small: 11px;
+  /* Spacing, from the gap within a line to the inset of a page. */
+  --space-1: 2px;
+  --space-2: 5px;
+  --space-3: 8px;
+  --space-4: 12px;
+  --space-5: 16px;
+  --space-6: 20px;
+  --space-7: 24px;
+  --gutter: var(--space-6);
   color-scheme: light;
 }
 
@@ -38,7 +47,7 @@ body {
 a { color: inherit; text-decoration: none; }
 a:hover { color: var(--accent); }
 
-.page { max-width: 1400px; margin: 0 auto; padding: 0 20px 40px; }
+.page { max-width: 1400px; margin: 0 auto; padding: 0 var(--gutter) 40px; }
 
 /* The console strip along the top. */
 .top {
@@ -47,9 +56,9 @@ a:hover { color: var(--accent); }
   z-index: 1;
   display: flex;
   align-items: center;
-  gap: 18px;
-  margin: 0 -20px;
-  padding: 7px 20px;
+  gap: var(--space-5);
+  margin: 0 calc(-1 * var(--gutter));
+  padding: var(--space-3) var(--gutter);
   background: rgba(250, 252, 253, 0.92);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--panel-edge);
@@ -57,7 +66,7 @@ a:hover { color: var(--accent); }
 .top input {
   flex: none;
   width: min(280px, 40vw);
-  padding: 5px 14px;
+  padding: var(--space-2) var(--space-4);
   border: 1px solid var(--panel-edge);
   background: var(--well);
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
@@ -71,20 +80,21 @@ a:hover { color: var(--accent); }
 main {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 24px;
-  margin-top: 20px;
+  gap: var(--space-7);
+  margin-top: var(--space-6);
 }
 @media (max-width: 900px) {
-  .page { padding: 0 16px 32px; }
-  .top { margin: 0 -16px; padding: 7px 16px; flex-wrap: wrap; }
+  :root { --gutter: var(--space-5); }
+  .page { padding-bottom: 32px; }
+  .top { flex-wrap: wrap; }
   main { grid-template-columns: minmax(0, 1fr); }
 }
 
 h2 {
   display: flex;
   align-items: baseline;
-  gap: 10px;
-  margin: 0 0 11px;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-4);
   font-size: var(--small);
   font-weight: 500;
   letter-spacing: 0.32em;
@@ -96,7 +106,7 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
 
 /* Panels. */
 .card, .watch {
-  margin-bottom: 11px;
+  margin-bottom: var(--space-4);
   background: var(--panel);
   border: 1px solid var(--panel-edge);
   box-shadow: 0 1px 0 #fff inset, 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px -16px rgba(0, 0, 0, 0.18);
@@ -105,8 +115,8 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
 .card header {
   display: flex;
   align-items: baseline;
-  gap: 9px;
-  padding: 9px 15px;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
   border-bottom: 1px solid var(--panel-edge);
 }
 .card .name { font-weight: 600; letter-spacing: 0.02em; }
@@ -114,7 +124,7 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
 .card.quiet .name { font-weight: 400; color: var(--muted); }
 .card > header:last-child, .card > .wt-links:last-child { border-bottom: 0; }
 .workspace {
-  padding: 0 9px;
+  padding: 0 var(--space-3);
   background: var(--fg);
   color: var(--panel);
   font: 500 var(--small)/20px var(--sans);
@@ -133,7 +143,7 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
   white-space: nowrap;
 }
 .copy {
-  padding: 1px 8px;
+  padding: var(--space-1) var(--space-3);
   border: 1px solid var(--panel-edge);
   background: var(--well);
   color: var(--muted);
@@ -144,16 +154,16 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
 }
 .copy:hover { color: var(--accent); border-color: var(--accent); }
 
-.card ul { margin: 0; padding: 5px 0; list-style: none; }
+.card ul { margin: 0; padding: var(--space-2) 0; list-style: none; }
 /* A project's agent panes, with how full their context is. */
 .panes {
   display: flex;
   flex-wrap: wrap;
-  gap: 3px 16px;
-  padding: 6px 15px;
+  gap: var(--space-1) var(--space-5);
+  padding: var(--space-2) var(--space-5);
   border-bottom: 1px solid var(--panel-edge);
 }
-.pane { display: inline-flex; align-items: baseline; gap: 8px; }
+.pane { display: inline-flex; align-items: baseline; gap: var(--space-3); }
 .pane .pr-agent { color: var(--muted); font-size: var(--normal); letter-spacing: 0.02em; text-transform: none; }
 .pane .pr-agent.agent-blocked { color: var(--red); }
 .ctx { font: var(--normal) var(--mono); color: var(--muted); }
@@ -164,8 +174,8 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
 .wt-links {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
-  gap: 3px 13px;
-  padding: 6px 15px;
+  gap: var(--space-1) var(--space-4);
+  padding: var(--space-2) var(--space-5);
   border-bottom: 1px solid var(--panel-edge);
   font: var(--normal) var(--mono);
 }
@@ -174,7 +184,7 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
 .wt-subject { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--normal) var(--sans); }
 .wt-links a:hover .wt-link-name { color: var(--accent); border-color: var(--accent); }
 .wt-links a:hover .wt-subject { color: var(--fg); }
-.item { display: flex; gap: 10px; align-items: baseline; padding: 4px 15px; }
+.item { display: flex; gap: var(--space-3); align-items: baseline; padding: var(--space-2) var(--space-5); }
 .item .role {
   font-size: var(--small);
   font-weight: 500;
@@ -189,7 +199,7 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
 .mark {
   flex: none;
   min-width: 57px;
-  padding: 0 6px;
+  padding: 0 var(--space-2);
   font: 500 var(--small)/17px var(--sans);
   letter-spacing: 0.12em;
   text-align: center;
@@ -206,7 +216,7 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
   justify-content: space-between;
   align-items: baseline;
   margin: 0;
-  padding: 9px 15px;
+  padding: var(--space-3) var(--space-5);
   font-size: var(--normal);
   font-weight: 500;
   letter-spacing: 0.2em;
@@ -216,26 +226,26 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
 .watch .checked { font: 400 var(--small) var(--mono); letter-spacing: 0.08em; text-transform: none; color: var(--muted); }
 /* What still comes as terminal lines reads like a ship's readout. */
 .watch pre {
-  margin: 8px;
-  padding: 8px 12px;
+  margin: var(--space-3);
+  padding: var(--space-3) var(--space-4);
   overflow-x: auto;
   background: var(--well);
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.07);
   font: var(--normal)/1.6 var(--mono);
 }
-.watch .empty { padding: 9px 15px; }
+.watch .empty { padding: var(--space-3) var(--space-5); }
 
-.prs { margin: 0; padding: 3px 0; list-style: none; }
-.pr { display: flex; gap: 12px; padding: 9px 15px; }
+.prs { margin: 0; padding: var(--space-1) 0; list-style: none; }
+.pr { display: flex; gap: var(--space-4); padding: var(--space-3) var(--space-5); }
 .pr + .pr { border-top: 1px solid var(--panel-edge); }
 .pr-main { flex: 1; min-width: 0; }
-.pr-title { margin-right: 8px; font-weight: 500; }
+.pr-title { margin-right: var(--space-3); font-weight: 500; }
 .pr-meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 12px;
-  margin-top: 5px;
+  gap: var(--space-2) var(--space-4);
+  margin-top: var(--space-2);
   font-size: var(--normal);
   color: var(--muted);
 }
@@ -246,7 +256,7 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
   display: inline-block;
   width: 7px;
   height: 7px;
-  margin-right: 6px;
+  margin-right: var(--space-2);
   border-radius: 50%;
   background: var(--faint);
   vertical-align: 1px;
@@ -259,7 +269,7 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
 .agent-blocked { color: var(--red); font-weight: 600; }
 @media (prefers-reduced-motion: reduce) { .agent-working::before { animation: none; } }
 .pr-failed { color: var(--red); }
-.entry-note { margin: 5px 0 0; font-size: var(--normal); color: var(--muted); }
+.entry-note { margin: var(--space-2) 0 0; font-size: var(--normal); color: var(--muted); }
 .entry-done .pr-main { opacity: 0.6; }
 
 /* The state of a pull request's checks, as an indicator lamp. */
@@ -267,7 +277,7 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
   flex: none;
   width: 12px;
   height: 12px;
-  margin-top: 6px;
+  margin-top: var(--space-2);
   border-radius: 50%;
   border: 2px solid var(--faint);
 }
@@ -282,8 +292,8 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
 
 .badge {
   display: inline-block;
-  margin-right: 6px;
-  padding: 0 8px;
+  margin-right: var(--space-2);
+  padding: 0 var(--space-3);
   border: 1px solid var(--panel-edge);
   font-size: var(--small);
   font-weight: 500;
@@ -303,14 +313,14 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 12px;
-  margin-top: 8px;
+  gap: var(--space-2) var(--space-4);
+  margin-top: var(--space-3);
   font-size: var(--normal);
   color: var(--muted);
 }
 .runs-bar {
   display: flex;
-  gap: 2px;
+  gap: var(--space-1);
   width: 120px;
   height: 6px;
   overflow: hidden;
@@ -355,9 +365,9 @@ code { font-family: var(--mono); font-size: var(--normal); }
 }
 
 /* The views along the console strip. */
-.top nav { flex: none; display: flex; gap: 4px; }
+.top nav { flex: none; display: flex; gap: var(--space-2); }
 .top nav a {
-  padding: 3px 12px;
+  padding: var(--space-1) var(--space-4);
   font-size: var(--small);
   font-weight: 500;
   letter-spacing: 0.24em;
@@ -367,32 +377,32 @@ code { font-family: var(--mono); font-size: var(--normal); }
 .top nav a.here { color: var(--panel); background: var(--fg); }
 
 /* Worktrees and their diffs. */
-.diffs { margin-top: 20px; }
+.diffs { margin-top: var(--space-6); }
 .diffs h2 a:hover { color: var(--accent); }
 .diffs h2 .copy { order: 1; letter-spacing: 0.08em; }
 .stat { flex: none; font: var(--normal) var(--mono); }
 .stat-add { color: var(--ok); }
 .stat-del { color: var(--red); }
 
-.wts { margin: 0; padding: 3px 0; list-style: none; }
-.wt { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; padding: 8px 15px; }
+.wts { margin: 0; padding: var(--space-1) 0; list-style: none; }
+.wt { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2) var(--space-4); padding: var(--space-3) var(--space-5); }
 .wt + .wt { border-top: 1px solid var(--panel-edge); }
 .wt-name { font-weight: 500; border-bottom: 1px solid var(--faint); }
 .wt-name:hover { border-color: var(--accent); }
 .wt-branch { font: var(--normal) var(--mono); }
 .wt-base { color: var(--muted); }
-.wt-counts { flex: 1; display: flex; gap: 12px; font-size: var(--normal); color: var(--muted); }
+.wt-counts { flex: 1; display: flex; gap: var(--space-4); font-size: var(--normal); color: var(--muted); }
 .wt.clean .wt-name { color: var(--muted); }
 .wt-error { flex: 1; font-size: var(--normal); color: var(--red); overflow-wrap: anywhere; }
 
-.card .commits, .card .file-index { margin: 0; padding: 8px 15px; list-style: none; font-size: var(--normal); }
-.commits code { color: var(--muted); margin-right: 6px; }
+.card .commits, .card .file-index { margin: 0; padding: var(--space-3) var(--space-5); list-style: none; font-size: var(--normal); }
+.commits code { color: var(--muted); margin-right: var(--space-2); }
 .commits + .file-index { border-top: 1px solid var(--panel-edge); }
-.file-index li { display: flex; gap: 12px; align-items: baseline; }
+.file-index li { display: flex; gap: var(--space-4); align-items: baseline; }
 .file-index button {
   flex: 1;
   min-width: 0;
-  padding: 1px 0;
+  padding: var(--space-1) 0;
   border: 0;
   background: none;
   color: inherit;
@@ -402,7 +412,7 @@ code { font-family: var(--mono); font-size: var(--normal); }
   cursor: pointer;
 }
 .file-index button:hover { color: var(--accent); }
-.file-note { padding: 10px 15px; }
+.file-note { padding: var(--space-3) var(--space-5); }
 
 .file { scroll-margin-top: 80px; }
 .card .file-head { align-items: center; cursor: pointer; user-select: none; }
@@ -423,7 +433,7 @@ code { font-family: var(--mono); font-size: var(--normal); }
 
 .diff-scroll { overflow-x: auto; }
 .diff { width: 100%; border-collapse: collapse; font: var(--normal)/1.6 var(--mono); }
-.diff td { padding: 0 10px; vertical-align: top; }
+.diff td { padding: 0 var(--space-3); vertical-align: top; }
 .diff .ln {
   width: 1%;
   min-width: 40px;
@@ -432,19 +442,19 @@ code { font-family: var(--mono); font-size: var(--normal); }
   user-select: none;
 }
 .diff .code { white-space: pre; tab-size: 4; }
-.diff .hunk td { padding: 4px 10px; background: var(--well); color: var(--muted); }
+.diff .hunk td { padding: var(--space-2) var(--space-3); background: var(--well); color: var(--muted); }
 .line-add { background: rgba(47, 111, 87, 0.1); }
-.line-add .code::before { content: "+"; color: var(--ok); margin-right: 6px; }
+.line-add .code::before { content: "+"; color: var(--ok); margin-right: var(--space-2); }
 .line-del { background: rgba(200, 35, 31, 0.08); }
-.line-del .code::before { content: "−"; color: var(--red); margin-right: 6px; }
-.line-ctx .code::before { content: " "; margin-right: 6px; }
+.line-del .code::before { content: "−"; color: var(--red); margin-right: var(--space-2); }
+.line-ctx .code::before { content: " "; margin-right: var(--space-2); }
 .line-note .code { color: var(--muted); font-style: italic; }
 
 /* Diffs side by side: the old file on the left, the new on the right,
    each wrapping its long lines to keep to its half. */
-.diffs h2 .layout { order: 1; display: flex; gap: 2px; }
+.diffs h2 .layout { order: 1; display: flex; gap: var(--space-1); }
 .diffs h2 .layout button {
-  padding: 1px 8px;
+  padding: var(--space-1) var(--space-3);
   border: 1px solid var(--panel-edge);
   background: none;
   color: var(--muted);
@@ -466,15 +476,15 @@ code { font-family: var(--mono); font-size: var(--normal); }
 .learn-org {
   display: grid;
   grid-template-columns: minmax(200px, 280px) minmax(0, 1fr);
-  gap: 24px;
+  gap: var(--space-7);
   align-items: start;
 }
 .learn-index { position: sticky; top: 80px; max-height: calc(100vh - 96px); overflow-y: auto; }
-.learn-index li { display: flex; gap: 10px; align-items: baseline; padding: 0 15px; }
+.learn-index li { display: flex; gap: var(--space-3); align-items: baseline; padding: 0 var(--space-5); }
 .learn-index button {
   flex: 1;
   min-width: 0;
-  padding: 3px 0;
+  padding: var(--space-1) 0;
   border: 0;
   background: none;
   color: inherit;
@@ -484,42 +494,42 @@ code { font-family: var(--mono); font-size: var(--normal); }
 }
 .learn-index button:hover { color: var(--accent); }
 .learn-count { font: var(--small) var(--mono); color: var(--muted); }
-.learn-topics { padding: 18px 24px; }
+.learn-topics { padding: var(--space-5) var(--space-7); }
 .learn-topic { scroll-margin-top: 80px; }
-.learn-topic + .learn-topic { margin-top: 24px; }
-.learn-topic h3 { margin: 0 0 6px; font-size: var(--normal); font-weight: 600; }
-.learn-topic h3 code { padding: 0 4px; background: var(--well); }
+.learn-topic + .learn-topic { margin-top: var(--space-7); }
+.learn-topic h3 { margin: 0 0 var(--space-2); font-size: var(--normal); font-weight: 600; }
+.learn-topic h3 code { padding: 0 var(--space-2); background: var(--well); }
 
 /* Markdown, as notes and learnings render to. */
 .markdown { font-size: var(--normal); line-height: 1.55; overflow-wrap: anywhere; }
 .markdown > :first-child { margin-top: 0; }
 .markdown > :last-child { margin-bottom: 0; }
-.markdown p, .markdown blockquote, .markdown pre, .markdown table { margin: 6px 0; }
+.markdown p, .markdown blockquote, .markdown pre, .markdown table { margin: var(--space-2) 0; }
 .markdown h1, .markdown h2, .markdown h3, .markdown h4, .markdown h5, .markdown h6 {
-  margin: 14px 0 4px;
+  margin: var(--space-4) 0 var(--space-2);
   color: var(--fg);
   font: 600 var(--normal) var(--sans);
   letter-spacing: normal;
   text-transform: none;
 }
 .markdown h1, .markdown h2 { font-size: var(--large); }
-.card .markdown ul, .markdown ul { margin: 4px 0; padding: 0 0 0 20px; list-style: disc; }
-.card .markdown ol, .markdown ol { margin: 4px 0; padding: 0 0 0 24px; }
-.markdown li { margin: 2px 0; }
+.card .markdown ul, .markdown ul { margin: var(--space-2) 0; padding: 0 0 0 var(--space-6); list-style: disc; }
+.card .markdown ol, .markdown ol { margin: var(--space-2) 0; padding: 0 0 0 var(--space-7); }
+.markdown li { margin: var(--space-1) 0; }
 .markdown li > p { margin: 0; }
-.markdown code { padding: 0 4px; background: var(--well); }
-.markdown pre { padding: 8px 12px; background: var(--well); overflow-x: auto; }
+.markdown code { padding: 0 var(--space-2); background: var(--well); }
+.markdown pre { padding: var(--space-3) var(--space-4); background: var(--well); overflow-x: auto; }
 .markdown pre code { padding: 0; background: none; }
-.markdown blockquote { padding-left: 12px; border-left: 3px solid var(--panel-edge); color: var(--muted); }
+.markdown blockquote { padding-left: var(--space-4); border-left: 3px solid var(--panel-edge); color: var(--muted); }
 .markdown a, .learn-topic h3 a { border-bottom: 1px solid var(--faint); }
 .markdown a:hover, .learn-topic h3 a:hover { border-color: var(--accent); }
 .markdown table { display: block; overflow-x: auto; border-collapse: collapse; }
-.markdown th, .markdown td { padding: 2px 8px; border: 1px solid var(--panel-edge); text-align: left; }
+.markdown th, .markdown td { padding: var(--space-1) var(--space-3); border: 1px solid var(--panel-edge); text-align: left; }
 .markdown hr { border: 0; border-top: 1px solid var(--panel-edge); }
-.learn-topic .markdown + .markdown { margin-top: 4px; }
+.learn-topic .markdown + .markdown { margin-top: var(--space-2); }
 
 /* A project's file, on its own page. */
-.file-page { max-width: 52rem; padding: 18px 24px; }
+.file-page { max-width: 52rem; padding: var(--space-5) var(--space-7); }
 .file-text { margin: 0; font: var(--normal) var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
 @media (max-width: 900px) {
   .learn-org { grid-template-columns: minmax(0, 1fr); }
