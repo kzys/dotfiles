@@ -2,8 +2,9 @@
 // them.
 
 import { useMemo, useState } from "preact/hooks";
-import { WorktreeLinks } from "./diffs.tsx";
+import { diffHref } from "./diffs.tsx";
 import { FULL_AT, type Item, uniqueKeys } from "./inbox.ts";
+import { fileHref } from "./pages.ts";
 import { statusState } from "./pulls.ts";
 import type { Pane, Project, State } from "./state.ts";
 import { Linked, matches } from "./ui.tsx";
@@ -71,6 +72,28 @@ function PaneRow({ panes }: { panes: Pane[] }) {
   );
 }
 
+/** Returns links to a project's worktrees, each to its diff with the
+ * subject of its last commit, and to its files. */
+function FileLinks({ project }: { project: Project }) {
+  if (!project.worktrees.length && !project.files.length) return null;
+  return (
+    <nav class="wt-links" aria-label="Files">
+      {project.worktrees.map((w) => (
+        <a key={w.dir} href={diffHref(w.dir)}>
+          <span class="wt-link-name">{w.dir.split("/").pop()}/</span>
+          <span class="wt-subject">{w.subject}</span>
+        </a>
+      ))}
+      {project.files.map((f) => (
+        <a key={f.name} href={fileHref(project.dir, f.name)}>
+          <span class="wt-link-name">{f.name}</span>
+          <span class="wt-subject" />
+        </a>
+      ))}
+    </nav>
+  );
+}
+
 function ProjectCard({ project }: { project: Project }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
@@ -97,7 +120,7 @@ function ProjectCard({ project }: { project: Project }) {
         </button>
       </header>
       <PaneRow panes={project.panes} />
-      <WorktreeLinks worktrees={project.worktrees} />
+      <FileLinks project={project} />
       {project.items.length > 0 && (
         <ul>
           {uniqueKeys(project.items.map((i) => `${project.dir}:${i.role}:${i.mark}:${i.text}`)).map(
@@ -133,7 +156,7 @@ export function ProjectsColumn({ state, query, waiting }: { state: State; query:
     () =>
       state.projects.flatMap((p) => {
         const wts = p.worktrees.flatMap((w) => [w.dir.split("/").pop()!, w.subject]);
-        const names = [p.name, p.title, ...p.workspaces, ...wts];
+        const names = [p.name, p.title, ...p.workspaces, ...wts, ...p.files.map((f) => f.name)];
         if (matches(query, ...names)) return [p];
         const items = p.items.filter((i) => matches(query, i.text, i.role));
         return items.length ? [{ ...p, items }] : [];

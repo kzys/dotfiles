@@ -3,7 +3,6 @@
 import { createContext } from "preact";
 import { useContext, useEffect, useRef, useState } from "preact/hooks";
 import { linkParts } from "./inbox.ts";
-import { codeParts } from "./learnings.ts";
 
 // The URLs of the open pull requests by their labels, like name#N.
 export const Links = createContext<Record<string, string>>({});
@@ -22,16 +21,6 @@ export function Linked({ text }: { text: string }) {
           p
         ),
       )}
-    </>
-  );
-}
-
-/** Returns text with its code spans as code and, if links, the rest
- * Linked. */
-export function Inline({ text, links = true }: { text: string; links?: boolean }) {
-  return (
-    <>
-      {codeParts(text).map(([p, code]) => (code ? <code>{p}</code> : links ? <Linked text={p} /> : p))}
     </>
   );
 }

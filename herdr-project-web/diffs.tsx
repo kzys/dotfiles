@@ -3,7 +3,6 @@
 import { useState } from "preact/hooks";
 import { type DiffLine, type FileDiff, filePath, splitRows } from "./diff.ts";
 import type { HighlightedDiff } from "./highlight.ts";
-import type { Worktree } from "./state.ts";
 import { Refresh, matches, useFetched } from "./ui.tsx";
 import type { Summary } from "./worktrees.ts";
 
@@ -37,22 +36,6 @@ type ProjectWorktrees = { dir: string; name: string; title: string; worktrees: S
 export const diffHref = (dir: string) => `#diffs/${encodeURIComponent(dir)}`;
 
 const base = (dir: string) => dir.split("/").pop() ?? dir;
-
-/** Returns links to the diffs of worktrees, by name, each with the
- * subject of its last commit. */
-export function WorktreeLinks({ worktrees }: { worktrees: Worktree[] }) {
-  if (!worktrees.length) return null;
-  return (
-    <nav class="wt-links" aria-label="Diffs">
-      {worktrees.map((w) => (
-        <a key={w.dir} href={diffHref(w.dir)}>
-          <span class="wt-link-name">{base(w.dir)}</span>
-          <span class="wt-subject">{w.subject}</span>
-        </a>
-      ))}
-    </nav>
-  );
-}
 
 function Stat({ added, removed }: { added: number; removed: number }) {
   return (

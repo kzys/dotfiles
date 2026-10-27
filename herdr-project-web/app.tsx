@@ -5,6 +5,7 @@ import { render } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { blobPath, blobPoints } from "./blob.ts";
 import { WorktreeDiffView, WorktreeList } from "./diffs.tsx";
+import { FileView } from "./files.tsx";
 import { halMessage } from "./hal.ts";
 import { LearningsView } from "./learnings.tsx";
 import { pageTitle, route, tab } from "./pages.ts";
@@ -193,6 +194,12 @@ function App() {
           <LearningsView query={q} />
         ) : at.view === "diff" ? (
           <WorktreeDiffView dir={at.dir} query={q} />
+        ) : at.view === "file" ? (
+          <FileView
+            dir={at.dir}
+            name={at.name}
+            at={state?.projects.find((p) => p.dir === at.dir)?.files.find((f) => f.name === at.name)?.at ?? null}
+          />
         ) : !state ? (
           <p class="empty">Loading…</p>
         ) : (

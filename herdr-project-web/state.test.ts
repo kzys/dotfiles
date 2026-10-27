@@ -1,10 +1,34 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { linkParts } from "./inbox.ts";
-import { type Herdr, namedCheckouts, pullRequestLinks, readState, workspaceLabels } from "./state.ts";
+import {
+  type Herdr, namedCheckouts, projectFiles, pullRequestLinks, readProjectFile, readState, workspaceLabels,
+} from "./state.ts";
+
+test("lists a project's files and reads only those", () => {
+  const dir = mkdtempSync(join(tmpdir(), "herdr-project-web-"));
+  for (const n of ["notes.txt", "AGENT-z.md", "README.md", "AGENT-a.md", ".hidden", "bin", "claude-1.json", "codex-2.json"])
+    writeFileSync(join(dir, n), n);
+  writeFileSync(join(dir, "bin"), Buffer.from([1, 0, 2]));
+  writeFileSync(join(dir, "big.log"), "x".repeat((1 << 20) + 1));
+  mkdirSync(join(dir, "worktree"));
+  symlinkSync(join(dir, "notes.txt"), join(dir, "link"));
+  writeFileSync(join(dir, "locked"), "x", { mode: 0o000 });
+  assert.deepEqual(projectFiles(dir).map((f) => f.name), [
+    "README.md", "AGENT-a.md", "AGENT-z.md", "big.log", "bin", "locked", "notes.txt",
+  ]);
+  // Root reads any file.
+  if (process.getuid?.() !== 0) assert.deepEqual(readProjectFile(dir, "locked"), { error: "It can't be read." });
+  assert.deepEqual(readProjectFile(dir, "notes.txt"), { text: "notes.txt" });
+  assert.deepEqual(readProjectFile(dir, "bin"), { error: "It isn't text." });
+  assert.deepEqual(readProjectFile(dir, "big.log"), { error: "It is too large to show." });
+  for (const name of [".hidden", "claude-1.json", "link", "worktree", "../README.md", "", "gone"])
+    assert.equal(readProjectFile(dir, name), null, name);
+  assert.deepEqual(projectFiles(join(dir, "gone")), []);
+});
 
 test("reads the watcher's files and the projects' notes", () => {
   const root = mkdtempSync(join(tmpdir(), "herdr-project-web-"));
