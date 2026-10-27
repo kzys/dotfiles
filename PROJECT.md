@@ -84,7 +84,9 @@ short name for its part, such as `main` or `reviewer`, in this shape:
   how a system behaves, a constraint or a decision. Fix or drop those
   that turn out wrong.
 - `## Log`: what you have done, each entry starting with the date, time
-  and zone.
+  and zone. It ends the file and only grows, so append entries with
+  `>>` instead of editing it, and read the file only up to `## Log`
+  when updating the other sections.
 
 Write only to your own file. When resuming another agent's work, keep
 using its file, but only if that agent has stopped: if another agent
