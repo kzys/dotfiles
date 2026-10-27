@@ -1,7 +1,7 @@
 // Reading what the watcher and the agents' notes say into one state
 // for the page.
 
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, readSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { FULL_AT, type Item, frontMatter, projectItems, watchedItems } from "./inbox.ts";
@@ -89,6 +89,8 @@ export type Project = {
   // The agent panes in Herdr working in dir.
   panes: Pane[];
   items: Item[];
+  // The files directly in dir, as projectFiles lists them.
+  files: ProjectFile[];
 };
 
 // What herdr workspace list and herdr pane list say, in part.
@@ -181,6 +183,70 @@ export function pullRequestLinks(prs: unknown): Record<string, string> {
   }
   for (const label of shared) delete links[label];
   return links;
+}
+
+// A file of a project and when it last changed, in milliseconds since
+// the epoch.
+export type ProjectFile = { name: string; at: number };
+
+// The most of a file the page shows.
+const MAX_FILE = 1 << 20;
+
+// Files the agents' status lines leave for the picker, not for people.
+const USAGE = /^(claude|codex)-.*\.json$/;
+
+/** Returns the regular files directly in the project in directory,
+ * hidden ones and USAGE files left out: its README.md, then its agents'
+ * AGENT-<role>.md, then the others by name. Symbolic links are left
+ * out too, since they can point outside the project. */
+export function projectFiles(directory: string): ProjectFile[] {
+  let names: string[];
+  try {
+    names = readdirSync(directory).filter((n) => !n.startsWith(".") && !USAGE.test(n));
+  } catch {
+    return [];
+  }
+  const order = (n: string) => (n === "README.md" ? 0 : n.startsWith("AGENT-") && n.endsWith(".md") ? 1 : 2);
+  return names
+    .sort((a, b) => order(a) - order(b) || (a < b ? -1 : a > b ? 1 : 0))
+    .flatMap((name) => {
+      try {
+        const st = lstatSync(join(directory, name));
+        return st.isFile() ? [{ name, at: st.mtimeMs }] : [];
+      } catch {
+        return [];
+      }
+    });
+}
+
+/** Returns the text of the file called name in directory if
+ * projectFiles lists it, or else null; or why it isn't shown, if it is
+ * larger than the page shows, not text or can't be read. It reads what
+ * it opened, so the file can't turn into a link, a pipe or a larger
+ * file meanwhile. */
+export function readProjectFile(directory: string, name: string): { text: string } | { error: string } | null {
+  if (!projectFiles(directory).some((f) => f.name === name)) return null;
+  let fd: number;
+  try {
+    fd = openSync(join(directory, name), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === "EACCES" ? { error: "It can't be read." } : null;
+  }
+  try {
+    if (!fstatSync(fd).isFile()) return null;
+    // One byte more than shown tells a file that is too large.
+    const buf = Buffer.alloc(MAX_FILE + 1);
+    let n = 0;
+    for (let got; n < buf.length && (got = readSync(fd, buf, n, buf.length - n, null)) > 0; ) n += got;
+    if (n > MAX_FILE) return { error: "It is too large to show." };
+    const bytes = buf.subarray(0, n);
+    if (bytes.subarray(0, 8192).includes(0)) return { error: "It isn't text." };
+    return { text: bytes.toString("utf8") };
+  } catch {
+    return { error: "It can't be read." };
+  } finally {
+    closeSync(fd);
+  }
 }
 
 /** Returns the agents' notes in directory as [role, text] pairs. */
@@ -320,6 +386,7 @@ export function readState(
         subject: lastSubject(d),
       })),
       items,
+      files: projectFiles(dir),
     });
   }
   const rank = (p: Project) =>

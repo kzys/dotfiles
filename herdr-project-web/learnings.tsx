@@ -1,7 +1,8 @@
 // The page's view of the LEARNINGS.md files in ~/repos.
 
 import type { Learnings, Topic } from "./learnings.ts";
-import { Inline, Refresh, matches, useFetched } from "./ui.tsx";
+import { plainInline, renderInline, renderMarkdown } from "./markdown.ts";
+import { Refresh, matches, useFetched } from "./ui.tsx";
 
 /** Returns the topics of l matching query: all of a topic whose heading
  * matches, or else those of its items that do. */
@@ -50,7 +51,7 @@ export function LearningsView({ query }: { query: string }) {
                         document.getElementById(topicId(l.org, i))?.scrollIntoView({ behavior: "smooth" })
                       }
                     >
-                      <Inline text={t.heading} links={false} />
+                      {plainInline(t.heading)}
                     </button>
                     <span class="learn-count">{t.items.length}</span>
                   </li>
@@ -60,16 +61,10 @@ export function LearningsView({ query }: { query: string }) {
             <div class="card learn-topics">
               {l.topics.map((t, i) => (
                 <section key={i} class="learn-topic" id={topicId(l.org, i)}>
-                  <h3>
-                    <Inline text={t.heading} />
-                  </h3>
-                  <ul>
-                    {t.items.map((item, j) => (
-                      <li key={j}>
-                        <Inline text={item} />
-                      </li>
-                    ))}
-                  </ul>
+                  <h3 dangerouslySetInnerHTML={{ __html: renderInline(t.heading) }} />
+                  {t.items.map((item, j) => (
+                    <div key={j} class="markdown" dangerouslySetInnerHTML={{ __html: renderMarkdown(item) }} />
+                  ))}
                 </section>
               ))}
             </div>

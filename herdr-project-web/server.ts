@@ -12,7 +12,7 @@ import { HerdrEvents } from "./events.ts";
 import { highlightDiff } from "./highlight.ts";
 import { frontMatter } from "./inbox.ts";
 import { type Learnings, parseLearnings } from "./learnings.ts";
-import { type Herdr, openProjects, projectDirs, readState } from "./state.ts";
+import { type Herdr, openProjects, projectDirs, readProjectFile, readState } from "./state.ts";
 import { checkoutDirs, summarize, worktreeDiff, worktreeDirs } from "./worktrees.ts";
 
 const here = import.meta.dirname;
@@ -216,6 +216,14 @@ const server = createServer((req, res) => {
         .then(highlightDiff)
         .then((diff) => json(res, 200, diff))
         .catch((e) => json(res, 500, { error: e.message }));
+  } else if (path === "/api/file") {
+    // Only the files of the projects the page lists, not any file asked for.
+    const dir = url.searchParams.get("dir");
+    const file = openProjects(projectRoot, herdr).some(([d]) => d === dir)
+      ? readProjectFile(dir!, url.searchParams.get("name") ?? "")
+      : null;
+    if (file === null) json(res, 404, { error: "no such file" });
+    else json(res, 200, file);
   } else if (path === "/api/learnings") {
     // They are small and change rarely, so they are read each time.
     json(res, 200, readLearnings());

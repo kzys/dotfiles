@@ -561,11 +561,39 @@ code { font-family: var(--mono); font-size: var(--normal); }
 .learn-topic { scroll-margin-top: 80px; }
 .learn-topic + .learn-topic { margin-top: 24px; }
 .learn-topic h3 { margin: 0 0 6px; font-size: var(--normal); font-weight: 600; }
-.learn-topic ul { margin: 0; padding: 0 0 0 20px; list-style: disc; }
-.learn-topic li { margin: 4px 0; line-height: 1.55; overflow-wrap: anywhere; }
-.learn-topic code { padding: 0 4px; background: var(--well); }
-.learn-topic a { border-bottom: 1px solid var(--faint); }
-.learn-topic a:hover { border-color: var(--accent); }
+.learn-topic h3 code { padding: 0 4px; background: var(--well); }
+
+/* Markdown, as notes and learnings render to. */
+.markdown { font-size: var(--normal); line-height: 1.55; overflow-wrap: anywhere; }
+.markdown > :first-child { margin-top: 0; }
+.markdown > :last-child { margin-bottom: 0; }
+.markdown p, .markdown blockquote, .markdown pre, .markdown table { margin: 6px 0; }
+.markdown h1, .markdown h2, .markdown h3, .markdown h4, .markdown h5, .markdown h6 {
+  margin: 14px 0 4px;
+  color: var(--fg);
+  font: 600 var(--normal) var(--sans);
+  letter-spacing: normal;
+  text-transform: none;
+}
+.markdown h1, .markdown h2 { font-size: var(--large); }
+.card .markdown ul, .markdown ul { margin: 4px 0; padding: 0 0 0 20px; list-style: disc; }
+.card .markdown ol, .markdown ol { margin: 4px 0; padding: 0 0 0 24px; }
+.markdown li { margin: 2px 0; }
+.markdown li > p { margin: 0; }
+.markdown code { padding: 0 4px; background: var(--well); }
+.markdown pre { padding: 8px 12px; background: var(--well); overflow-x: auto; }
+.markdown pre code { padding: 0; background: none; }
+.markdown blockquote { padding-left: 12px; border-left: 3px solid var(--panel-edge); color: var(--muted); }
+.markdown a, .learn-topic h3 a { border-bottom: 1px solid var(--faint); }
+.markdown a:hover, .learn-topic h3 a:hover { border-color: var(--accent); }
+.markdown table { display: block; overflow-x: auto; border-collapse: collapse; }
+.markdown th, .markdown td { padding: 2px 8px; border: 1px solid var(--panel-edge); text-align: left; }
+.markdown hr { border: 0; border-top: 1px solid var(--panel-edge); }
+.learn-topic .markdown + .markdown { margin-top: 4px; }
+
+/* A project's file, on its own page. */
+.file-page { max-width: 52rem; padding: 18px 24px; }
+.file-text { margin: 0; font: var(--normal) var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
 @media (max-width: 900px) {
   .learn-org { grid-template-columns: minmax(0, 1fr); }
   .learn-index { position: static; max-height: none; }
