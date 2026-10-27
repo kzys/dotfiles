@@ -75,6 +75,26 @@ def remember_follower(pane, agent_pane, env):
     path.write_text(agent_pane)
 
 
+def forget_follower(pane, agent_pane, herdr, env):
+    """Removes the record that Herdr pane pane follows agent_pane if
+    Herdr says agent_pane is gone, but not if Herdr itself is, since it
+    restores both panes when it starts again. Herdr stops answering
+    before its panes go when it quits. herdr runs a herdr
+    command and raises CalledProcessError, with its stderr, if it
+    fails."""
+    try:
+        herdr("pane", "get", agent_pane)
+    except subprocess.CalledProcessError as e:
+        try:
+            gone = json.loads(e.stderr or "")["error"]["code"] == "pane_not_found"
+        except (ValueError, KeyError, TypeError):
+            gone = False
+        if gone:
+            follower_file(pane, env).unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
 class PaneWatch:
     """Learns from Herdr's socket when a pane closes or its process
     exits, without polling. Without the socket it can only sleep, and
