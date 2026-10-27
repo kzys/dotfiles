@@ -837,35 +837,6 @@ def test_needs_the_pull_requests_repo_in_the_worktree():
     assert pull_request.owner(pr, tree(None), []) is None
 
 
-def test_finds_what_waits_on_me_in_notes(tmp_path):
-    (tmp_path / 'AGENT-main.md').write_text(
-        '## Remaining\n'
-        '- [you] Decide on the rollout\n'
-        '  for the canary first.\n'
-        '- [wait] CI on #12\n'
-        '- Ask the user before pushing\n'
-        '- Write the tests\n'
-        '- Optional: post findings to the thread if the user asks\n'
-        '- Base image commit reviewed, not pushed\n'
-        '- Reported findings to the user\n'
-        '- Nothing; answered the user.\n'
-        '- None unless user wants a fix PR\n'
-        '- [cleanup] Remove the worktree\n'
-        '- None.\n'
-        '\n'
-        '## Log\n'
-        '- [you] old\n')
-    (tmp_path / 'AGENT-side.md').write_text('## Remaining\n- [You] Approve the plan\n')
-    (tmp_path / 'README.md').write_text('## Remaining\n- [you] not an agent\n')
-    assert inbox.note_items(tmp_path) == [
-        {'role': 'main', 'mark': 'you', 'text': 'Decide on the rollout for the canary first.'},
-        {'role': 'side', 'mark': 'you', 'text': 'Approve the plan'},
-        {'role': 'main', 'mark': '?', 'text': 'Ask the user before pushing'},
-        {'role': 'main', 'mark': '?', 'text': 'Base image commit reviewed, not pushed'},
-        {'role': 'main', 'mark': 'maybe',
-         'text': 'Optional: post findings to the thread if the user asks'}]
-
-
 def test_keeps_state(tmp_path):
     path = tmp_path / 'state/x.json'
     assert load_state(path) is None
@@ -878,19 +849,14 @@ def test_keeps_state(tmp_path):
 
 def test_keeps_watched_items(tmp_path):
     path = tmp_path / 'inbox.json'
-    assert inbox.watched_items(path) == []
+    assert inbox.read_sources(path) == {}
     one = {'project': '/p/a', 'role': None, 'mark': 'pr', 'text': '1'}
     two = {'project': None, 'role': None, 'mark': 'slack', 'text': '2'}
     inbox.write_sources(path, {'a': [one], 'b': [two]})
     assert inbox.read_sources(path) == {'a': [one], 'b': [two]}
-    assert inbox.watched_items(path) == [one, two]
     assert [p.name for p in tmp_path.iterdir()] == ['inbox.json']
     path.write_text('[]')
     assert inbox.read_sources(path) == {}
-    path.write_text(json.dumps({'a': [{'text': 't', 'mark': 'new', 'project': None, 'role': None},
-                                      'junk', {'text': 1}], 'b': 'junk'}))
-    assert inbox.watched_items(path) == [
-        {'text': 't', 'mark': 'new', 'project': None, 'role': None}]
 
 
 def test_lists_pull_requests_waiting_on_me():
@@ -906,39 +872,6 @@ def test_lists_pull_requests_waiting_on_me():
         ('/p/a', 'app#1 checks failed: test: PR 1'),
         (None, 'app#2 changes requested: PR 2'),
         (None, 'app#3 approved, ready to merge: PR 3')]
-
-
-def test_guesses_what_waits_on_me():
-    assert [inbox.waiting(i) for i in [
-        'Apply the change to staging (user)', 'Cleanup left (ask): branches',
-        'Agree on the design with the user', 'Rollout not decided yet', 'Branch is local only',
-        'Offer: file a ticket', 'Post outcome in the thread if user wants',
-        'Rerun 4 timed-out clusters', 'Unverified: GPU containers work',
-        '[ ] Decide on the rollout', '[x] Decide on the rollout', 'Is the user okay to push?',
-        'Offers to file a ticket', 'Wrote notes for the user', 'Shared summary with the user',
-        'PR approved, waiting on CI', 'Decision: went with B', 'Needs approval from the owner',
-        'Confirm the plan with the user']] == [
-        '?', '?', '?', '?', '?', 'maybe', 'maybe', None, None,
-        '?', None, '?', 'maybe', None, None, None, None, '?', '?']
-
-
-def test_closes_roles_and_then_the_project(tmp_path):
-    (tmp_path / 'AGENT-a.md').write_text(
-        'closed: https://x/pull/1\n\n## Remaining\n- [you] Stale\n\n## Findings\n- etcd needs 3\n')
-    (tmp_path / 'AGENT-b.md').write_text('## Remaining\n- None.\n')
-    (tmp_path / 'AGENT-c.md').write_text('## Remaining\n- [you] Decide X\n\n## Log\n- closed: no\n')
-    assert [(i['role'], i['mark'], i['text']) for i in inbox.project_items(tmp_path)] == [
-        ('c', 'you', 'Decide X'),
-        ('b', 'close', 'Nothing remaining for b; tell its agent its part is done to close it')]
-    # The watcher's items hold the suggestions back.
-    watched = [{'project': str(tmp_path), 'role': None, 'mark': 'pr', 'text': 'app#1 failed'}]
-    assert [i['mark'] for i in inbox.project_items(tmp_path, watched)] == ['you', 'pr']
-
-    (tmp_path / 'AGENT-c.md').write_text('closed: decided X\n\n## Remaining\n')
-    assert [i['text'] for i in inbox.project_items(tmp_path)] == [
-        'Nothing remaining; tell its agent the task is done to close it']
-    (tmp_path / 'AGENT-b.md').write_text('closed:\n\n## Remaining\n- None.\n')
-    assert not inbox.role_closed((tmp_path / 'AGENT-b.md').read_text())
 
 
 def test_groups_slack_conversations_without_a_project_by_channel(tmp_path):

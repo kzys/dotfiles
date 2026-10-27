@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { projectItems, uniqueKeys, waiting, watchedItems } from "./inbox.ts";
 
-test("guesses what waits on me as inbox.py does", () => {
+test("guesses what waits on me", () => {
   assert.deepEqual(
     [
       "Apply the change to staging (user)", "Cleanup left (ask): branches",
@@ -16,6 +16,34 @@ test("guesses what waits on me as inbox.py does", () => {
     ].map(waiting), [
     "?", "?", "?", "?", "?", "maybe", "maybe", null, null,
     "?", null, "?", "maybe", null, null, null, null, "?", "?", "you",
+  ]);
+});
+
+test("finds what waits on me in notes", () => {
+  const main =
+    "## Remaining\n" +
+    "- [you] Decide on the rollout\n" +
+    "  for the canary first.\n" +
+    "- [wait] CI on #12\n" +
+    "- Ask the user before pushing\n" +
+    "- Write the tests\n" +
+    "- Optional: post findings to the thread if the user asks\n" +
+    "- Base image commit reviewed, not pushed\n" +
+    "- Reported findings to the user\n" +
+    "- Nothing; answered the user.\n" +
+    "- None unless user wants a fix PR\n" +
+    "- [cleanup] Remove the worktree\n" +
+    "- None.\n" +
+    "\n" +
+    "## Log\n" +
+    "- [you] old\n";
+  const side = "## Remaining\n- [You] Approve the plan\n";
+  assert.deepEqual(projectItems("/p", null, [["main", main], ["side", side]]), [
+    { project: "/p", role: "main", mark: "you", text: "Decide on the rollout for the canary first." },
+    { project: "/p", role: "side", mark: "you", text: "Approve the plan" },
+    { project: "/p", role: "main", mark: "?", text: "Ask the user before pushing" },
+    { project: "/p", role: "main", mark: "?", text: "Base image commit reviewed, not pushed" },
+    { project: "/p", role: "main", mark: "maybe", text: "Optional: post findings to the thread if the user asks" },
   ]);
 });
 

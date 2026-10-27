@@ -1,8 +1,10 @@
+import http.server
 import importlib.machinery
 import importlib.util
 import json
 import sqlite3
 import sys
+import threading
 from contextlib import closing
 from pathlib import Path
 
@@ -131,34 +133,30 @@ class TestAgent:
 
     def test_picker_lists_inbox(self):
         picker = load('herdr_picker_inbox', ROOT / 'bin/herdr-project-picker')
-        old, new, idle = self.home / '20261001-a', self.home / '20261002-b', self.home / '20261003-c'
-        done, closed = self.home / '20261004-d', self.home / '20261005-e'
-        for d in (old, new, idle, done, closed):
-            d.mkdir()
-        (done / 'AGENT-main.md').write_text('## Remaining\n- None.\n\n## Log\n- did it\n')
-        (closed / 'README.md').write_text('---\ntitle: Closed\nclosed: https://x/1\n---\n')
-        (closed / 'AGENT-main.md').write_text('## Remaining\n- [you] Decide Y\n')
-        fresh, failing = self.home / '20261006-f', self.home / '20261007-g'
-        for d in (fresh, failing):
-            d.mkdir()
-        (fresh / 'AGENT-main.md').write_text('## Remaining\n\n## Log\n')
-        (failing / 'AGENT-main.md').write_text('## Remaining\n- None.\n')
-        (old / 'README.md').write_text('---\ntitle: Old work\n---\n')
-        (old / 'AGENT-main.md').write_text('## Remaining\n- Offer: a follow-up\n- [you] Decide X\n')
-        (idle / 'AGENT-main.md').write_text('## Remaining\n- Write tests\n')
-        codex = [{'id': 's2', 'cwd': str(new)}, {'id': 's1', 'cwd': str(old)}]
-        panes = [{'agent': 'codex', 'workspace': 'w', 'cwd': str(new), 'pane': 'p',
+        old, new, quiet, done = (str(self.home / d) for d in
+                                 ('20261001-a', '20261002-b', '20261003-c', '20261004-d'))
+
+        def project(d, title, *items):
+            return {'dir': d, 'title': title,
+                    'items': [{'project': d, 'role': r, 'mark': m, 'text': x}
+                              for r, m, x in items]}
+        # herdr-project-web lists projects by its own rank.
+        state = {
+            'projects': [
+                project(old, 'Old work', ('main', 'you', 'Decide X'),
+                        ('main', 'maybe', 'Offer: a follow-up')),
+                project(quiet, '(no title)'),
+                project(new, '(no title)', ('main', 'pr', 'app#1 failed')),
+                project(done, '(no title)', (None, 'close',
+                        'Nothing remaining; tell its agent the task is done to close it')),
+            ],
+            'unowned': [{'project': None, 'role': None, 'mark': 'slack', 'text': 'Slack #x: hi'}],
+        }
+        codex = [{'id': 's2', 'cwd': new}, {'id': 's1', 'cwd': old}]
+        panes = [{'agent': 'codex', 'workspace': 'w', 'cwd': new, 'pane': 'p',
                   'session': 's2', 'role': 'main'}]
-        watched = [{'project': str(new), 'role': 'main', 'mark': 'pr', 'text': 'app#1 failed'},
-                   {'project': None, 'role': None, 'mark': 'slack', 'text': 'Slack #x: hi'},
-                   {'project': str(self.home / 'gone'), 'role': None, 'mark': 'linear',
-                    'text': 'ABC-1: moved'},
-                   {'project': str(closed), 'role': None, 'mark': 'pr', 'text': 'app#2 failed'},
-                   {'project': str(failing), 'role': None, 'mark': 'pr', 'text': 'app#3 failed'}]
-        rows = list(picker.inbox_choices(panes, 'codex', self.home, codex, watched))
+        rows = list(picker.inbox_choices(panes, 'codex', codex, state))
         assert rows == [
-            f'project\t{failing}\t\t20261007-g  (no title)',
-            f'session\t{failing}\t\t    pr     app#3 failed',
             f'project\t{done}\t\t20261004-d  (no title)',
             (f'session\t{done}\t\t    close? Nothing remaining; tell its agent the task is done '
              'to close it'),
@@ -168,9 +166,33 @@ class TestAgent:
             f'session\t{old}\ts1\t    you    Decide X',
             f'session\t{old}\ts1\t    maybe  Offer: a follow-up',
             'new\t\t\t+ slack  Slack #x: hi',
-            'new\t\t\t+ linear ABC-1: moved',
-            'new\t\t\t+ pr     app#2 failed',
         ]
+        [row] = picker.inbox_choices(panes, 'codex', codex, None)
+        assert row.startswith('error\t\t\therdr-project-web isn\'t answering')
+
+    def test_picker_reads_server_state(self):
+        picker = load('herdr_picker_state', ROOT / 'bin/herdr-project-picker')
+        state = {'projects': [], 'unowned': []}
+        bodies = [json.dumps(state), '[]', json.dumps({'error': 'x'})]
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(200 if self.path == '/api/state' else 404)
+                self.end_headers()
+                self.wfile.write(bodies.pop(0).encode())
+
+            def log_message(self, *args):
+                pass
+
+        with http.server.HTTPServer(('127.0.0.1', 0), Handler) as server:
+            port = server.server_port
+            threading.Thread(target=lambda: [server.handle_request() for _ in range(3)],
+                             daemon=True).start()
+            assert picker.server_state(port) == state
+            # Another server on the port isn't herdr-project-web.
+            assert picker.server_state(port) is None
+            assert picker.server_state(port) is None
+        assert picker.server_state(port) is None
 
     def test_picker_reuses_workspace_with_shell_pane(self):
         picker = load('herdr_picker_shell', ROOT / 'bin/herdr-project-picker')

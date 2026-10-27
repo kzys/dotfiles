@@ -1,5 +1,5 @@
-// What waits on the user in a project's notes, as herdr_project/inbox.py
-// finds it for the picker. Keep the two in step.
+// What waits on the user in a project's notes, for the page and the
+// picker's inbox.
 
 export type Item = {
   project: string | null;
