@@ -56,7 +56,7 @@ For a root-cause write-up, use three sections in this order and no others:
 2. **Why**: the mechanism. Lead with the raw signal (terminal capture,
    payload, error string), then explain what produced it. Root cause first,
    not the story of how you found it.
-3. **Solutions**: one row per affected component, with its status (fixable,
+3. **Options**: one row per affected component, with its status (fixable,
    not fixable, works by default, tracked upstream) and the concrete fix.
 
 Close with a footer of one or two lines, not a section, naming the exact
@@ -88,7 +88,9 @@ tells the reader. If the answer is "nothing", leave it out.
 - Monospace only for real paths, commands and code.
 - One or two typefaces. Keep prose under about 75 characters wide, and let
   tables and diagrams run wider (up to about 64rem, centered). Design for
-  desktop screens, in both light and dark mode.
+  desktop screens, in both light and dark mode, and keep the page readable
+  on a phone: the page itself never scrolls sideways, and wide tables,
+  diagrams and code blocks scroll inside their own container.
 - A diagram must make sense on its own before the reader reaches the text
   below it. Say above it what it shows, draw connections as arrows, and
   explain every name in it, earlier on the page or in the diagram. Draw
