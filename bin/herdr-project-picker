@@ -17,7 +17,8 @@ after the others with no agent running in Herdr.
 
 With --inbox it lists instead what waits on the user in each open project:
 items its agents' notes tag [you], untagged ones that likely do (marked
-"you?"), and what herdr-project --watch found. Enter on one switches to
+"you?"), and what herdr-project --watch found, as herdr-project-web,
+which the watcher runs, serves them. Enter on one switches to
 or resumes the session of the agent whose item it is, or that worked on
 the project last, and on one without a project starts a new project.
 Projects that look finished are listed with a suggestion to close them.
@@ -28,17 +29,17 @@ import os
 import shlex
 import subprocess
 import sys
+import urllib.request
 from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from herdr_project import claude, inbox
+from herdr_project import claude
 from herdr_project.agent import agent, codex_context, codex_sessions
 from herdr_project.herdr import herdr
 from herdr_project.instructions import new_project
 from herdr_project.notes import front_matter, notes, report_title, reported_role
 from herdr_project.screen import pick
-from herdr_project.watch import state_dir
 
 BIN = Path(__file__).resolve().parent
 PROJECTS = Path.home() / "project"
@@ -162,33 +163,43 @@ def session_for(directory, role, panes, selected, codex):
     return found[0].stem
 
 
-def inbox_choices(panes, selected, projects, codex, watched):
+def server_state(port):
+    """Returns the state herdr-project-web on localhost port serves, or
+    None if it doesn't answer with one."""
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/state", timeout=2) as r:
+            state = json.load(r)
+    except (OSError, ValueError):
+        return None
+    if not (isinstance(state, dict) and isinstance(state.get("projects"), list)
+            and isinstance(state.get("unowned"), list)):
+        return None
+    return state
+
+
+def inbox_choices(panes, selected, codex, state):
     """Yields the lines for pick, as choices does, for what waits on the
-    user: the items in the notes of the projects in directory projects
-    and watched, the watcher's items, under their projects, newest first,
-    then the watcher's items without a project."""
+    user in state, what herdr-project-web serves, or None if it isn't
+    running: the items of its projects, newest first, then those
+    without a project."""
+    if state is None:
+        yield ("error\t\t\therdr-project-web isn't answering; herdr-project --watch "
+               "runs it, logging to ~/.local/state/herdr-project/web.log")
+        return
     running = {p["session"] for p in panes if p["session"] and p["agent"] == selected}
-    dirs = sorted((d for d in projects.iterdir()
-                   if d.is_dir() and d.name[0] != "." and not front_matter(d, "closed")),
-                  reverse=True)
-    known = {str(d) for d in dirs}
-    by_project = {}
-    for i in watched:
-        # Items of projects since removed or closed count as having none.
-        by_project.setdefault(i["project"] if i["project"] in known else None, []).append(i)
-    for d in dirs:
-        items = sorted(inbox.project_items(d, by_project.get(str(d), [])), key=inbox.rank)
-        if not items:
+    for project in sorted(state["projects"], key=lambda p: p["dir"], reverse=True):
+        if not project["items"]:
             continue
-        yield f"project\t{d}\t\t{d.name}  {front_matter(d, 'title') or '(no title)'}"
+        d = Path(project["dir"])
+        yield f"project\t{d}\t\t{d.name}  {project['title']}"
         sids = {}
-        for i in items:
+        for i in project["items"]:
             if i["role"] not in sids:
                 sids[i["role"]] = session_for(d, i["role"], panes, selected, codex)
             sid = sids[i["role"]]
             mark = "●" if sid in running else " "
             yield f"session\t{d}\t{sid}\t  {mark} {SOURCES.get(i['mark'], i['mark']):<6} {i['text']}"
-    for i in by_project.get(None, []):
+    for i in state["unowned"]:
         yield f"new\t\t\t+ {SOURCES.get(i['mark'], i['mark']):<6} {i['text']}"
 
 
@@ -199,8 +210,8 @@ def main():
     panes = pane_records(herdr("pane", "list"))
 
     if sys.argv[1:] == ["--inbox"]:
-        rows = inbox_choices(panes, selected, PROJECTS, codex,
-                             inbox.watched_items(state_dir(os.environ) / "inbox.json"))
+        rows = inbox_choices(panes, selected, codex,
+                             server_state(os.environ.get("PORT", "9000")))
     else:
         rows = choices(panes, selected, PROJECTS, codex)
     picked = pick(rows, lambda *row: row_notes(*row, selected))
@@ -232,6 +243,8 @@ def open_picked(picked, panes, selected, projects, herdr):
     new workspace, creating a project under projects for a new one. herdr
     runs a herdr command."""
     kind, directory, sid = picked[:3]
+    if kind == "error":
+        return
     if kind == "new":
         directory = str(new_project(projects, datetime.now()))
 
