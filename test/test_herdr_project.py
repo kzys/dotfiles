@@ -742,20 +742,28 @@ def test_passes_the_poller_to_the_web_page():
     assert 'HERDR_PROJECT_TTY' not in watch.web_env({}, [], None)
 
 
+# exec_web replaces the process that calls it, so it runs in one of its own:
+# python -c BECOME <repo> <missing command> <log>.
+BECOME = """
+import os, sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+from herdr_project import watch
+try:
+    watch.exec_web([sys.argv[2]], [], Path(sys.argv[3]), {})
+except OSError:
+    print("still here", flush=True)
+watch.exec_web([sys.executable, "-c", "import os; print(os.environ['HERDR_PROJECT_POLLER'])"],
+               ["p", "--poll"], Path(sys.argv[3]), {})
+"""
+
+
 def test_becomes_the_web_page_with_its_output_in_a_log(tmp_path):
     log = tmp_path / 'state/web.log'
-    script = ('import os, sys\n'
-              'from pathlib import Path\n'
-              f'sys.path.insert(0, {str(Path(__file__).parent.parent)!r})\n'
-              'from herdr_project import watch\n'
-              'try:\n'
-              f'    watch.exec_web([{str(tmp_path / "missing")!r}], [], Path({str(log)!r}), {{}})\n'
-              'except OSError:\n'
-              '    print("still here", flush=True)\n'
-              f'watch.exec_web([sys.executable, "-c", "import os; print(os.environ[\'HERDR_PROJECT_POLLER\'])"], '
-              f'["p", "--poll"], Path({str(log)!r}), {{}})\n')
-    out = subprocess.run([sys.executable, '-c', script], stdout=subprocess.PIPE, text=True,
-                         check=True).stdout
+    out = subprocess.run([sys.executable, '-c', BECOME, str(Path(__file__).parent.parent),
+                          str(tmp_path / 'missing'), str(log)],
+                         stdout=subprocess.PIPE, text=True, check=True).stdout
+    # Failing to exec leaves the output where it was.
     assert out == 'still here\n'
     assert log.read_text() == '["p", "--poll"]\n'
 
