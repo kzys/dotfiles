@@ -85,7 +85,7 @@ checkout under `~/repos`, differs from where its branch left the
 remote's default branch, uncommitted and untracked files included.
 
 The watcher needs its packages installed, with Node 22.6 or later: it
-becomes herdr-project-web, which checks all of it and serves at
+runs herdr-project-web, which checks all of it and serves at
 http://127.0.0.1:9000/. If the page doesn't come up, look in
 `~/.local/state/herdr-project/web.log`. To restart it on new code,
 touch `herdr-project-web/restart.stamp`; open pages reload once it runs

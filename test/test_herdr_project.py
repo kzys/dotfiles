@@ -1,6 +1,7 @@
 import json
 import os
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -328,36 +329,59 @@ def test_runs_the_web_page_only_once_installed(tmp_path):
     assert (tmp_path / 'restart.stamp').exists()
 
 
-def test_tells_the_web_page_what_to_watch(tmp_path):
-    env = watch.web_env({'HOME': '/h'}, ['org'], '/dev/ttys001', tmp_path / 'w1:p1')
-    assert env == {'HOME': '/h', 'HERDR_PROJECT_ORGS': '["org"]', 'HERDR_PROJECT_TTY': '/dev/ttys001',
-                   'HERDR_PROJECT_WATCHER_FILE': str(tmp_path / 'w1:p1')}
-    assert watch.web_env({}, (), None, None) == {'HERDR_PROJECT_ORGS': '[]'}
+def test_tells_the_web_page_what_to_watch():
+    env = watch.web_env({'HOME': '/h'}, ['org'], '/dev/ttys001')
+    assert env == {'HOME': '/h', 'HERDR_PROJECT_ORGS': '["org"]', 'HERDR_PROJECT_TTY': '/dev/ttys001'}
+    assert watch.web_env({}, (), None) == {'HERDR_PROJECT_ORGS': '[]'}
 
 
-# exec_web replaces the process that calls it, so it runs in one of its own:
-# python -c BECOME <repo> <missing command> <log>.
-BECOME = """
+def test_runs_the_web_page_with_its_output_in_a_log(tmp_path):
+    log = tmp_path / 'state/web.log'
+    with pytest.raises(OSError):
+        watch.run_web([str(tmp_path / 'missing')], [], log, {})
+    script = "import os, sys; print(os.environ['HERDR_PROJECT_ORGS']); sys.exit(3)"
+    assert watch.run_web([sys.executable, '-c', script], ['org'], log, {}) == 3
+    assert log.read_text() == '["org"]\n'
+
+
+# run_web as the watcher runs it, in a process of its own, since the test
+# signals it: python -c RUN_WEB <repo> <log> <script>, under node's watch
+# mode.
+RUN_WEB = """
 import os, sys
 from pathlib import Path
 sys.path.insert(0, sys.argv[1])
 from herdr_project import watch
-try:
-    watch.exec_web([sys.argv[2]], [], Path(sys.argv[3]), {})
-except OSError:
-    print("still here", flush=True)
-watch.exec_web([sys.executable, "-c", "import os; print(os.environ['HERDR_PROJECT_ORGS'])"],
-               ["org"], Path(sys.argv[3]), {})
+command = ["node", f"--watch-path={sys.argv[3]}", sys.argv[3]]
+print(watch.run_web(command, [], Path(sys.argv[2]), dict(os.environ)), flush=True)
 """
 
 
-def test_becomes_the_web_page_with_its_output_in_a_log(tmp_path):
-    log = tmp_path / 'state/web.log'
-    out = subprocess.run([sys.executable, '-c', BECOME, str(Path(__file__).parent.parent),
-                          str(tmp_path / 'missing'), str(log)],
-                         stdout=subprocess.PIPE, text=True, check=True).stdout
-    # Failing to exec leaves the output where it was.
-    assert out == 'still here\n'
-    assert log.read_text() == '["org"]\n'
+@pytest.mark.skipif(shutil.which('node') is None, reason='node is not installed')
+@pytest.mark.parametrize('sig', [signal.SIGTERM, signal.SIGHUP])
+def test_ends_the_web_page_on_signals(tmp_path, sig):
+    log = tmp_path / 'web.log'
+    script = tmp_path / 'page.js'
+    # Like the page, it runs until killed, under node's watch mode.
+    script.write_text('console.log(`pid ${process.pid}`); setInterval(() => {}, 1000);\n')
+    watcher = subprocess.Popen([sys.executable, '-c', RUN_WEB, str(Path(__file__).parent.parent),
+                                str(log), str(script)], stdout=subprocess.PIPE, text=True)
+    deadline = time.monotonic() + 10
+    while 'pid ' not in (log.read_text() if log.exists() else '') and time.monotonic() < deadline:
+        time.sleep(0.05)
+    page = int(log.read_text().split('pid ')[1].split()[0])
+    watcher.send_signal(sig)
+    out, _ = watcher.communicate(timeout=10)
+    assert out == 'None\n'
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        try:
+            os.kill(page, 0)
+        except ProcessLookupError:
+            break
+        time.sleep(0.05)
+    else:
+        os.kill(page, signal.SIGKILL)
+        pytest.fail('the page outlived the watcher')
 
 

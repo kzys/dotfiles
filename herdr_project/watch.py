@@ -87,48 +87,60 @@ def web_command(web, node_version=None):
             "--disable-warning=ExperimentalWarning", str(web / "main.ts")]
 
 
-def web_env(env, orgs, tty, watcher):
+def web_env(env, orgs, tty):
     """Returns env for herdr-project-web as the watcher of the pull
     requests in orgs, or all without orgs, showing them on the terminal
-    tty if not None, and forgetting the watcher's pane, whose record is
-    the file watcher if not None, when interrupted."""
+    tty if not None."""
     out = {**env, "HERDR_PROJECT_ORGS": json.dumps(list(orgs))}
     if tty:
         out["HERDR_PROJECT_TTY"] = tty
-    if watcher:
-        out["HERDR_PROJECT_WATCHER_FILE"] = str(watcher)
     return out
 
 
-def exec_web(command, orgs, log, env, watcher=None):
-    """Replaces this process with command, herdr-project-web, as web_env
-    describes it, with env, writing its output to the file log and
-    leaving this process's terminal, if any, to the pull requests.
-    Raises if it can't."""
+def run_web(command, orgs, log, env):
+    """Runs command, herdr-project-web, as web_env describes it, with
+    env, writing its output to the file log and leaving this process's
+    terminal, if any, to the pull requests, until it exits. SIGTERM or
+    SIGHUP, even one that comes as it starts, ends it with SIGTERM, which
+    node's watch mode passes on to the page, unlike SIGHUP; this then
+    returns None, or else its exit code. Ctrl-C reaches it from the
+    terminal, so on KeyboardInterrupt this waits for it to exit before
+    raising. Raises OSError if it can't start."""
     tty = os.ttyname(1) if os.isatty(1) else None
     log.parent.mkdir(parents=True, exist_ok=True)
-    out = os.open(log, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
-    saved = os.dup(1), os.dup(2)
-    os.dup2(out, 1)
-    os.dup2(out, 2)
+    child, stopped = None, []
+
+    def forward(sig, _frame):
+        stopped.append(sig)
+        if child:
+            child.terminate()
+
+    saved = {sig: signal.signal(sig, forward) for sig in (signal.SIGTERM, signal.SIGHUP)}
     try:
-        os.execvpe(command[0], command, web_env(env, orgs, tty, watcher))
-    except OSError:
-        os.dup2(saved[0], 1)
-        os.dup2(saved[1], 2)
-        raise
+        with open(log, "w") as out:
+            child = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=out, stderr=out,
+                                     env=web_env(env, orgs, tty))
+        if stopped:
+            child.terminate()
+        try:
+            code = child.wait()
+        except KeyboardInterrupt:
+            child.wait()
+            raise
     finally:
-        for fd in (out, *saved):
-            os.close(fd)
+        for sig, handler in saved.items():
+            signal.signal(sig, handler)
+    return None if stopped else code
 
 
 def main(orgs=(), pane=None):
     """Watches the pull requests in orgs, or all without orgs, of the
     projects under ~/project, and the rest herdr-project-web watches, by
-    becoming it. pane is the Herdr pane it runs in, if any, where zshrc
+    running it. pane is the Herdr pane it runs in, if any, where zshrc
     resumes it after Herdr restores the session, unless it was
-    interrupted. Without herdr-project-web, it says so until interrupted,
-    so that its pane stays rather than another opening."""
+    interrupted. Without herdr-project-web, or if it exits on its own, it
+    says so until interrupted, so that its pane stays rather than another
+    opening."""
     watcher = None
     if pane:
         try:
@@ -138,18 +150,25 @@ def main(orgs=(), pane=None):
             pass
     web = Path(__file__).resolve().parent.parent / "herdr-project-web"
     command = web_command(web)
-    if command:
-        try:
-            exec_web(command, orgs, state_dir(os.environ) / "web.log", os.environ, watcher)
-        except OSError as e:
-            print(f"herdr-project --watch can't run herdr-project-web: {e}", flush=True)
-    else:
-        print(f"herdr-project --watch needs herdr-project-web: run npm install in {web}, "
-              "with Node 22.6 or later.", flush=True)
+    log = state_dir(os.environ) / "web.log"
     try:
+        if not command:
+            print(f"herdr-project --watch needs herdr-project-web: run npm install in {web}, "
+                  "with Node 22.6 or later.", flush=True)
+        else:
+            try:
+                code = run_web(command, orgs, log, os.environ)
+            except OSError as e:
+                print(f"herdr-project --watch can't run herdr-project-web: {e}", flush=True)
+            else:
+                if code is None:
+                    return 0
+                print(f"herdr-project-web exited with {code}; see {log}.", flush=True)
         while True:
             signal.pause()
     except KeyboardInterrupt:
+        # Another Ctrl-C mustn't keep the pane from being forgotten.
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
         if watcher:
             watcher.unlink(missing_ok=True)
-    return 1
+        return 0
