@@ -140,8 +140,8 @@ export function projectItems(
   return items.sort((a, b) => rank(a) - rank(b));
 }
 
-/** Returns the watcher's inbox items from sources, the contents of
- * inbox.json by source, skipping any not in the form it writes. */
+/** Returns the watcher's inbox items from sources, its items by source
+ * as it reports them, skipping any not in the form it sends. */
 export function watchedItems(sources: unknown): Item[] {
   if (!sources || typeof sources !== "object" || Array.isArray(sources)) return [];
   const strOrNull = (v: unknown) => typeof v === "string" || v === null || v === undefined;

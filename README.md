@@ -78,8 +78,8 @@ stay sandboxed. Restart Codex to load the preferences.
 
 A localhost-only page showing what `herdr-project --watch` found and the
 open projects under `~/project`, with their agents and what their notes
-say waits on the user, updated as their files change. The watcher keeps
-its sections in `~/.local/state/herdr-project/screen.json` for it.
+say waits on the user, updated as the watcher reports and their files
+change.
 Its Worktrees view shows how each worktree in the projects, and each
 checkout under `~/repos`, differs from where its branch left the
 remote's default branch, uncommitted and untracked files included.
