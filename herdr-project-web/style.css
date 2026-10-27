@@ -30,7 +30,7 @@ body {
     radial-gradient(1200px 600px at 50% -200px, #ffffff 0%, transparent 70%),
     var(--bg);
   color: var(--fg);
-  font: 400 var(--large)/1.5 var(--sans);
+  font: 400 var(--large)/1.45 var(--sans);
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
 }
@@ -38,7 +38,7 @@ body {
 a { color: inherit; text-decoration: none; }
 a:hover { color: var(--accent); }
 
-.page { max-width: 1400px; margin: 0 auto; padding: 0 24px 48px; }
+.page { max-width: 1400px; margin: 0 auto; padding: 0 20px 40px; }
 
 /* The console strip along the top. */
 .top {
@@ -48,8 +48,8 @@ a:hover { color: var(--accent); }
   display: flex;
   align-items: center;
   gap: 18px;
-  margin: 0 -24px;
-  padding: 8px 24px;
+  margin: 0 -20px;
+  padding: 7px 20px;
   background: rgba(250, 252, 253, 0.92);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--panel-edge);
@@ -57,7 +57,7 @@ a:hover { color: var(--accent); }
 .top input {
   flex: none;
   width: min(280px, 40vw);
-  padding: 7px 16px;
+  padding: 5px 14px;
   border: 1px solid var(--panel-edge);
   background: var(--well);
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
@@ -71,12 +71,12 @@ a:hover { color: var(--accent); }
 main {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 32px;
-  margin-top: 28px;
+  gap: 24px;
+  margin-top: 20px;
 }
 @media (max-width: 900px) {
   .page { padding: 0 16px 32px; }
-  .top { margin: 0 -16px; padding: 8px 16px; flex-wrap: wrap; }
+  .top { margin: 0 -16px; padding: 7px 16px; flex-wrap: wrap; }
   main { grid-template-columns: minmax(0, 1fr); }
 }
 
@@ -84,7 +84,7 @@ h2 {
   display: flex;
   align-items: baseline;
   gap: 10px;
-  margin: 0 0 14px;
+  margin: 0 0 11px;
   font-size: var(--small);
   font-weight: 500;
   letter-spacing: 0.32em;
@@ -96,7 +96,7 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
 
 /* Panels. */
 .card, .watch {
-  margin-bottom: 14px;
+  margin-bottom: 11px;
   background: var(--panel);
   border: 1px solid var(--panel-edge);
   box-shadow: 0 1px 0 #fff inset, 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px -16px rgba(0, 0, 0, 0.18);
@@ -105,8 +105,8 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
 .card header {
   display: flex;
   align-items: baseline;
-  gap: 10px;
-  padding: 12px 18px;
+  gap: 9px;
+  padding: 9px 15px;
   border-bottom: 1px solid var(--panel-edge);
 }
 .card .name { font-weight: 600; letter-spacing: 0.02em; }
@@ -133,24 +133,24 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
   white-space: nowrap;
 }
 .copy {
-  padding: 2px 10px;
+  padding: 1px 8px;
   border: 1px solid var(--panel-edge);
   background: var(--well);
   color: var(--muted);
   font: 500 var(--small) var(--sans);
-  letter-spacing: 0.16em;
+  letter-spacing: 0.13em;
   text-transform: uppercase;
   cursor: pointer;
 }
 .copy:hover { color: var(--accent); border-color: var(--accent); }
 
-.card ul { margin: 0; padding: 6px 0; list-style: none; }
+.card ul { margin: 0; padding: 5px 0; list-style: none; }
 /* A project's agent panes, with how full their context is. */
 .panes {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 18px;
-  padding: 8px 18px;
+  gap: 3px 16px;
+  padding: 6px 15px;
   border-bottom: 1px solid var(--panel-edge);
 }
 .pane { display: inline-flex; align-items: baseline; gap: 8px; }
@@ -164,8 +164,8 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
 .wt-links {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
-  gap: 4px 14px;
-  padding: 8px 18px;
+  gap: 3px 13px;
+  padding: 6px 15px;
   border-bottom: 1px solid var(--panel-edge);
   font: var(--normal) var(--mono);
 }
@@ -174,11 +174,11 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
 .wt-subject { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--normal) var(--sans); }
 .wt-links a:hover .wt-link-name { color: var(--accent); border-color: var(--accent); }
 .wt-links a:hover .wt-subject { color: var(--fg); }
-.item { display: flex; gap: 12px; align-items: baseline; padding: 6px 18px; }
+.item { display: flex; gap: 10px; align-items: baseline; padding: 4px 15px; }
 .item .role {
   font-size: var(--small);
   font-weight: 500;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--faint);
 }
@@ -188,10 +188,10 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
 
 .mark {
   flex: none;
-  min-width: 64px;
-  padding: 0 8px;
-  font: 500 var(--small)/18px var(--sans);
-  letter-spacing: 0.16em;
+  min-width: 57px;
+  padding: 0 6px;
+  font: 500 var(--small)/17px var(--sans);
+  letter-spacing: 0.12em;
   text-align: center;
   text-transform: uppercase;
   color: var(--muted);
@@ -206,27 +206,27 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
   justify-content: space-between;
   align-items: baseline;
   margin: 0;
-  padding: 12px 18px;
+  padding: 9px 15px;
   font-size: var(--normal);
   font-weight: 500;
-  letter-spacing: 0.24em;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
   border-bottom: 1px solid var(--panel-edge);
 }
 .watch .checked { font: 400 var(--small) var(--mono); letter-spacing: 0.08em; text-transform: none; color: var(--muted); }
 /* What still comes as terminal lines reads like a ship's readout. */
 .watch pre {
-  margin: 10px;
-  padding: 10px 14px;
+  margin: 8px;
+  padding: 8px 12px;
   overflow-x: auto;
   background: var(--well);
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.07);
-  font: var(--normal)/1.7 var(--mono);
+  font: var(--normal)/1.6 var(--mono);
 }
-.watch .empty { padding: 12px 18px; }
+.watch .empty { padding: 9px 15px; }
 
-.prs { margin: 0; padding: 4px 0; list-style: none; }
-.pr { display: flex; gap: 14px; padding: 12px 18px; }
+.prs { margin: 0; padding: 3px 0; list-style: none; }
+.pr { display: flex; gap: 12px; padding: 9px 15px; }
 .pr + .pr { border-top: 1px solid var(--panel-edge); }
 .pr-main { flex: 1; min-width: 0; }
 .pr-title { margin-right: 8px; font-weight: 500; }
@@ -367,15 +367,15 @@ code { font-family: var(--mono); font-size: var(--normal); }
 .top nav a.here { color: var(--panel); background: var(--fg); }
 
 /* Worktrees and their diffs. */
-.diffs { margin-top: 28px; }
+.diffs { margin-top: 20px; }
 .diffs h2 a:hover { color: var(--accent); }
 .diffs h2 .copy { order: 1; letter-spacing: 0.08em; }
 .stat { flex: none; font: var(--normal) var(--mono); }
 .stat-add { color: var(--ok); }
 .stat-del { color: var(--red); }
 
-.wts { margin: 0; padding: 4px 0; list-style: none; }
-.wt { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; padding: 8px 18px; }
+.wts { margin: 0; padding: 3px 0; list-style: none; }
+.wt { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; padding: 8px 15px; }
 .wt + .wt { border-top: 1px solid var(--panel-edge); }
 .wt-name { font-weight: 500; border-bottom: 1px solid var(--faint); }
 .wt-name:hover { border-color: var(--accent); }
@@ -385,7 +385,7 @@ code { font-family: var(--mono); font-size: var(--normal); }
 .wt.clean .wt-name { color: var(--muted); }
 .wt-error { flex: 1; font-size: var(--normal); color: var(--red); overflow-wrap: anywhere; }
 
-.card .commits, .card .file-index { margin: 0; padding: 8px 18px; list-style: none; font-size: var(--normal); }
+.card .commits, .card .file-index { margin: 0; padding: 8px 15px; list-style: none; font-size: var(--normal); }
 .commits code { color: var(--muted); margin-right: 6px; }
 .commits + .file-index { border-top: 1px solid var(--panel-edge); }
 .file-index li { display: flex; gap: 12px; align-items: baseline; }
@@ -402,7 +402,7 @@ code { font-family: var(--mono); font-size: var(--normal); }
   cursor: pointer;
 }
 .file-index button:hover { color: var(--accent); }
-.file-note { padding: 10px 18px; }
+.file-note { padding: 10px 15px; }
 
 .file { scroll-margin-top: 80px; }
 .card .file-head { align-items: center; cursor: pointer; user-select: none; }
@@ -444,12 +444,12 @@ code { font-family: var(--mono); font-size: var(--normal); }
    each wrapping its long lines to keep to its half. */
 .diffs h2 .layout { order: 1; display: flex; gap: 2px; }
 .diffs h2 .layout button {
-  padding: 2px 10px;
+  padding: 1px 8px;
   border: 1px solid var(--panel-edge);
   background: none;
   color: var(--muted);
   font: 500 var(--small) var(--sans);
-  letter-spacing: 0.16em;
+  letter-spacing: 0.13em;
   text-transform: uppercase;
   cursor: pointer;
 }
@@ -470,7 +470,7 @@ code { font-family: var(--mono); font-size: var(--normal); }
   align-items: start;
 }
 .learn-index { position: sticky; top: 80px; max-height: calc(100vh - 96px); overflow-y: auto; }
-.learn-index li { display: flex; gap: 10px; align-items: baseline; padding: 0 18px; }
+.learn-index li { display: flex; gap: 10px; align-items: baseline; padding: 0 15px; }
 .learn-index button {
   flex: 1;
   min-width: 0;
