@@ -280,13 +280,13 @@ def test_switches_agents_with_arrows_and_ctrl_keys():
 
 def test_hints_name_the_selected_agent():
     assert screen.hint(['project', '/p', '', 'a'], 'codex') == (
-        'enter: start a new Codex session in this project')
+        'enter: start a new codex session in this project')
     assert screen.hint(['new', '', '', '+ new project'], 'claude') == (
-        'enter: start a new Claude session in a new project')
+        'enter: start a new claude session in a new project')
     assert screen.hint(['session', '/p', 'claude:x', '  ● claude'], 'codex') == (
         'enter: switch to this running session')
     assert screen.hint(['session', '/p', '', '    you   Review'], 'codex') == (
-        'enter: start a new Codex session for this')
+        'enter: start a new codex session for this')
 
 
 def test_picks_a_row_with_the_switched_agent(monkeypatch):
@@ -295,6 +295,7 @@ def test_picks_a_row_with_the_switched_agent(monkeypatch):
 
         def __init__(self, keys):
             self.keys = list(keys)
+            self.drawn = []
 
         def get_wch(self):
             return self.keys.pop(0)
@@ -302,11 +303,11 @@ def test_picks_a_row_with_the_switched_agent(monkeypatch):
         def getmaxyx(self):
             return 24, 80
 
-        def addstr(self, *args):
-            pass
+        def addstr(self, y, x, text, attr=0):
+            self.drawn.append((y, text, attr))
 
         def erase(self):
-            pass
+            self.drawn = []
 
         def move(self, y, x):
             pass
@@ -326,7 +327,12 @@ def test_picks_a_row_with_the_switched_agent(monkeypatch):
     assert screen.run(Terminal(keys), loading, lambda *args: '', agents) == (1, 'codex')
     keys = ['\x06', '\x02', '\x02', '\n']
     assert screen.run(Terminal(keys), loading, lambda *args: '', agents) == (0, 'codex')
-    assert screen.run(Terminal(['\n']), loading, lambda *args: '', agents) == (0, 'claude')
+    terminal = Terminal([screen.curses.KEY_RIGHT, '\n'])
+    assert screen.run(terminal, loading, lambda *args: '', agents) == (0, 'codex')
+    # The new project row shows the agents, the selected one reversed.
+    row = [(text, attr) for y, text, attr in terminal.drawn if y == 1]
+    assert ''.join(text for text, _ in row).endswith('+ new project with  claude  codex ')
+    assert [text for text, attr in row if attr & screen.curses.A_REVERSE] == [' codex ']
 
 
 def test_cursor_follows_its_row_as_rows_arrive():

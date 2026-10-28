@@ -31,7 +31,7 @@ def hint(row, agent):
         kind = "unsaved"
     elif kind == "session" and "●" in text:
         return HINT["running"]
-    return HINT.get(kind, "").format(agent.title())
+    return HINT.get(kind, "").format(agent)
 
 
 def switch(agents, current, key):

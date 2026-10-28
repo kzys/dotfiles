@@ -4,6 +4,7 @@ import importlib.util
 import json
 import os
 import sqlite3
+import subprocess
 import sys
 import threading
 from contextlib import closing
@@ -49,6 +50,11 @@ class TestAgent:
             'codex', ['--inbox'])
         assert herdr_agent.parse_agent(['--agent=codex', '--', '--agent', 'other']) == (
             'codex', ['--', '--agent', 'other'])
+        assert herdr_agent.parse_agent(['--agent', 'opencode'], ('claude', 'opencode')) == (
+            'opencode', [])
+        # Scripts that know only Claude and Codex reject the others.
+        with pytest.raises(SystemExit):
+            herdr_agent.parse_agent(['--agent', 'opencode'])
 
     def test_database_sessions_include_missing_paginated_rollouts(self):
         self.database()
@@ -132,6 +138,26 @@ class TestAgent:
         _, args, env = launcher.command('claude', [])
         assert 'outside ~/project' not in ' '.join(args)
         assert env == {'CLAUDE_CODE_SHELL': '/bin/bash'}
+
+    def test_opencode_launcher_new_and_resume(self, monkeypatch):
+        launcher = load('herdr_project_opencode', ROOT / 'bin/herdr-project')
+        project = self.home / '20261027-abc'
+        project.mkdir()
+        monkeypatch.chdir(project)
+        # The files of agents that have exited go.
+        gone = subprocess.Popen(['true'])
+        gone.wait()
+        (self.home / 'state/opencode').mkdir(parents=True)
+        (self.home / f'state/opencode/{gone.pid}.md').write_text('old')
+        for arguments, tail in [([], []), (['--resume', 'id'], ['--session', 'id'])]:
+            command, args, env = launcher.command('opencode', arguments, state=self.home / 'state')
+            assert (command, args) == ('opencode', ['opencode', *tail])
+            [path] = json.loads(env['OPENCODE_CONFIG_CONTENT'])['instructions']
+            assert path == str(self.home / f'state/opencode/{os.getpid()}.md')
+            assert not (self.home / f'state/opencode/{gone.pid}.md').exists()
+            instructions = Path(path).read_text()
+            assert '## Remaining' in instructions
+            assert 'herdr-name-workspace' in instructions
 
     def test_codex_launcher_new_and_resume(self):
         launcher = load('herdr_project_codex', ROOT / 'bin/herdr-project')
@@ -233,13 +259,13 @@ class TestAgent:
         rows = list(picker.inbox_choices(panes, codex, state))
         assert rows == [
             f'project\t{done}\t\t20261004-d  (no title)',
-            (f'session\t{done}\t\t           close? Nothing remaining; tell its agent the task is done '
+            (f'session\t{done}\t\t             close? Nothing remaining; tell its agent the task is done '
              'to close it'),
             f'project\t{new}\t\t20261002-b  (no title)',
-            f'session\t{new}\tcodex:s2\t  ● codex  pr     app#1 failed',
+            f'session\t{new}\tcodex:s2\t  ● codex    pr     app#1 failed',
             f'project\t{old}\t\t20261001-a  Old work',
-            f'session\t{old}\tcodex:s1\t    codex  you    Decide X',
-            f'session\t{old}\tcodex:s1\t    codex  maybe  Offer: a follow-up',
+            f'session\t{old}\tcodex:s1\t    codex    you    Decide X',
+            f'session\t{old}\tcodex:s1\t    codex    maybe  Offer: a follow-up',
             'new\t\t\t+ slack  Slack #x: hi',
         ]
         [row] = picker.inbox_choices(panes, codex, None)

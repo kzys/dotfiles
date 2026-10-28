@@ -8,10 +8,11 @@ from contextlib import closing
 from pathlib import Path
 
 
-def parse_agent(argv):
-    """Returns the --agent selection (claude by default) and remaining arguments."""
+def parse_agent(argv, agents=('claude', 'codex')):
+    """Returns the --agent selection, one of agents (claude by default),
+    and remaining arguments."""
     parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
-    parser.add_argument('--agent', choices=('claude', 'codex'), default='claude')
+    parser.add_argument('--agent', choices=agents, default='claude')
     options, remaining = parser.parse_known_args(argv)
     return options.agent, remaining
 

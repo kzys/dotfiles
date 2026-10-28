@@ -23,7 +23,8 @@ items its agents' notes tag [you], untagged ones that likely do (marked
 "you?"), and what herdr-project --watch found, as herdr-project-web,
 which the watcher runs, serves them. Enter on one switches to
 or resumes the session of the agent whose item it is, or that worked on
-the project last, and on one without a project starts a new project.
+the project last, and on one without a project starts a new project
+with the agent it shows selected, as the "+ new project" row does.
 Projects that look finished are listed with a suggestion to close them.
 """
 
@@ -48,7 +49,7 @@ from herdr_project.screen import pick
 BIN = Path(__file__).resolve().parent
 PROJECTS = Path.home() / "project"
 # The agents a new session can start with, the default first.
-AGENTS = ("claude", "codex")
+AGENTS = ("claude", "codex", "opencode")
 
 
 def sessions(directory, codex):
@@ -90,7 +91,7 @@ def context(directory, sid, selected):
 def background(sid, selected, run=subprocess.run):
     """Returns the ID and status of claude session sid if it runs in
     the background, else None. run runs a command like subprocess.run."""
-    if selected == "codex":
+    if selected != "claude":
         return None
     try:
         proc = run(["claude", "agents", "--json"], capture_output=True, text=True)
@@ -110,7 +111,7 @@ def choices(panes, projects, codex):
     agent running in Herdr panes come first. Directory names start with
     the date, so reverse order puts the newest projects first."""
     running = {(p["agent"], p["session"]) for p in panes if p["session"]}
-    active = {p["cwd"] for p in panes if p["agent"] in ("claude", "codex")}
+    active = {p["cwd"] for p in panes if p["agent"] in AGENTS}
 
     def has_agent(d):
         """Returns whether an agent runs in d or under it."""
@@ -138,7 +139,7 @@ def choices(panes, projects, codex):
             if selected == "codex" and not ctx:
                 pct = codex_context(t.get("rollout_path", ""))
                 ctx = f"{pct}%" if pct is not None else ""
-            yield f"session\t{d}\t{selected}:{sid}\t  {mark} {selected:<6} {when} {ctx:>4}  {title(t, selected)}"
+            yield f"session\t{d}\t{selected}:{sid}\t  {mark} {selected:<8} {when} {ctx:>4}  {title(t, selected)}"
 
 
 # How inbox rows show where an item comes from.
@@ -149,7 +150,7 @@ SOURCES = {"you": "you", "?": "you?", "maybe": "maybe", "close": "close?", "pr":
 def session_for(directory, role, panes, codex):
     """Returns agent:session for the role's running or saved session, else the newest."""
     for p in panes:
-        if (p["agent"] in ("claude", "codex") and p["session"] and role
+        if (p["agent"] in AGENTS and p["session"] and role
                 and p["role"] == role
                 and (p["cwd"] == str(directory) or p["cwd"].startswith(f"{directory}/"))):
             return f"{p['agent']}:{p['session']}"
@@ -197,7 +198,7 @@ def inbox_choices(panes, codex, state):
             sid = sids[i["role"]]
             mark = "●" if sid in running else " "
             selected = sid.partition(":")[0]
-            yield f"session\t{d}\t{sid}\t  {mark} {selected:<6} {SOURCES.get(i['mark'], i['mark']):<6} {i['text']}"
+            yield f"session\t{d}\t{sid}\t  {mark} {selected:<8} {SOURCES.get(i['mark'], i['mark']):<6} {i['text']}"
     for i in state["unowned"]:
         yield f"new\t\t\t+ {SOURCES.get(i['mark'], i['mark']):<6} {i['text']}"
 
