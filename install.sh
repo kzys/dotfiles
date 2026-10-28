@@ -62,6 +62,12 @@ main() {
         link "$PWD/claude/$file" "$HOME/.claude/$file"
     done
 
+    # Codex reads user skills from ~/.agents/skills.
+    git ls-files claude/skills | cut -d/ -f3 | sort -u | while IFS= read -r skill
+    do
+        link "$PWD/claude/skills/$skill" "$HOME/.agents/skills/$skill"
+    done
+
     if [[ -n "${CODESPACES:-}" ]]; then
         setup_codespaces
     fi
