@@ -76,8 +76,6 @@ else
     alias ls='ls -wF'
 fi
 alias tmuxa='tmux attach || tmux'
-# Default to Claude while preserving the selected agent in new panes.
-export HERDR_PROJECT_AGENT=${HERDR_PROJECT_AGENT:-claude}
 alias hp=herdr-project
 # Herdr restores herdr-project's "## Remaining" pane as a shell.
 remaining=${XDG_STATE_HOME:-$HOME/.local/state}/herdr-project/remaining/$HERDR_PANE_ID
@@ -293,7 +291,7 @@ function cdw {
 # cd into a directory a past agent session ran in, picked with fzf.
 function cdc {
     local dir
-    dir=$(agent-session-dirs --pick) && cd "$dir"
+    dir=$(agent-session-dirs --pick "$@") && cd "$dir"
 }
 
 if [ -f ~/.zsh/init-work.sh ]; then

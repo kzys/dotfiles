@@ -10,8 +10,9 @@ from .match import clip, columns, spans, visible
 
 # What the line below the list says Enter does, by kind of row.
 HINT = {
+    "agent": "enter: start a new session with this agent",
     "new": "enter: start a new session in a new project",
-    "project": "enter: start a new session in this project",
+    "project": "enter: choose an agent for a new session in this project",
     "running": "enter: switch to this running session",
     "session": "enter: resume this session",
 }
@@ -212,11 +213,18 @@ def pick(lines, notes):
     """Returns the fields of the line the user picks, or None if the user
     quits, including with ctrl-c. notes(kind, directory, session) returns
     the text to show below the list for a line."""
-    loading = Loading(lines)
+    def start(screen):
+        screen.erase()
+        put(screen, 0, 0, "project> ", curses.A_BOLD)
+        screen.move(0, min(screen.getmaxyx()[1] - 1, 9))
+        screen.refresh()
+        loading = Loading(lines)
+        return run(screen, loading, notes), loading
+
     locale.setlocale(locale.LC_ALL, "")
     os.environ.setdefault("ESCDELAY", "25")
     try:
-        i = curses.wrapper(run, loading, notes)
+        i, loading = curses.wrapper(start)
     except KeyboardInterrupt:
         return None
     if loading.error and i is None:

@@ -8,12 +8,12 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from herdr_project.agent import agent, codex_sessions
+from herdr_project.agent import codex_sessions, parse_agent
 from herdr_project.herdr import herdr
 
 
 def main():
-    selected = agent()
+    selected, _ = parse_agent(sys.argv[1:])
     if selected == 'claude':
         command = str(Path(__file__).resolve().with_name('claude-adopt'))
         os.execv(command, [command])
@@ -39,7 +39,7 @@ def main():
         pane = created['result']['root_pane']['pane_id']
         launcher = shlex.quote(str(Path(__file__).resolve().with_name('herdr-project')))
         herdr('pane', 'run', pane,
-              f'HERDR_PROJECT_AGENT=codex {launcher} --resume {shlex.quote(sid)}')
+              f'{launcher} --agent codex --resume {shlex.quote(sid)}')
 
 
 if __name__ == '__main__':
