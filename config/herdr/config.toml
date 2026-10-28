@@ -77,7 +77,7 @@ description = "new tab where the agent is working"
 # in the pane, and only if the directory still exists.
 command = '''
 dir=$("$HERDR_BIN_PATH" pane get "$HERDR_ACTIVE_PANE_ID" |
-    jq -r '.result.pane | select(.agent == "claude" or .agent == "codex") | .tokens.cwd // empty')
+    jq -r '.result.pane | select(.agent == "claude" or .agent == "codex" or .agent == "opencode") | .tokens.cwd // empty')
 [ -d "$dir" ] || dir=
 "$HERDR_BIN_PATH" tab create --workspace "$HERDR_ACTIVE_WORKSPACE_ID" --cwd "${dir:-$HERDR_ACTIVE_PANE_CWD}" --focus
 '''

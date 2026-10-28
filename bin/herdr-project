@@ -6,7 +6,7 @@ project, and works in the directory it was started from too.
 In Herdr, the "## Remaining" section of the agent's notes shows in a
 pane above it.
 
-herdr-project --agent <claude|codex> selects the agent for this session,
+herdr-project --agent <claude|codex|opencode> selects the agent for this session,
 defaulting to claude. Other arguments are passed to the selected agent.
 
 herdr-project --remaining <pane> runs in that pane: it reprints the
@@ -78,7 +78,7 @@ def remaining_pane():
 
 
 def main(argv):
-    selected, argv = parse_agent(argv)
+    selected, argv = parse_agent(argv, ("claude", "codex", "opencode"))
 
     if argv[:1] == ["--remaining"]:
         if len(argv) != 2:
@@ -132,11 +132,27 @@ def main(argv):
     os.execvp(program, args)
 
 
-def command(selected, argv, origin=None):
+def alive(pid):
+    """Reports whether process pid exists."""
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        pass
+    return True
+
+
+def command(selected, argv, origin=None, state=None):
     """Returns the program and arguments that start the selected agent,
     passing it argv, and the environment variables to set for it. origin
     is the directory the agent was started from, outside its project,
-    which it may also work in, or None."""
+    which it may also work in, or None. OpenCode reads instructions only
+    from files, so for it they are written to one named after this
+    process, which becomes the agent, under state, by default
+    herdr-project's state directory, removing those of agents that have
+    exited. OpenCode isn't given origin or the dotfiles checkout as
+    extra directories; it asks before working outside its project."""
     text = instructions(os.getcwd(), SELF.parent.parent, datetime.now().astimezone())
     extra, env = [], {"CLAUDE_CODE_SHELL": "/bin/bash"}
     if origin:
@@ -161,6 +177,22 @@ def command(selected, argv, origin=None):
             "-c", "developer_instructions=" + json.dumps(rules + "\n\n" + text),
             *argv,
         ], {}
+
+    if selected == "opencode":
+        # --resume is the picker's common spelling.
+        if argv[:1] == ["--resume"]:
+            argv = ["--session", *argv[1:]]
+        # It reads the dotfiles' rules from ~/.config/opencode/AGENTS.md
+        # already.
+        folder = (state or watch.state_dir(os.environ)) / "opencode"
+        folder.mkdir(parents=True, exist_ok=True)
+        for old in folder.glob("*.md"):
+            if old.stem.isdigit() and not alive(int(old.stem)):
+                old.unlink(missing_ok=True)
+        path = folder / f"{os.getpid()}.md"
+        path.write_text(text + "\n")
+        return "opencode", ["opencode", *argv], {
+            "OPENCODE_CONFIG_CONTENT": json.dumps({"instructions": [str(path)]})}
 
     # Run claude's commands in bash, not the login shell, whose quirks
     # trip it up.

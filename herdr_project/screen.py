@@ -8,22 +8,37 @@ import threading
 
 from .match import clip, columns, spans, visible
 
-# What the line below the list says Enter does, by kind of row.
+# What the line below the list says Enter does, by kind of row, with
+# the selected agent.
 HINT = {
-    "agent": "enter: start a new session with this agent",
-    "new": "enter: start a new session in a new project",
-    "project": "enter: choose an agent for a new session in this project",
+    "new": "enter: start a new {} session in a new project",
+    "project": "enter: start a new {} session in this project",
     "running": "enter: switch to this running session",
     "session": "enter: resume this session",
+    "unsaved": "enter: start a new {} session for this",
 }
 
+# Keys that select the next or the previous agent.
+SWITCH = {curses.KEY_RIGHT: 1, "\x06": 1, curses.KEY_LEFT: -1, "\x02": -1}
 
-def hint(row):
-    """Returns what the line below the list says Enter does on row."""
-    kind, _, _, text = row
-    if kind == "session" and "●" in text:
+
+def hint(row, agent):
+    """Returns what the line below the list says Enter does on row, with
+    agent selected. A session row without a session, as for an inbox
+    item of a project with none saved, starts a new one."""
+    kind, _, sid, text = row
+    if kind == "session" and not sid:
+        kind = "unsaved"
+    elif kind == "session" and "●" in text:
         return HINT["running"]
-    return HINT[kind]
+    return HINT.get(kind, "").format(agent)
+
+
+def switch(agents, current, key):
+    """Returns the agent among agents that key selects after current:
+    the next for right or ctrl-f, the previous for left or ctrl-b,
+    wrapping around, or current for other keys."""
+    return agents[(agents.index(current) + SWITCH.get(key, 0)) % len(agents)]
 
 
 def put(win, y, x, text, attr=0):
@@ -74,12 +89,15 @@ def follow(shown, cursor, new):
     return new.index(current) if current in new else cursor
 
 
-def run(screen, loading, notes):
+def run(screen, loading, notes, agents):
     """Lets the user pick one of the rows of loading on screen, showing
     them as they arrive and notes(*row[:3]) for the highlighted row
-    below them. Returns its index, or
-    None if the user quits with Esc or ctrl-g. Up, down, ctrl-p, ctrl-n,
-    PgUp and PgDn move; shift-up and shift-down scroll the preview."""
+    below them, and one of agents, the first unless switched, which
+    rows of kind new show after their text as the agent they start.
+    Returns the row's index and the agent, or None if the user quits
+    with Esc or ctrl-g. Up, down, ctrl-p, ctrl-n, PgUp and
+    PgDn move; left, right, ctrl-b and ctrl-f switch the agent;
+    shift-up and shift-down scroll the preview."""
     if curses.has_colors():
         curses.use_default_colors()
         curses.init_pair(1, curses.COLOR_YELLOW, -1)
@@ -98,6 +116,7 @@ def run(screen, loading, notes):
     loaded = len(rows)
     shown = visible(rows[:loaded], query)
     cursor = top = scroll = 0
+    agent = agents[0]
     while True:
         # Read whether loading is done before the rows, so the last rows
         # are drawn before waiting for keys without a timeout.
@@ -132,10 +151,14 @@ def run(screen, loading, notes):
                 if moved == x:
                     break
                 x = moved
+            if kind == "new":
+                x = put(screen, y, x, " with ", base)
+                for a in agents:
+                    x = put(screen, y, x, f" {a} ", curses.A_REVERSE | curses.A_BOLD if a == agent else curses.A_DIM)
         count = f"  {len(shown)}/{loaded}{'' if done else '…'}  "
         put(screen, lines + 1, 0, count, curses.A_DIM)
         if shown:
-            put(screen, lines + 1, columns(count), hint(rows[shown[cursor]]), curses.A_DIM)
+            put(screen, lines + 1, columns(count), hint(rows[shown[cursor]], agent), curses.A_DIM)
         rule = lines + 2
         put(screen, rule, 0, "─" * width, color(3))
         text = []
@@ -169,7 +192,9 @@ def run(screen, loading, notes):
         if key in ("\x1b", "\x07"):
             return None
         elif key in ("\n", "\r", curses.KEY_ENTER):
-            return shown[cursor] if shown else None
+            return (shown[cursor], agent) if shown else None
+        elif key in SWITCH:
+            agent = switch(agents, agent, key)
         elif key in moves:
             cursor = max(0, min(cursor + moves[key], len(shown) - 1))
             scroll = 0
@@ -209,26 +234,27 @@ def pending(screen):
         screen.nodelay(False)
 
 
-def pick(lines, notes):
-    """Returns the fields of the line the user picks, or None if the user
-    quits, including with ctrl-c. notes(kind, directory, session) returns
-    the text to show below the list for a line."""
+def pick(lines, notes, agents):
+    """Returns the fields of the line the user picks and the one of
+    agents selected with it, or None if the user quits, including with
+    ctrl-c. notes(kind, directory, session) returns the text to show
+    below the list for a line."""
     def start(screen):
         screen.erase()
         put(screen, 0, 0, "project> ", curses.A_BOLD)
         screen.move(0, min(screen.getmaxyx()[1] - 1, 9))
         screen.refresh()
         loading = Loading(lines)
-        return run(screen, loading, notes), loading
+        return run(screen, loading, notes, agents), loading
 
     locale.setlocale(locale.LC_ALL, "")
     os.environ.setdefault("ESCDELAY", "25")
     try:
-        i, loading = curses.wrapper(start)
+        picked, loading = curses.wrapper(start)
     except KeyboardInterrupt:
         return None
-    if loading.error and i is None:
+    if loading.error and picked is None:
         raise loading.error
     if loading.error:
         print(f"Not all projects loaded: {loading.error!r}", file=sys.stderr)
-    return None if i is None else loading.rows[i][:3]
+    return None if picked is None else (loading.rows[picked[0]][:3], picked[1])

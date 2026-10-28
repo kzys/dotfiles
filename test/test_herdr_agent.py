@@ -4,6 +4,7 @@ import importlib.util
 import json
 import os
 import sqlite3
+import subprocess
 import sys
 import threading
 from contextlib import closing
@@ -49,6 +50,11 @@ class TestAgent:
             'codex', ['--inbox'])
         assert herdr_agent.parse_agent(['--agent=codex', '--', '--agent', 'other']) == (
             'codex', ['--', '--agent', 'other'])
+        assert herdr_agent.parse_agent(['--agent', 'opencode'], ('claude', 'opencode')) == (
+            'opencode', [])
+        # Scripts that know only Claude and Codex reject the others.
+        with pytest.raises(SystemExit):
+            herdr_agent.parse_agent(['--agent', 'opencode'])
 
     def test_database_sessions_include_missing_paginated_rollouts(self):
         self.database()
@@ -132,6 +138,26 @@ class TestAgent:
         _, args, env = launcher.command('claude', [])
         assert 'outside ~/project' not in ' '.join(args)
         assert env == {'CLAUDE_CODE_SHELL': '/bin/bash'}
+
+    def test_opencode_launcher_new_and_resume(self, monkeypatch):
+        launcher = load('herdr_project_opencode', ROOT / 'bin/herdr-project')
+        project = self.home / '20261027-abc'
+        project.mkdir()
+        monkeypatch.chdir(project)
+        # The files of agents that have exited go.
+        gone = subprocess.Popen(['true'])
+        gone.wait()
+        (self.home / 'state/opencode').mkdir(parents=True)
+        (self.home / f'state/opencode/{gone.pid}.md').write_text('old')
+        for arguments, tail in [([], []), (['--resume', 'id'], ['--session', 'id'])]:
+            command, args, env = launcher.command('opencode', arguments, state=self.home / 'state')
+            assert (command, args) == ('opencode', ['opencode', *tail])
+            [path] = json.loads(env['OPENCODE_CONFIG_CONTENT'])['instructions']
+            assert path == str(self.home / f'state/opencode/{os.getpid()}.md')
+            assert not (self.home / f'state/opencode/{gone.pid}.md').exists()
+            instructions = Path(path).read_text()
+            assert '## Remaining' in instructions
+            assert 'herdr-name-workspace' in instructions
 
     def test_codex_launcher_new_and_resume(self):
         launcher = load('herdr_project_codex', ROOT / 'bin/herdr-project')
@@ -233,13 +259,13 @@ class TestAgent:
         rows = list(picker.inbox_choices(panes, codex, state))
         assert rows == [
             f'project\t{done}\t\t20261004-d  (no title)',
-            (f'session\t{done}\t\t           close? Nothing remaining; tell its agent the task is done '
+            (f'session\t{done}\t\t             close? Nothing remaining; tell its agent the task is done '
              'to close it'),
             f'project\t{new}\t\t20261002-b  (no title)',
-            f'session\t{new}\tcodex:s2\t  ● codex  pr     app#1 failed',
+            f'session\t{new}\tcodex:s2\t  ● codex    pr     app#1 failed',
             f'project\t{old}\t\t20261001-a  Old work',
-            f'session\t{old}\tcodex:s1\t    codex  you    Decide X',
-            f'session\t{old}\tcodex:s1\t    codex  maybe  Offer: a follow-up',
+            f'session\t{old}\tcodex:s1\t    codex    you    Decide X',
+            f'session\t{old}\tcodex:s1\t    codex    maybe  Offer: a follow-up',
             'new\t\t\t+ slack  Slack #x: hi',
         ]
         [row] = picker.inbox_choices(panes, codex, None)
@@ -279,8 +305,7 @@ class TestAgent:
 
         panes = [{'workspace': 'w', 'cwd': str(self.home), 'pane': 'shell',
                   'agent': None, 'session': ''}]
-        monkeypatch.setattr(picker, 'pick', lambda rows, preview: list(rows)[1].split('\t')[:3])
-        picker.open_picked(['project', str(self.home), ''], panes, self.home, herdr)
+        picker.open_picked(['project', str(self.home), ''], 'codex', panes, self.home, herdr)
         assert calls[0][:2] == ('tab', 'create')
         assert calls[-1][-1] == f'{ROOT}/bin/herdr-project --agent codex'
 
@@ -291,7 +316,7 @@ class TestAgent:
                   'agent': 'claude', 'session': 'id'},
                  {'workspace': 'w', 'cwd': str(self.home), 'pane': 'p',
                   'agent': 'codex', 'session': 'id'}]
-        picker.open_picked(['session', str(self.home), 'codex:id'], panes, self.home,
+        picker.open_picked(['session', str(self.home), 'codex:id'], 'claude', panes, self.home,
                            lambda *args: calls.append(args))
         assert calls == [('agent', 'focus', 'p')]
 
@@ -332,7 +357,7 @@ class TestAgent:
         loading = Loading(picker.load_choices([], self.home))
         try:
             assert started.wait(5)
-            assert [r[2] for r in loading.rows] == ['claude:', 'codex:']
+            assert loading.rows == [['new', '', '', '+ new project']]
             assert not loading.done
         finally:
             release.set()
@@ -351,7 +376,9 @@ class TestAgent:
             calls.append(args)
             return {'result': {'root_pane': {'pane_id': 'new'}}}
 
-        picker.open_picked(['session', str(self.home), f'{selected}:same'],
+        # The selected agent is for new sessions only.
+        other = 'codex' if selected == 'claude' else 'claude'
+        picker.open_picked(['session', str(self.home), f'{selected}:same'], other,
                            panes, self.home, herdr)
         assert calls[-1] == ('pane', 'run', 'new',
                              f'{ROOT}/bin/herdr-project --agent {selected} --resume same')
@@ -367,14 +394,20 @@ class TestAgent:
         rows = [r.split('\t', 3) for r in picker.inbox_choices(panes, [], state)]
         assert [r[2] for r in rows if r[0] == 'session'] == ['claude:claude', 'codex:codex']
 
-    def test_picker_cancelling_agent_choice_creates_nothing(self, monkeypatch):
-        picker = load('herdr_picker_cancel_agent', ROOT / 'bin/herdr-project-picker')
-        monkeypatch.setattr(picker, 'pick', lambda *args: None)
-        projects = self.home / 'not-created'
+    def test_picker_starts_a_new_project_with_the_selected_agent(self):
+        picker = load('herdr_picker_new_agent', ROOT / 'bin/herdr-project-picker')
+        projects = self.home / 'projects'
         calls = []
-        picker.open_picked(['new', '', ''], [], projects, lambda *args: calls.append(args))
-        assert not projects.exists()
-        assert calls == []
+
+        def herdr(*args):
+            calls.append(args)
+            return {'result': {'workspace': {'workspace_id': 'w'}, 'root_pane': {'pane_id': 'new'}}}
+
+        picker.open_picked(['new', '', ''], 'codex', [], projects, herdr)
+        [project] = projects.iterdir()
+        assert calls[0][:3] == ('workspace', 'create', '--cwd')
+        assert calls[0][3] == str(project)
+        assert calls[-1] == ('pane', 'run', 'new', f'{ROOT}/bin/herdr-project --agent codex')
 
     def test_picker_lists_projects_with_agents_first(self):
         picker = load('herdr_picker_order', ROOT / 'bin/herdr-project-picker')
