@@ -44,17 +44,23 @@ fires without an active login session.
 
 ## Herdr agent selection
 
-Set one variable before starting Herdr (or export it in your shell config):
+Choose an agent explicitly; Claude is the default:
 
 ```sh
-export HERDR_PROJECT_AGENT=codex   # claude is the default
-herdr
+hp --agent codex
+hp --agent codex --resume <session-id>
+herdr-project-picker
+herdr-adopt --agent codex
+cdc --agent codex
 ```
 
-This selects the agent for `hp`, the prefix+w project picker, `herdr-adopt`,
-and `cdc`. New panes keep the picker's selection. Existing sessions keep their
-agent; the picker lists sessions for the selected agent. Restart the Herdr server after
-changing the variable so its popups inherit the new value.
+The picker and prefix+w shortcut list Claude and Codex sessions together,
+newest first, labeled with their agent. Selecting a saved session resumes it
+with its own agent; selecting a running session focuses its pane. New projects
+have separate Claude and Codex choices. Selecting a project asks which agent
+to start. The inbox picker also resolves items across both agents.
+Other `hp` arguments pass through to the selected agent. Use `--` before
+arguments that should bypass `hp`'s parser.
 
 Run `./install_codex.py` (Python 3.11+) once to install Herdr's Codex session integration and
 sidebar metadata hooks; `install.sh` also does this when both CLIs are available.

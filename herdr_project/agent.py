@@ -1,5 +1,6 @@
 """Shared agent selection and read-only Codex session discovery."""
 
+import argparse
 import json
 import os
 import sqlite3
@@ -7,13 +8,12 @@ from contextlib import closing
 from pathlib import Path
 
 
-def agent(env=None):
-    """Returns the agent HERDR_PROJECT_AGENT in env, by default this
-    process's environment, selects: claude, the default, or codex."""
-    value = (os.environ if env is None else env).get('HERDR_PROJECT_AGENT', 'claude')
-    if value not in ('claude', 'codex'):
-        raise SystemExit('HERDR_PROJECT_AGENT must be claude or codex')
-    return value
+def parse_agent(argv):
+    """Returns the --agent selection (claude by default) and remaining arguments."""
+    parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    parser.add_argument('--agent', choices=('claude', 'codex'), default='claude')
+    options, remaining = parser.parse_known_args(argv)
+    return options.agent, remaining
 
 
 def codex_home():

@@ -13,7 +13,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from herdr_project import claude, watch
+from herdr_project import claude, screen, watch
 from herdr_project.herdr import ancestors, herdr, in_pane
 from herdr_project.match import clip, columns, spans, visible
 from herdr_project.notes import front_matter, notes, report_title, reported_role
@@ -227,6 +227,44 @@ def test_loads_rows_in_the_background():
     assert loading.rows == [['new', '', '', '+ new project'], ['project', '/a', '', 'a  A']]
     assert loading.done
     assert isinstance(loading.error, OSError)
+
+
+def test_picker_refreshes_prompt_before_loading_rows(monkeypatch):
+    class Terminal:
+        def __init__(self):
+            self.refreshed = False
+            self.text = ''
+
+        def getmaxyx(self):
+            return 24, 80
+
+        def erase(self):
+            self.text = ''
+
+        def addstr(self, y, x, text, attr):
+            self.text += text
+
+        def move(self, y, x):
+            pass
+
+        def refresh(self):
+            assert self.text == 'project> '
+            self.refreshed = True
+
+    terminal = Terminal()
+
+    def lines():
+        assert terminal.refreshed
+        yield 'new\t\tcodex:\t+ new project with Codex'
+
+    def run(terminal, loading, notes):
+        loading.wait()
+        assert loading.error is None
+        return 0
+
+    monkeypatch.setattr(screen.curses, 'wrapper', lambda start: start(terminal))
+    monkeypatch.setattr(screen, 'run', run)
+    assert screen.pick(lines(), lambda *args: '') == ['new', '', 'codex:']
 
 
 def test_cursor_follows_its_row_as_rows_arrive():

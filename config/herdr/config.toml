@@ -57,7 +57,7 @@ switch_workspace = "prefix+shift+1..9"
 key = "prefix+w"
 type = "popup"
 description = "ask agent"
-command = '"$(dirname "$(readlink -f ~/.config/herdr/config.toml)")/../../bin/herdr-project-picker"'
+command = 'herdr-project-picker'
 width = "80%"
 height = "60%"
 
