@@ -255,16 +255,78 @@ def test_picker_refreshes_prompt_before_loading_rows(monkeypatch):
 
     def lines():
         assert terminal.refreshed
-        yield 'new\t\tcodex:\t+ new project with Codex'
+        yield 'new\t\t\t+ new project'
 
-    def run(terminal, loading, notes):
+    def run(terminal, loading, notes, agents):
         loading.wait()
         assert loading.error is None
-        return 0
+        return 0, agents[1]
 
     monkeypatch.setattr(screen.curses, 'wrapper', lambda start: start(terminal))
     monkeypatch.setattr(screen, 'run', run)
-    assert screen.pick(lines(), lambda *args: '') == ['new', '', 'codex:']
+    assert screen.pick(lines(), lambda *args: '', ('claude', 'codex')) == (
+        ['new', '', ''], 'codex')
+
+
+def test_switches_agents_with_arrows_and_ctrl_keys():
+    agents = ('claude', 'codex', 'other')
+    assert screen.switch(agents, 'claude', screen.curses.KEY_RIGHT) == 'codex'
+    assert screen.switch(agents, 'codex', '\x06') == 'other'
+    assert screen.switch(agents, 'other', '\x06') == 'claude'
+    assert screen.switch(agents, 'claude', '\x02') == 'other'
+    assert screen.switch(agents, 'codex', screen.curses.KEY_LEFT) == 'claude'
+    assert screen.switch(agents, 'codex', 'x') == 'codex'
+
+
+def test_hints_name_the_selected_agent():
+    assert screen.hint(['project', '/p', '', 'a'], 'codex') == (
+        'enter: start a new Codex session in this project')
+    assert screen.hint(['new', '', '', '+ new project'], 'claude') == (
+        'enter: start a new Claude session in a new project')
+    assert screen.hint(['session', '/p', 'claude:x', '  ● claude'], 'codex') == (
+        'enter: switch to this running session')
+    assert screen.hint(['session', '/p', '', '    you   Review'], 'codex') == (
+        'enter: start a new Codex session for this')
+
+
+def test_picks_a_row_with_the_switched_agent(monkeypatch):
+    class Terminal:
+        """A terminal of 24 rows that is sent keys."""
+
+        def __init__(self, keys):
+            self.keys = list(keys)
+
+        def get_wch(self):
+            return self.keys.pop(0)
+
+        def getmaxyx(self):
+            return 24, 80
+
+        def addstr(self, *args):
+            pass
+
+        def erase(self):
+            pass
+
+        def move(self, y, x):
+            pass
+
+        def refresh(self):
+            pass
+
+        def timeout(self, delay):
+            pass
+
+    # Drawing needs a real terminal for its colors.
+    monkeypatch.setattr(screen.curses, 'has_colors', lambda: False)
+    loading = Loading(iter(['new\t\t\t+ new project', 'project\t/p\t\tp']))
+    loading.wait()
+    agents = ('claude', 'codex')
+    keys = [screen.curses.KEY_RIGHT, screen.curses.KEY_DOWN, '\n']
+    assert screen.run(Terminal(keys), loading, lambda *args: '', agents) == (1, 'codex')
+    keys = ['\x06', '\x02', '\x02', '\n']
+    assert screen.run(Terminal(keys), loading, lambda *args: '', agents) == (0, 'codex')
+    assert screen.run(Terminal(['\n']), loading, lambda *args: '', agents) == (0, 'claude')
 
 
 def test_cursor_follows_its_row_as_rows_arrive():

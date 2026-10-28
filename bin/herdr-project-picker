@@ -8,11 +8,12 @@ list: every word must appear in a project row, or in a session row or
 its project's row.
 
 Enter on a running session switches to its pane. On any other session
-it resumes that session with its own agent. On a project it asks which
-agent to start, in a new
-tab of the project's workspace, or in a new workspace labeled with the
-name from the front matter. A session running in the background is
-stopped and resumed if idle, and attached otherwise.
+it resumes that session with its own agent. On a project it starts the
+agent the "+ new project" row shows selected, Claude unless switched
+with left, right, ctrl-b or ctrl-f, in a new tab of the project's
+workspace, or in a new workspace labeled with the name from the front
+matter. A session running in the background is stopped and resumed if
+idle, and attached otherwise.
 
 Closed projects, whose README.md front matter has a closed field, come
 after the others with no agent running in Herdr.
@@ -46,6 +47,8 @@ from herdr_project.screen import pick
 
 BIN = Path(__file__).resolve().parent
 PROJECTS = Path.home() / "project"
+# The agents a new session can start with, the default first.
+AGENTS = ("claude", "codex")
 
 
 def sessions(directory, codex):
@@ -203,8 +206,7 @@ def load_choices(panes, projects, inbox=False):
     """Loads rows in the screen's background thread, filling panes for opening sessions."""
     projects.mkdir(exist_ok=True)
     if not inbox:
-        yield "new\t\tclaude:\t+ new project with Claude"
-        yield "new\t\tcodex:\t+ new project with Codex"
+        yield "new\t\t\t+ new project"
     codex = codex_sessions()
     panes.extend(pane_records(herdr("pane", "list")))
     if inbox:
@@ -218,9 +220,9 @@ def main():
     parser.add_argument("--inbox", action="store_true")
     options = parser.parse_args()
     panes = []
-    picked = pick(load_choices(panes, PROJECTS, options.inbox), row_notes)
+    picked = pick(load_choices(panes, PROJECTS, options.inbox), row_notes, AGENTS)
     if picked is not None:
-        open_picked(picked, panes, PROJECTS, herdr)
+        open_picked(*picked, panes, PROJECTS, herdr)
 
 
 def pane_records(listed):
@@ -240,23 +242,16 @@ def pane_records(listed):
     ]
 
 
-def open_picked(picked, panes, projects, herdr):
+def open_picked(picked, agent, panes, projects, herdr):
     """Opens the picked row, (kind, directory, agent:session), with its
-    agent: switches to the pane among panes running its session,
-    or starts the agent in a new tab of the project's workspace or in a
-    new workspace, creating a project under projects for a new one. herdr
-    runs a herdr command."""
+    agent, or agent for a row without a session: switches to the pane
+    among panes running its session, or starts the agent in a new tab of
+    the project's workspace or in a new workspace, creating a project
+    under projects for a new one. herdr runs a herdr command."""
     kind, directory, sid = picked[:3]
     if kind == "error":
         return
-    if not sid:
-        picked = pick(
-            [f"agent\t{directory}\t{a}:\tStart a new {a.title()} session"
-             for a in ("claude", "codex")], row_notes)
-        if picked is None:
-            return
-        sid = picked[2]
-    selected, sid = sid.split(":", 1)
+    selected, sid = sid.split(":", 1) if sid else (agent, "")
     if kind == "new":
         directory = str(new_project(projects, datetime.now()))
 
