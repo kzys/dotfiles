@@ -31,7 +31,7 @@ modmap:
 keymap:
   - name: Terminal
     application:
-      only: [gnome-terminal-server, Gnome-terminal, org.kde.konsole, ghostty, foot]
+      only: [gnome-terminal-server, Gnome-terminal, org.kde.konsole, ghostty, foot, herdr-app]
     remap:
       F20-n: C-Shift-n
       F20-t: C-Shift-t
