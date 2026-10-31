@@ -74,7 +74,9 @@ test("diffs a worktree from where its branch left the remote's default", async (
   const broken = join(project, "broken");
   mkdirSync(broken);
   writeFileSync(join(broken, ".git"), "gitdir: /nonexistent\n");
-  assert.match((await summarize(broken)).error ?? "", /not a git repository/);
+  // Newer git says the gitfile doesn't point to a valid repository.
+  assert.match((await summarize(broken)).error ?? "",
+               /not a git repository|does not point to a valid repository/);
   assert.equal(lastSubject(broken), null);
 });
 
