@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 import install_codex
 from herdr_project import agent as herdr_agent
+from herdr_project import app as herdr_app
 
 
 def load(name, path):
@@ -422,6 +423,76 @@ class TestAgent:
                  for line in picker.choices(panes, projects, [])
                  if line.startswith('project')]
         assert found == ['20261001-a', '20261003-c', '20261002-b']
+
+    def test_app_reads_panes_from_terminals(self):
+        sessions = self.home / 'sessions'
+        sessions.mkdir()
+        (sessions / '7.json').write_text('{"pid": 7, "sessionId": "s"}')
+        (sessions / 'broken.json').write_text('{')
+        assert herdr_app.claude_sessions(sessions) == {7: 's'}
+        space = {'herdr.space': 'sp'}
+        terminals = [
+            {'address': 't1', 'state': 'live', 'cwd': '/home', 'labels': space,
+             'foreground': {'pid': 7, 'cwd': '/p'}, 'agent': 'claude-code'},
+            {'address': 't2', 'state': 'live', 'cwd': '/a', 'labels': space,
+             'foreground': None, 'agent': None},
+            # Not in a space, so not the app's.
+            {'address': 't3', 'state': 'live', 'cwd': '/b', 'labels': {}, 'agent': 'opencode'},
+            {'address': 't4', 'state': 'live', 'cwd': '/c', 'labels': space,
+             'foreground': {'pid': 7, 'cwd': '/c'}, 'agent': 'opencode'},
+        ]
+        assert herdr_app.pane_records(terminals, {7: 's'}) == [
+            {'agent': 'claude', 'workspace': 'sp', 'cwd': '/p', 'pane': 't1', 'session': 's',
+             'role': ''},
+            {'agent': None, 'workspace': 'sp', 'cwd': '/a', 'pane': 't2', 'session': '',
+             'role': ''},
+            {'agent': 'opencode', 'workspace': 'sp', 'cwd': '/c', 'pane': 't4', 'session': '',
+             'role': ''},
+        ]
+
+    def test_app_lists_panes_through_hc(self):
+        got = {'t1': {'address': 't1', 'state': 'live', 'cwd': '/p',
+                      'labels': {'herdr.space': 'sp'}, 'foreground': {'pid': 7, 'cwd': '/p'}}}
+
+        def hc(*args):
+            if args[0] == 'ls':
+                return {'terminals': [{'address': 't1', 'agent': 'claude-code'},
+                                      {'address': 'gone', 'agent': 'opencode'}]}
+            if args[1] not in got:
+                raise subprocess.CalledProcessError(1, ['hc', *args])
+            return got[args[1]]
+
+        assert herdr_app.panes(hc, {7: 's'}) == [
+            {'agent': 'claude', 'workspace': 'sp', 'cwd': '/p', 'pane': 't1', 'session': 's',
+             'role': ''},
+        ]
+
+    def test_picker_opens_rows_in_app(self, monkeypatch):
+        picker = load('herdr_picker_app', ROOT / 'bin/herdr-project-picker')
+        monkeypatch.setattr(picker, 'background', lambda *args: None)
+        busy, quiet = self.home / '20261001-a', self.home / '20261002-b'
+        busy.mkdir()
+        quiet.mkdir()
+        (quiet / 'README.md').write_text('---\nname: quiet\n---\n')
+        panes = [{'agent': 'claude', 'workspace': 'sp', 'cwd': str(busy), 'pane': 't1',
+                  'session': 'id'}]
+        calls = []
+
+        def run(name, args):
+            calls.append((name, args))
+
+        herdr_project = f'{ROOT}/bin/herdr-project'
+        picker.open_in_app(['session', str(busy), 'claude:id'], 'codex', panes, self.home, run)
+        picker.open_in_app(['session', str(busy), 'claude:old'], 'codex', panes, self.home, run)
+        picker.open_in_app(['project', str(quiet), ''], 'codex', panes, self.home, run)
+        picker.open_in_app(['error', '', ''], 'codex', panes, self.home, run)
+        assert calls == [
+            ('pane.focus', {'terminal': 't1'}),
+            ('tab.new', {'space': 'sp', 'folder': str(busy),
+                         'argv': [herdr_project, '--agent', 'claude', '--resume', 'old']}),
+            ('space.new', {'name': 'quiet', 'folder': str(quiet),
+                           'argv': [herdr_project, '--agent', 'codex']}),
+        ]
 
     def test_hook_preserves_prompt_on_tool_event_and_skips_children(self):
         hook = load('codex_hook', ROOT / 'bin/codex-hook')

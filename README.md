@@ -62,6 +62,12 @@ to start. The inbox picker also resolves items across both agents.
 Other `hp` arguments pass through to the selected agent. Use `--` before
 arguments that should bypass `hp`'s parser.
 
+In the Herdr app, the `project-picker` mod runs `herdr-project-picker --app`
+in a dialog, and the `projects` mod draws the same picker natively. Bind them
+in `~/.config/herdr-app/keys.json`: `"ctrl-z w": "mod.open:project-picker"`,
+`"ctrl-z e": "mod.open:projects"`. They know which Claude sessions run in the
+app, but not which Codex or OpenCode ones.
+
 Run `./install_codex.py` (Python 3.11+) once to install Herdr's Codex session integration and
 sidebar metadata hooks; `install.sh` also does this when both CLIs are available.
 In Codex, use `/hooks` to review and trust the installed hooks. Hooks report the

@@ -26,6 +26,10 @@ or resumes the session of the agent whose item it is, or that worked on
 the project last, and on one without a project starts a new project
 with the agent it shows selected, as the "+ new project" row does.
 Projects that look finished are listed with a suggestion to close them.
+
+With --app it opens rows in the Herdr app instead of Herdr. --json,
+--notes and --open let the app's native picker show and open the rows. It knows
+which Claude sessions run there, but not which Codex or OpenCode ones.
 """
 
 import argparse
@@ -39,7 +43,7 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from herdr_project import claude
+from herdr_project import app, claude
 from herdr_project.agent import codex_context, codex_sessions
 from herdr_project.herdr import herdr
 from herdr_project.instructions import new_project
@@ -203,13 +207,19 @@ def inbox_choices(panes, codex, state):
         yield f"new\t\t\t+ {SOURCES.get(i['mark'], i['mark']):<6} {i['text']}"
 
 
-def load_choices(panes, projects, inbox=False):
-    """Loads rows in the screen's background thread, filling panes for opening sessions."""
+def tui_panes():
+    """Returns the panes of Herdr, as pane_records does."""
+    return pane_records(herdr("pane", "list"))
+
+
+def load_choices(panes, projects, inbox=False, list_panes=None):
+    """Loads rows in the screen's background thread, filling panes for
+    opening sessions from list_panes, by default tui_panes."""
     projects.mkdir(exist_ok=True)
     if not inbox:
         yield "new\t\t\t+ new project"
     codex = codex_sessions()
-    panes.extend(pane_records(herdr("pane", "list")))
+    panes.extend((list_panes or tui_panes)())
     if inbox:
         yield from inbox_choices(panes, codex, server_state(os.environ.get("PORT", "9000")))
     else:
@@ -219,10 +229,41 @@ def load_choices(panes, projects, inbox=False):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--inbox", action="store_true")
+    parser.add_argument("--app", action="store_true",
+                        help="open the picked row in the Herdr app instead of Herdr")
+    # For the Herdr app's native picker, which shows the rows itself.
+    parser.add_argument("--json", action="store_true",
+                        help="print the rows as JSON instead of picking one")
+    parser.add_argument("--notes", nargs=3, metavar=("KIND", "DIR", "SESSION"),
+                        help="print the notes of a row")
+    parser.add_argument("--open", nargs=3, metavar=("KIND", "DIR", "SESSION"),
+                        help="open a row in the Herdr app")
+    parser.add_argument("--agent", choices=AGENTS, default=AGENTS[0],
+                        help="the agent --open starts for a row without a session")
     options = parser.parse_args()
+    if options.notes:
+        print(row_notes(*options.notes))
+        return
+    if options.open:
+        open_in_app(options.open, options.agent, app.panes(), PROJECTS, app.herdr_app)
+        return
     panes = []
-    picked = pick(load_choices(panes, PROJECTS, options.inbox), row_notes, AGENTS)
-    if picked is not None:
+    list_panes = app.panes if options.app else None
+    if options.json:
+        rows = load_choices(panes, PROJECTS, options.inbox, list_panes)
+        json.dump([line.split("\t", 3) for line in rows], sys.stdout)
+        return
+    picked = pick(load_choices(panes, PROJECTS, options.inbox, list_panes), row_notes, AGENTS)
+    if picked is None:
+        return
+    if options.app:
+        try:
+            open_in_app(*picked, panes, PROJECTS, app.herdr_app)
+        except (OSError, ValueError, subprocess.CalledProcessError) as e:
+            # The app closes the picker's dialog when it exits, so wait
+            # until the error is read.
+            input(f"Couldn't open it: {e}\nPress Enter to close. ")
+    else:
         open_picked(*picked, panes, PROJECTS, herdr)
 
 
@@ -243,15 +284,18 @@ def pane_records(listed):
     ]
 
 
-def open_picked(picked, agent, panes, projects, herdr):
-    """Opens the picked row, (kind, directory, agent:session), with its
-    agent, or agent for a row without a session: switches to the pane
-    among panes running its session, or starts the agent in a new tab of
-    the project's workspace or in a new workspace, creating a project
-    under projects for a new one. herdr runs a herdr command."""
+def plan(picked, agent, panes, projects):
+    """Returns how to open the picked row, (kind, directory,
+    agent:session), with its agent, or agent for a row without a
+    session: ("focus", pane) for the pane among panes running its
+    session, else ("start", workspace, directory, command) to run the
+    command in a new tab of the project's workspace, or in a new
+    workspace if workspace is None. Returns None for an error row.
+    Creates a project under projects for a new one, and stops a
+    background Claude session it resumes if the session is idle."""
     kind, directory, sid = picked[:3]
     if kind == "error":
-        return
+        return None
     selected, sid = sid.split(":", 1) if sid else (agent, "")
     if kind == "new":
         directory = str(new_project(projects, datetime.now()))
@@ -260,8 +304,7 @@ def open_picked(picked, agent, panes, projects, herdr):
     if sid:
         for p in panes:
             if p["agent"] == selected and p["session"] == sid:
-                herdr("agent", "focus", p["pane"])
-                return
+                return "focus", p["pane"]
         bg = background(sid, selected)
         if bg and bg[1] == "idle" and subprocess.run(
             ["claude", "stop", bg[0]], stdout=subprocess.DEVNULL
@@ -280,6 +323,19 @@ def open_picked(picked, agent, panes, projects, herdr):
         ),
         None,
     )
+    return "start", workspace, directory, cmd
+
+
+def open_picked(picked, agent, panes, projects, herdr):
+    """Opens the picked row in Herdr as plan says. herdr runs a herdr
+    command."""
+    planned = plan(picked, agent, panes, projects)
+    if planned is None:
+        return
+    if planned[0] == "focus":
+        herdr("agent", "focus", planned[1])
+        return
+    _, workspace, directory, cmd = planned
     if workspace:
         created = herdr(
             "tab", "create", "--workspace", workspace, "--cwd", directory, "--focus"
@@ -295,6 +351,24 @@ def open_picked(picked, agent, panes, projects, herdr):
         # Without herdr-project, nothing else reports the title.
         report_title(workspace, directory, herdr)
     herdr("pane", "run", created["result"]["root_pane"]["pane_id"], cmd)
+
+
+def open_in_app(picked, agent, panes, projects, run):
+    """Opens the picked row in the Herdr app as plan says, with panes
+    from app.panes. run runs an app command with a dict of arguments."""
+    planned = plan(picked, agent, panes, projects)
+    if planned is None:
+        return
+    if planned[0] == "focus":
+        run("pane.focus", {"terminal": planned[1]})
+        return
+    _, space, directory, cmd = planned
+    args = {"folder": directory, "argv": shlex.split(cmd)}
+    if space:
+        run("tab.new", {"space": space, **args})
+        return
+    name = front_matter(directory, "name")
+    run("space.new", {"name": name, **args} if name else args)
 
 
 if __name__ == "__main__":
