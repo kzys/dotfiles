@@ -3,7 +3,7 @@
 
 import { basename, extname } from "node:path";
 import { type BundledLanguage, bundledLanguages, codeToTokens } from "shiki";
-import { type FileDiff, type Token, hunkSides, parseDiff, withTokens } from "./diff.ts";
+import { type DiffLine, type FileDiff, type Token, hunkSides, parseDiff, withTokens } from "./diff.ts";
 import type { WorktreeDiff } from "./worktrees.ts";
 
 const THEME = "github-light";
@@ -61,6 +61,14 @@ export async function highlight(file: FileDiff): Promise<FileDiff> {
   } catch {
     return file;
   }
+}
+
+/** Returns lines of the file at path, each with its tokens if it could be
+ * highlighted. */
+export async function highlightLines(path: string, lines: string[]): Promise<{ text: string; tokens?: Token[] }[]> {
+  const context: DiffLine[] = lines.map((text, i) => ({ kind: "ctx", text, old: i + 1, new: i + 1 }));
+  const file: FileDiff = { from: path, to: path, status: "modified", binary: false, added: 0, removed: 0, hunks: [{ header: "", lines: context }] };
+  return (await highlight(file)).hunks[0].lines.map(({ text, tokens }) => ({ text, ...(tokens ? { tokens } : {}) }));
 }
 
 // A worktree's diff as the page shows it: in files, highlighted.

@@ -2,7 +2,7 @@
 // branches started.
 
 import { execFile, execFileSync } from "node:child_process";
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 // Untracked files past this many go unshown.
@@ -222,6 +222,28 @@ export async function summarize(dir: string): Promise<Summary> {
   return (await inspect(dir))[0];
 }
 
+// Lines of context around each change; the page can show more.
+const CONTEXT = 10;
+// A file larger than this isn't read for more context.
+const MAX_FILE = 5 << 20;
+
+/** Returns lines from through to of the file at path in dir, as they are
+ * now, numbered from 1, or null if it isn't a file in dir that can be read. */
+export function fileLines(dir: string, path: string, from: number, to: number): string[] | null {
+  try {
+    const root = realpathSync(dir);
+    const file = realpathSync(join(dir, path));
+    const stat = statSync(file);
+    if (!file.startsWith(`${root}/`) || !stat.isFile() || stat.size > MAX_FILE) return null;
+    const lines = readFileSync(file, "utf8").split("\n");
+    // A last newline ends the last line, rather than starting another.
+    if (lines.at(-1) === "") lines.pop();
+    return lines.slice(from - 1, to);
+  } catch {
+    return null;
+  }
+}
+
 /** Returns how dir differs from where its branch started: its commits
  * since and the diff of its files, untracked ones included as added. */
 export async function worktreeDiff(dir: string): Promise<WorktreeDiff> {
@@ -234,7 +256,7 @@ export async function worktreeDiff(dir: string): Promise<WorktreeDiff> {
   try {
     const [log, diff, others] = await Promise.all([
       born ? git(dir, ["log", "-z", "--format=%h %s", `${from}..HEAD`]) : "",
-      git(dir, [...DIFF, "--find-renames", from]),
+      git(dir, [...DIFF, "--find-renames", `--unified=${CONTEXT}`, from]),
       listing,
     ]);
     result.commits = log.split("\0").filter((l) => l).map((l) => {

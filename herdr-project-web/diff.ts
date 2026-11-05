@@ -202,3 +202,75 @@ export function splitRows(hunk: Hunk): [DiffLine | null, DiffLine | null][] {
   flush();
   return rows;
 }
+
+// What a hunk's header says: where it starts in each file and how long it
+// is, a start with no lines being the line before it.
+const HEADER = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$/;
+
+type Span = { old: number; oldLength: number; now: number; nowLength: number; rest: string };
+
+/** Returns what hunk's header says, with old and now as the numbers of its
+ * first lines, or where they would be. */
+function span(hunk: Hunk): Span | null {
+  const m = HEADER.exec(hunk.header);
+  if (!m) return null;
+  const [oldLength, nowLength] = [Number(m[2] ?? 1), Number(m[4] ?? 1)];
+  return {
+    old: Number(m[1]) + (oldLength ? 0 : 1), oldLength, now: Number(m[3]) + (nowLength ? 0 : 1), nowLength, rest: m[5],
+  };
+}
+
+const header = ({ old, oldLength, now, nowLength, rest }: Span) =>
+  `@@ -${oldLength ? old : old - 1},${oldLength} +${nowLength ? now : now - 1},${nowLength} @@${rest}`;
+
+// Lines of the new file not shown, from through to, or to its end with to
+// null. Adding offset to a line's number gives its number in the old file.
+export type Gap = { from: number; to: number | null; offset: number };
+
+/** Returns the gap before hunks[i], or after the last hunk with i past the
+ * end, or null if there is none: hunks touch, or the file ends there. */
+export function gapAt(hunks: Hunk[], i: number): Gap | null {
+  const [before, after] = [hunks[i - 1], hunks[i]];
+  const [a, b] = [before && span(before), after && span(after)];
+  // A file with no hunks, like a binary or renamed one, has no lines to show.
+  if ((!a && !b) || (before && !a) || (after && !b)) return null;
+  // git marks a last line without a newline.
+  if (!after && before?.lines.at(-1)?.kind === "note") return null;
+  const from = a ? a.now + a.nowLength : 1;
+  const to = b ? b.now - 1 : null;
+  if (to !== null && from > to) return null;
+  const offset = b ? b.old - b.now : a!.old + a!.oldLength - (a!.now + a!.nowLength);
+  return { from, to, offset };
+}
+
+/** Returns what hunk shows of the new file as its first or last line, or
+ * null if it shows none. */
+export function edgeLine(hunk: Hunk | undefined, end: "first" | "last"): string | null {
+  const lines = (hunk?.lines ?? []).filter((l) => l.kind === "add" || l.kind === "ctx");
+  return (end === "first" ? lines[0] : lines.at(-1))?.text ?? null;
+}
+
+/** Returns hunks with lines, those of the gap at i from its start, added
+ * to the hunk before it, or from its end, to the hunk after it, joining the
+ * two once they touch. */
+export function expandHunks(hunks: Hunk[], i: number, lines: DiffLine[], end: "start" | "end"): Hunk[] {
+  const next = [...hunks];
+  const at = end === "start" ? i - 1 : i;
+  const s = span(next[at])!;
+  next[at] = {
+    header: header({
+      ...s, oldLength: s.oldLength + lines.length, nowLength: s.nowLength + lines.length,
+      ...(end === "end" ? { old: s.old - lines.length, now: s.now - lines.length } : {}),
+    }),
+    lines: end === "start" ? [...next[at].lines, ...lines] : [...lines, ...next[at].lines],
+  };
+  const [left, right] = [next[i - 1], next[i]];
+  if (left && right && !gapAt(next, i)) {
+    const [a, b] = [span(left)!, span(right)!];
+    next.splice(i - 1, 2, {
+      header: header({ ...a, oldLength: a.oldLength + b.oldLength, nowLength: a.nowLength + b.nowLength }),
+      lines: [...left.lines, ...right.lines],
+    });
+  }
+  return next;
+}

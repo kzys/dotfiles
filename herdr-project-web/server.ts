@@ -16,7 +16,7 @@ import { HerdrEvents } from "./events.ts";
 import * as github from "./github.ts";
 import { HerdrError, request } from "./herdr.ts";
 import { type HookEvent, type HookHandler, hookServer, listenOn, readBody, speaker } from "./hooks.ts";
-import { highlightDiff } from "./highlight.ts";
+import { highlightDiff, highlightLines } from "./highlight.ts";
 import { frontMatter } from "./inbox.ts";
 import { agentCommand, instructions, launchDirectory, launchScript, parseAgent, projectDir } from "./launch.ts";
 import { readLearnings } from "./learnings.ts";
@@ -36,7 +36,7 @@ import {
   type Herdr, type Watched, agentStates, checkoutOf, linkCheckout, openProjects, projectDirs, projectLabels, readProjectFile, readState,
 } from "./state.ts";
 import { type Found, title, watchWorkspace, watchedFrom } from "./watched.ts";
-import { checkoutDirs, summarize, worktreeDiff, worktreeDirs } from "./worktrees.ts";
+import { checkoutDirs, fileLines, summarize, worktreeDiff, worktreeDirs } from "./worktrees.ts";
 
 const here = import.meta.dirname;
 const home = homedir();
@@ -433,6 +433,15 @@ const server = createServer((req, res) => {
         .then(highlightDiff)
         .then((diff) => json(res, 200, diff))
         .catch((e) => json(res, 500, { error: e.message }));
+  } else if (path === "/api/lines") {
+    // More context for a diff: only the worktrees the page lists, like it.
+    const q = url.searchParams;
+    const dir = q.get("dir");
+    const lines = projectWorktrees().some((p) => p.worktrees.includes(dir ?? ""))
+      ? fileLines(dir!, q.get("path") ?? "", Number(q.get("from")), Number(q.get("to")))
+      : null;
+    if (lines === null) json(res, 404, { error: "no such file" });
+    else highlightLines(q.get("path")!, lines).then((tokens) => json(res, 200, tokens));
   } else if (path === "/api/file") {
     // Only the files of the projects the page lists, not any file asked for.
     const dir = url.searchParams.get("dir");

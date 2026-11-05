@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseDiff } from "./diff.ts";
-import { checkoutDirs, lastSubject, summarize, worktreeDiff, worktreeDirs } from "./worktrees.ts";
+import { checkoutDirs, fileLines, lastSubject, summarize, worktreeDiff, worktreeDirs } from "./worktrees.ts";
 
 test("diffs a worktree from where its branch left the remote's default", async () => {
   const root = mkdtempSync(join(tmpdir(), "herdr-project-web-"));
@@ -89,4 +89,33 @@ test("names a worktree's last commit again once it changes", () => {
   assert.equal(lastSubject(dir), "First");
   git("commit", "-q", "--allow-empty", "-m", "Second");
   assert.equal(lastSubject(dir), "Second");
+});
+
+test("shows ten lines of context around a change", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "herdr-project-web-"));
+  const git = (...args: string[]) => execFileSync("git", args, { cwd: dir });
+  const lines = Array.from({ length: 41 }, (_, i) => `line ${i}`);
+  git("init", "-q");
+  git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "start");
+  writeFileSync(join(dir, "f"), lines.join("\n"));
+  git("add", "f");
+  git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "file");
+  lines[20] = "changed";
+  writeFileSync(join(dir, "f"), lines.join("\n"));
+  assert.equal((await worktreeDiff(dir)).diff.split("\n").filter((l) => l.startsWith(" ")).length, 20);
+});
+
+test("reads lines of a file in the worktree and nothing outside it", () => {
+  const root = mkdtempSync(join(tmpdir(), "herdr-project-web-"));
+  const dir = join(root, "wt");
+  mkdirSync(join(dir, "sub"), { recursive: true });
+  writeFileSync(join(dir, "sub/f"), "one\ntwo\nthree\n");
+  writeFileSync(join(root, "secret"), "no\n");
+  symlinkSync(join(root, "secret"), join(dir, "link"));
+  assert.deepEqual(fileLines(dir, "sub/f", 2, 3), ["two", "three"]);
+  assert.deepEqual(fileLines(dir, "sub/f", 3, 20), ["three"]);
+  assert.deepEqual(fileLines(dir, "sub/f", 4, 20), []);
+  assert.equal(fileLines(dir, "../secret", 1, 1), null);
+  assert.equal(fileLines(dir, "link", 1, 1), null);
+  assert.equal(fileLines(dir, "missing", 1, 1), null);
 });

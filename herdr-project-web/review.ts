@@ -27,18 +27,30 @@ export function reviewMessage(dir: string, branch: string | null, comments: Comm
   return `Review comments on ${dir}${branch ? ` (${branch})` : ""}. Address each, then say what you did.\n\n${parts.join("\n\n")}`;
 }
 
-/** Returns the agents that can take comments on the diff of dir, as
- * [pane, label]: those of the projects that work in it, the ones inside it
- * first, in an order that stays put as projects change rank. */
+export type Reviewer = { id: string; label: string; inside: boolean };
+
+/** Returns the agents that can take comments on the diff of dir: those of
+ * the projects that work in it, the ones inside it first, in an order that
+ * stays put as projects change rank. */
 export function reviewers(
   projects: { name: string; worktrees: { dir: string }[]; panes: { id: string; role: string | null; cwd: string | null }[] }[],
   dir: string,
-): [string, string][] {
-  const inside = (cwd: string | null) => cwd === dir || !!cwd?.startsWith(`${dir}/`);
+): Reviewer[] {
+  const within = (cwd: string | null) => cwd === dir || !!cwd?.startsWith(`${dir}/`);
   return projects.filter((p) => p.worktrees.some((w) => w.dir === dir))
-    .flatMap((p) => p.panes.map((a) => ({ a, label: a.role ? `${p.name} · ${a.role} (${a.id})` : `${p.name} · ${a.id}` })))
-    .sort((x, y) => Number(inside(y.a.cwd)) - Number(inside(x.a.cwd)) || x.a.id.localeCompare(y.a.id))
-    .map(({ a, label }): [string, string] => [a.id, label]);
+    .flatMap((p) => p.panes.map((a) => ({
+      id: a.id, label: a.role ? `${p.name} · ${a.role} (${a.id})` : `${p.name} · ${a.id}`, inside: within(a.cwd),
+    })))
+    .sort((x, y) => Number(y.inside) - Number(x.inside) || x.id.localeCompare(y.id));
+}
+
+/** Returns the agent to send comments to without asking, or null: the only
+ * one offered, or the only one inside the diff. Any other choice would be
+ * a guess, and the comments would go to an agent that knows nothing of them. */
+export function clearReviewer(agents: Reviewer[]): Reviewer | null {
+  const inside = agents.filter((a) => a.inside);
+  if (inside.length === 1) return inside[0];
+  return agents.length === 1 ? agents[0] : null;
 }
 
 /** Returns the comments no line of files holds any more: their line left
