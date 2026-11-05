@@ -4,7 +4,7 @@ import { Fragment } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { type DiffLine, type FileDiff, type Gap, type Hunk, expandHunks, filePath, gapAt, splitRows } from "./diff.ts";
 import type { HighlightedDiff } from "./highlight.ts";
-import { type Comment, type Reviewer, clearReviewer, commentKey, displaced, reviewMessage, reviewers, withComment } from "./review.ts";
+import { type Comment, type Reviewer, clearReviewer, commentKey, displaced, receiverStarted, receiverStatus, reviewMessage, reviewers, withComment } from "./review.ts";
 import type { State } from "./state.ts";
 import { Refresh, matches, send as post, useFetched } from "./ui.tsx";
 import type { Summary } from "./worktrees.ts";
@@ -305,7 +305,9 @@ type Sender = {
   target: Reviewer | null;
   pick: (id: string) => void;
   sending: boolean;
-  status: string | null;
+  // The agent last sent to and when, until dismissed.
+  sent: (Reviewer & { at: number }) | null;
+  dismiss: () => void;
   // Returns why it couldn't send them, or null once it has.
   send: (comments: Comment[]) => Promise<string | null>;
 };
@@ -316,7 +318,7 @@ function useSender(review: Review, wt: HighlightedDiff | null, state: State | nu
   const agents = state?.controls && wt ? reviewers(state.projects, wt.dir) : [];
   const [picked, pick] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
+  const [sent, setSent] = useState<Sender["sent"]>(null);
   // One picked that has gone stays gone, rather than becoming another.
   const target = picked ? (agents.find((a) => a.id === picked) ?? null) : clearReviewer(agents);
   const send = async (comments: Comment[]) => {
@@ -325,8 +327,7 @@ function useSender(review: Review, wt: HighlightedDiff | null, state: State | nu
     try {
       await post("POST", `/api/agents/${encodeURIComponent(target.id)}/messages`, { text: reviewMessage(wt.dir, wt.branch, comments) });
       review.remove(comments);
-      setStatus(`Sent to ${target.label}. It gets ${comments.length === 1 ? "it" : "them"} when it is free.`);
-      setTimeout(() => setStatus(null), 5000);
+      setSent({ ...target, at: Date.now() });
       return null;
     } catch (e) {
       return (e as Error).message;
@@ -334,7 +335,23 @@ function useSender(review: Review, wt: HighlightedDiff | null, state: State | nu
       setSending(false);
     }
   };
-  return { agents, target, pick, sending, status, send };
+  return { agents, target, pick, sending, sent, dismiss: () => setSent(null), send };
+}
+
+/** Returns what the agent sent to is doing, kept current by state, from
+ * the time it was sent to. */
+function SentNote({ sent, dismiss, state }: { sent: Reviewer; dismiss: () => void; state: State | null }) {
+  const started = useRef(false);
+  started.current ||= receiverStarted(state, sent.id);
+  const [agent, text] = receiverStatus(state, sent.id, started.current);
+  return (
+    <p class="sent-note">
+      Sent to {sent.label}: <span class={`pr-agent agent-${agent}`}>{text}</span>
+      <button class="copy" onClick={dismiss}>
+        dismiss
+      </button>
+    </p>
+  );
 }
 
 /** Returns the choice of agent, where there is one to make. */
@@ -648,7 +665,7 @@ export function WorktreeDiffView({ dir, query, state }: { dir: string; query: st
       </h2>
       {error && <p class="empty">Couldn't read the diff: {error}</p>}
       {lineError && <p class="empty">Couldn't read more lines: {lineError}</p>}
-      {sender.status && <p class="sent-note">{sender.status}</p>}
+      {sender.sent && <SentNote key={sender.sent.at} sent={sender.sent} dismiss={sender.dismiss} state={state} />}
       {!wt ? (
         !error && <p class="empty">Asking git…</p>
       ) : (

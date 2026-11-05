@@ -161,8 +161,9 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
   border-bottom: 1px solid var(--panel-edge);
 }
 .pane { display: inline-flex; align-items: baseline; gap: var(--space-3); }
-.pane .pr-agent { color: var(--muted); font-size: var(--normal); text-transform: none; }
-.pane .pr-agent.agent-blocked { color: var(--red); }
+.pane .pr-agent, .agent-counts .pr-agent, .sent-note .pr-agent { color: var(--muted); font-size: var(--normal); text-transform: none; }
+.pane .pr-agent.agent-blocked, .agent-counts .pr-agent.agent-blocked, .sent-note .pr-agent.agent-blocked { color: var(--red); }
+.agent-counts { display: flex; gap: var(--space-4); font-size: var(--normal); color: var(--muted); }
 .ctx { font: var(--normal) var(--mono); color: var(--muted); }
 .ctx-full { color: var(--red); font-weight: 600; }
 .card > .panes:last-child { border-bottom: 0; }
@@ -482,6 +483,9 @@ code { font-family: var(--mono); font-size: var(--normal); }
   background: var(--panel);
   border: 1px solid var(--panel-edge);
 }
+.sent-note .copy { margin-left: var(--space-3); }
+/* The note stays, so the end of the diff can scroll out from under it. */
+.diffs:has(.sent-note) { padding-bottom: var(--space-7); margin-bottom: var(--space-7); }
 .ln-comment { cursor: pointer; }
 .ln-comment:hover { color: var(--accent); }
 .comment-row td { padding: var(--space-3); background: var(--well); }

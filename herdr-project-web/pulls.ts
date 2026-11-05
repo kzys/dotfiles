@@ -25,6 +25,14 @@ export function statusState(status: string | null | undefined): AgentState {
   return "unknown";
 }
 
+/** Returns how many of panes are in each state with any, blocked first. */
+export function agentCounts(panes: { status: string | null }[]): [AgentState, number][] {
+  const states = panes.map((p) => statusState(p.status));
+  return (["blocked", "working", "idle", "unknown"] as const)
+    .map((s): [AgentState, number] => [s, states.filter((t) => t === s).length])
+    .filter(([, n]) => n > 0);
+}
+
 /** Returns where pr stands, most pressing first, as a label and its
  * kind: "bad" when it needs fixing or the user, "wait" while checks
  * run, its agent works or it is a draft, "ok" when it is ready for
