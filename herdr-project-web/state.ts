@@ -103,6 +103,7 @@ export type Herdr = {
     cwd?: string;
     foreground_cwd?: string;
     agent?: string | null;
+    agent_session?: { value?: string } | null;
     agent_status?: string;
     // What the agent's status line reports, like its role and ctx.
     tokens?: Record<string, string>;

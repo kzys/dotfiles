@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=22.6"
+    "node": ">=22.13"
   },
   "scripts": {
     "start": "node --experimental-strip-types --disable-warning=ExperimentalWarning server.ts",

@@ -1,206 +1,26 @@
-#!/usr/bin/env python3
-"""Start the selected agent with instructions for finding checkouts,
-keeping notes, and naming the Herdr workspace, in its project's
-directory under ~/project. A new session started elsewhere gets a new
-project, and works in the directory it was started from too.
-In Herdr, the "## Remaining" section of the agent's notes shows in a
-pane above it.
+#!/bin/sh
+# herdr-project [--agent <claude|codex|opencode>] [args...] starts the
+# agent in its project, with instructions for working there, passing it
+# args. A new session started outside ~/project gets a new project. The
+# server works out how; this replaces itself with what it says, so that
+# the agent is the pane's own process.
 
-herdr-project --agent <claude|codex|opencode> selects the agent for this session,
-defaulting to claude. Other arguments are passed to the selected agent.
+here=$(dirname "$(readlink -f "$0")")
+case $1 in
+--watch | --start-watch | --remaining) exec "$here/herdr-project-py" "$@" ;;
+esac
 
-herdr-project --remaining <pane> runs in that pane: it reprints the
-section of the agent in Herdr pane <pane>, whose notes file is named
-by the role token the agent reports, until the pane is gone, and fits
-its own pane to the section.
-
-herdr-project --watch [<org>...] lists the user's open pull requests,
-in the given GitHub organizations if any. It tells the user, and the
-agent working on each pull request, when its checks, review or state
-change. It runs herdr-project-web, which must be installed, serving a
-page of it. The page also lists active Slack conversations
-and Linear issues, if the user has those claude.ai connectors, telling
-the user when one waits on them; agents whose context is nearly full,
-asking each once to update its notes; and shell panes idle for a day.
-It titles the watch workspace with how much waits on the user.
-
-herdr-project --start-watch starts the watcher in a new Herdr workspace
-named watch, unless a pane already has it.
-"""
-
-import json
-import os
-import subprocess
-import sys
-from datetime import datetime
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from herdr_project.agent import parse_agent
-from herdr_project.herdr import ancestors, herdr, in_pane
-from herdr_project.instructions import instructions, new_project, start_in
-from herdr_project.notes import report_title
-from herdr_project import watch
-from herdr_project.remaining import follow_remaining, forget_follower, remember_follower
-
-SELF = Path(__file__).resolve()
-PROJECTS = Path.home() / "project"
-
-
-def remaining_pane():
-    """Opens a pane above this one following this agent's "## Remaining"
-    section, if this pane has its tab to itself. Raises if herdr fails,
-    keeping its errors out of the agent's terminal."""
-    env = os.environ
-
-    def quiet(*args):
-        return herdr(*args, stderr=subprocess.DEVNULL)
-
-    panes = quiet("pane", "list", "--workspace", env["HERDR_WORKSPACE_ID"])
-    tab = env["HERDR_TAB_ID"]
-    if sum(p["tab_id"] == tab for p in panes["result"]["panes"]) != 1:
-        return
-    split = quiet(
-        "pane", "split", "--current", "--direction", "down", "--ratio", "0.35",
-        "--cwd", os.getcwd(), "--no-focus",
-    )
-    pane = split["result"]["pane"]["pane_id"]
-    command = f"exec '{SELF}' --remaining {env['HERDR_PANE_ID']}"
-    try:
-        quiet("pane", "run", pane, command)
-    except (OSError, subprocess.CalledProcessError):
-        quiet("pane", "close", pane)
-        raise
-    remember_follower(pane, env["HERDR_PANE_ID"], env)
-    quiet("pane", "swap", "--source-pane", pane,
-          "--target-pane", env["HERDR_PANE_ID"])
-    quiet("pane", "focus", "--direction", "down", "--pane", pane)
-
-
-def main(argv):
-    selected, argv = parse_agent(argv, ("claude", "codex", "opencode"))
-
-    if argv[:1] == ["--remaining"]:
-        if len(argv) != 2:
-            print("usage: herdr-project --remaining <pane>", file=sys.stderr)
-            return 2
-        try:
-            own = os.environ.get("HERDR_PANE_ID")
-            follow_remaining(
-                argv[1], lambda *args: herdr(*args, stderr=subprocess.DEVNULL), own=own)
-            if own:
-                forget_follower(own, argv[1],
-                                lambda *args: herdr(*args, stderr=subprocess.PIPE),
-                                os.environ)
-        except KeyboardInterrupt:
-            pass
-        return 0
-
-    if argv[:1] == ["--watch"]:
-        pane = os.environ["HERDR_PANE_ID"] if in_pane(os.environ, ancestors()) else None
-        return watch.main(argv[1:], pane)
-
-    if argv == ["--start-watch"]:
-        try:
-            watch.start(lambda *args: herdr(*args, stderr=subprocess.PIPE), os.environ)
-        except (KeyError, OSError, subprocess.CalledProcessError):
-            return 1
-        return 0
-
-    # Keep the project, with its notes, under ~/project wherever the agent
-    # was started, so that the tools that look there find it.
-    directory, origin = start_in(os.getcwd(), PROJECTS, Path.home(), argv)
-    if directory is None:
-        os.chdir(new_project(PROJECTS, datetime.now()))
-
-    # Herdr already tracks sessions, so keep them out of the background.
-    if os.environ.get("HERDR_ENV") == "1":
-        if selected == "claude":
-            os.environ["CLAUDE_CODE_DISABLE_AGENT_VIEW"] = "1"
-        try:
-            remaining_pane()
-        except (KeyError, TypeError, OSError, subprocess.CalledProcessError):
-            pass
-        try:
-            report_title(os.environ["HERDR_WORKSPACE_ID"], os.getcwd(),
-                         lambda *args: herdr(*args, stderr=subprocess.DEVNULL))
-        except (KeyError, OSError, subprocess.CalledProcessError):
-            pass
-
-    program, args, env = command(selected, argv, origin)
-    os.environ.update(env)
-    os.execvp(program, args)
-
-
-def alive(pid):
-    """Reports whether process pid exists."""
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        pass
-    return True
-
-
-def command(selected, argv, origin=None, state=None):
-    """Returns the program and arguments that start the selected agent,
-    passing it argv, and the environment variables to set for it. origin
-    is the directory the agent was started from, outside its project,
-    which it may also work in, or None. OpenCode reads instructions only
-    from files, so for it they are written to one named after this
-    process, which becomes the agent, under state, by default
-    herdr-project's state directory, removing those of agents that have
-    exited. OpenCode isn't given origin or the dotfiles checkout as
-    extra directories; it asks before working outside its project."""
-    text = instructions(os.getcwd(), SELF.parent.parent, datetime.now().astimezone())
-    extra, env = [], {"CLAUDE_CODE_SHELL": "/bin/bash"}
-    if origin:
-        text += (f"\n\nThis session was started in `{origin}`, outside ~/project, "
-                 "so this task's directory was made for it. Work on what is in "
-                 f"`{origin}` as Checkouts says, keeping your notes here.")
-        extra = ["--add-dir", str(origin)]
-        # Claude reads CLAUDE.md files of added directories only if asked.
-        env["CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD"] = "1"
-    if selected == "codex":
-        # --resume is the picker's common spelling; Codex uses a subcommand.
-        if argv[:1] == ["--resume"]:
-            argv = ["resume", *argv[1:]]
-        rules = (SELF.parent.parent / "config/opencode/AGENTS.md").read_text()
-        # Codex doesn't expand imports, so give it a path it can open.
-        rules = rules.replace("@../../", f"@{SELF.parent.parent}/")
-        return "codex", [
-            # Scratch projects may be untrusted, where Codex defaults to
-            # read-only permissions and rejects additional writable roots.
-            "codex", "--sandbox", "workspace-write",
-            "--add-dir", str(SELF.parent.parent), *extra,
-            "-c", "developer_instructions=" + json.dumps(rules + "\n\n" + text),
-            *argv,
-        ], {}
-
-    if selected == "opencode":
-        # --resume is the picker's common spelling.
-        if argv[:1] == ["--resume"]:
-            argv = ["--session", *argv[1:]]
-        # It reads the dotfiles' rules from ~/.config/opencode/AGENTS.md
-        # already.
-        folder = (state or watch.state_dir(os.environ)) / "opencode"
-        folder.mkdir(parents=True, exist_ok=True)
-        for old in folder.glob("*.md"):
-            if old.stem.isdigit() and not alive(int(old.stem)):
-                old.unlink(missing_ok=True)
-        path = folder / f"{os.getpid()}.md"
-        path.write_text(text + "\n")
-        return "opencode", ["opencode", *argv], {
-            "OPENCODE_CONFIG_CONTENT": json.dumps({"instructions": [str(path)]})}
-
-    # Run claude's commands in bash, not the login shell, whose quirks
-    # trip it up.
-    return "claude", [
-        "claude", "--add-dir", str(SELF.parent.parent), *extra,
-        "--append-system-prompt", text, *argv,
-    ], env
-
-
-if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+for arg in "$@"; do
+    set -- "$@" --data-urlencode "arg=$arg"
+    shift
+done
+state=${XDG_STATE_HOME:-$HOME/.local/state}
+script=$(curl --silent --fail-with-body --max-time 10 \
+    --unix-socket "$state/herdr-project/run/server.sock" \
+    --data-urlencode "cwd=$(pwd -P)" --data-urlencode "pid=$$" \
+    --data-urlencode "herdr=${HERDR_ENV:-}" --data-urlencode "workspace=${HERDR_WORKSPACE_ID:-}" \
+    "$@" http://localhost/launch) || {
+    echo "herdr-project: ${script:-the server is not answering. herdr-project --watch runs it.}" >&2
+    exit 1
+}
+eval "$script"

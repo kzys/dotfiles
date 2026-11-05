@@ -77,8 +77,14 @@ export async function readBody(req: IncomingMessage): Promise<string | null> {
  * the pane in X-Herdr-Pane and the posting process in X-Agent-Pid, and
  * ignores subagents and processes outside the pane; GET /hooks lists
  * latest. lineage returns a process's ancestors' command lines, and
- * changed is called after an event is kept. */
-export function hookServer(latest: Map<string, HookEvent>, lineage = ancestors, changed = () => {}): Server {
+ * changed is called after an event is kept. Other requests go to other,
+ * given the request's path. */
+export function hookServer(
+  latest: Map<string, HookEvent>,
+  lineage = ancestors,
+  changed = () => {},
+  other = (_req: IncomingMessage, res: ServerResponse, _url: URL) => void res.writeHead(404).end(),
+): Server {
   async function post(req: IncomingMessage, res: ServerResponse, hook: { agent: string; event: string }) {
     const at = Date.now();
     const body = await readBody(req);
@@ -105,14 +111,15 @@ export function hookServer(latest: Map<string, HookEvent>, lineage = ancestors, 
     res.writeHead(204).end();
   }
   return createServer((req, res) => {
-    const path = new URL(req.url ?? "/", "http://localhost").pathname;
+    const url = new URL(req.url ?? "/", "http://localhost");
+    const path = url.pathname;
     const hook = hookPath(path);
     if (req.method === "POST" && hook) {
       post(req, res, hook).catch(() => res.writeHead(500).end());
     } else if (req.method === "GET" && path === "/hooks") {
       res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify(Object.fromEntries(latest)));
     } else {
-      res.writeHead(404).end();
+      other(req, res, url);
     }
   });
 }

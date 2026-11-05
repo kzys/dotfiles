@@ -4,9 +4,9 @@
 
 import { execFile } from "node:child_process";
 import { type FSWatcher, openSync, readFileSync, watch, writeSync } from "node:fs";
-import { type ServerResponse, createServer } from "node:http";
+import { type IncomingMessage, type ServerResponse, createServer } from "node:http";
 import { homedir } from "node:os";
-import { extname, join, relative } from "node:path";
+import { dirname, extname, join, relative } from "node:path";
 import { promisify } from "node:util";
 import { build } from "esbuild";
 import {
@@ -15,14 +15,17 @@ import {
 import { HerdrEvents } from "./events.ts";
 import * as github from "./github.ts";
 import { HerdrError, request } from "./herdr.ts";
-import { type HookEvent, hookServer, listenOn } from "./hooks.ts";
+import { type HookEvent, hookServer, listenOn, readBody } from "./hooks.ts";
 import { highlightDiff } from "./highlight.ts";
+import { agentCommand, launchDirectory, launchScript, parseAgent } from "./launch.ts";
 import { readLearnings } from "./learnings.ts";
 import { connectors } from "./headless.ts";
 import * as linear from "./linear.ts";
 import { type Owner, notesTexts } from "./owners.ts";
 import { type PaneHerdr, checkPanes } from "./panes.ts";
 import { type Checked, checkQueue } from "./queues.ts";
+import { type OpenHerdr, background, choices, inboxChoices, open, paneRecords, plan, rowNotes } from "./rows.ts";
+import { codexSessions } from "./sessions.ts";
 import * as slack from "./slack.ts";
 import {
   type Herdr, type Watched, agentStates, openProjects, projectDirs, projectLabels, readProjectFile, readState,
@@ -439,5 +442,90 @@ const server = createServer((req, res) => {
 // Only this machine: the page shows private work.
 server.listen(port, "127.0.0.1", () => console.log(`herdr-project-web on http://127.0.0.1:${port}/`));
 
+const dotfiles = dirname(here);
+const launcher = join(dotfiles, "bin/herdr-project");
+
+/** Returns the README.md of the project in directory, or null. */
+function readProjectReadme(directory: string): string | null {
+  try {
+    return readFileSync(join(directory, "README.md"), "utf8");
+  } catch {
+    return null;
+  }
+}
+
+/** Reports the title in the front matter of the project in directory to
+ * Herdr workspace, for the Spaces panel, if it has one. */
+function reportTitle(workspace: string, directory: string) {
+  const title = projectLabels(directory, readProjectReadme(directory)).title;
+  if (title !== "(no title)") return tryAsk("workspace.report_metadata", { workspace_id: workspace, source: "readme-title", tokens: { title } });
+}
+
+/** Returns the script that starts the agent herdr-project asks for, in
+ * form, what it posted, creating its project if it needs one. */
+function launch(form: URLSearchParams): string {
+  const { agent, argv } = parseAgent(form.getAll("arg"));
+  const now = new Date();
+  const [directory, origin] = launchDirectory(form.get("cwd") ?? home, projectRoot, home, argv, now);
+  const pid = Number(form.get("pid"));
+  const command = agentCommand(agent, argv, directory, origin, { dotfiles, stateDir, pid, now });
+  // Herdr already tracks sessions, so keep them out of the background.
+  if (form.get("herdr") === "1" && agent === "claude") command.env.CLAUDE_CODE_DISABLE_AGENT_VIEW = "1";
+  const workspace = form.get("workspace");
+  if (workspace) reportTitle(workspace, directory);
+  return launchScript(directory, command);
+}
+
+const openHerdr: OpenHerdr = {
+  focus: (pane) => ask("agent.focus", { target: pane }),
+  tab: async (workspace, cwd) => (await ask("tab.create", { workspace_id: workspace, cwd, focus: true })).root_pane.pane_id,
+  workspace: async (cwd, label) => {
+    const { workspace, root_pane } = await ask("workspace.create", { cwd, focus: true, ...(label ? { label } : {}) });
+    return { workspace: workspace.workspace_id, pane: root_pane.pane_id };
+  },
+  title: async (workspace, directory) => reportTitle(workspace, directory),
+  run: (pane, command) => paneHerdr.run(pane, command),
+};
+
+const planDeps = {
+  background,
+  stop: (id: string) => promisify(execFile)("claude", ["stop", id]).then(() => true, () => false),
+  now: () => new Date(),
+};
+
+/** Serves what herdr-project and the picker ask for on the socket. */
+async function socketRequest(req: IncomingMessage, res: ServerResponse, url: URL) {
+  const path = url.pathname;
+  // Now, not as last polled: going by old panes could resume a session
+  // that already runs.
+  const panes = async () => paneRecords({ workspaces: [], panes: (await ask("pane.list")).panes });
+  if (req.method === "POST" && path === "/launch") {
+    const body = await readBody(req);
+    if (body === null) return void res.writeHead(413).end("arguments too long");
+    const script = launch(new URLSearchParams(body));
+    res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" }).end(script);
+  } else if (req.method === "GET" && path === "/picker") {
+    const rows = url.searchParams.has("inbox")
+      ? inboxChoices(await panes(), codexSessions(), JSON.parse(last))
+      : choices(await panes(), projectRoot, codexSessions());
+    json(res, 200, rows);
+  } else if (req.method === "GET" && path === "/picker/notes") {
+    const q = url.searchParams;
+    res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" })
+      .end(rowNotes(q.get("kind") ?? "", q.get("dir") ?? "", q.get("session") ?? ""));
+  } else if (req.method === "POST" && path === "/picker/open") {
+    const { row, agent } = JSON.parse((await readBody(req)) ?? "{}");
+    await open(await plan(row, agent, await panes(), projectRoot, launcher, planDeps), openHerdr);
+    res.writeHead(204).end();
+  } else {
+    res.writeHead(404).end();
+  }
+}
+
 // Only the watcher's server: hooks reach one server, like the checks.
-if (orgs) await listenOn(hookServer(hookEvents, undefined, refresh), join(stateDir, "run/server.sock"));
+if (orgs) {
+  const hookListener = hookServer(hookEvents, undefined, refresh, (req, res, url) => {
+    socketRequest(req, res, url).catch((e) => res.writeHead(500).end(String(e.message)));
+  });
+  await listenOn(hookListener, join(stateDir, "run/server.sock"));
+}
