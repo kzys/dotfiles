@@ -529,6 +529,41 @@ function FileView({ file, id, layout, review, sender, expand, ended }: {
   );
 }
 
+// How the page says what chose a diff's base.
+const SOURCES: Record<string, string> = { "pull request": "its pull request", setting: "chosen", "created from": "where it was created" };
+
+/** Returns the choice of what a branch starts from. A pull request's base
+ * is GitHub's to change. */
+function BasePicker({ wt, refresh }: { wt: HighlightedDiff; refresh: () => void }) {
+  const [error, setError] = useState<string | null>(null);
+  if (!wt.branch || wt.source === "pull request" || !wt.baseOptions.length) return null;
+  const choose = async (base: string) => {
+    try {
+      await post("POST", "/api/base", { dir: wt.dir, branch: wt.branch, base: base || null });
+      setError(null);
+      refresh();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+  return (
+    <>
+      <select aria-label="Base" value="" onChange={(e) => choose(e.currentTarget.value)}>
+        <option value="" disabled hidden>
+          change base
+        </option>
+        {wt.chosenBase && <option value="">automatic</option>}
+        {wt.baseOptions.map((b) => (
+          <option key={b} value={b}>
+            {b}
+          </option>
+        ))}
+      </select>
+      {error && <span class="agent-error">{error}</span>}
+    </>
+  );
+}
+
 // The hunks of a file with lines added from its gaps, for the changes they
 // were added to, and whether its end has been reached.
 type Expanded = { changes: string; hunks: Hunk[]; ended: boolean };
@@ -616,9 +651,11 @@ export function WorktreeDiffView({ dir, query, state }: { dir: string; query: st
             <header>
               <span class="name">{wt.branch ?? "detached"}</span>
               <span class="title">
-                {wt.base ? `since it left ${wt.base}` : "since HEAD"} · {dir}
+                {wt.base ? `since it left ${wt.base}` : "since HEAD"}
+                {wt.source && wt.source !== "default" && ` (${SOURCES[wt.source]})`} · {dir}
               </span>
               <Stat added={added} removed={removed} />
+              <BasePicker wt={wt} refresh={refresh} />
             </header>
             {wt.error && <p class="empty file-note wt-error">{wt.error}</p>}
             {wt.commits.length > 0 && (

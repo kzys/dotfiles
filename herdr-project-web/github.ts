@@ -22,7 +22,7 @@ query($q: String!, $open: String!) {
 fragment pullRequests on SearchResultItemConnection {
     nodes {
       ... on PullRequest {
-        number title url state isDraft headRefName reviewDecision
+        number title url state isDraft headRefName baseRefName reviewDecision
         repository { nameWithOwner }
         headRepository { nameWithOwner }
         commits(last: 1) { nodes { commit { statusCheckRollup {
@@ -62,6 +62,8 @@ export type Pull = {
   number: number;
   title: string;
   branch: string;
+  // The branch it would merge into.
+  base?: string;
   state: string;
   draft: boolean;
   checks: string | null;
@@ -145,6 +147,7 @@ export function pullRequests(data: any): Pull[] {
       number: node.number,
       title: node.title,
       branch: node.headRefName,
+      base: node.baseRefName,
       state: node.state,
       draft: node.isDraft,
       checks: rollup.state ?? null,
@@ -154,6 +157,13 @@ export function pullRequests(data: any): Pull[] {
     });
   }
   return prs;
+}
+
+/** Returns what the open pull requests of prs merge into, by "owner/name:
+ * branch". One from a fork says nothing of a branch of that name here. */
+export function pullBases(prs: Pull[]): Record<string, string> {
+  const open = prs.filter((p) => p.state === "OPEN" && p.base && p.repo === p.head);
+  return Object.fromEntries(open.map((p) => [`${p.repo}:${p.branch}`, p.base!]));
 }
 
 /** Returns the "owner/name" of the GitHub repository at remote url, or
@@ -392,7 +402,9 @@ export async function poll(
   path: string,
   orgs: string[] = [],
   fetchPrs: (orgs: string[]) => Promise<any> = (o) => fetch("gh", o),
-): Promise<{ lines: string[]; owners: Record<string, Owner | null>; items: Item[]; rows: Row[]; urls: string[] }> {
+): Promise<{
+  lines: string[]; owners: Record<string, Owner | null>; items: Item[]; rows: Row[]; urls: string[]; bases: Record<string, string>;
+}> {
   const loaded = loadState(path);
   const old = loaded && typeof loaded === "object" ? (loaded as Seen) : null;
   const prs = pullRequests(await fetchPrs(orgs));
@@ -416,7 +428,7 @@ export async function poll(
   const seen = remember(old, prs);
   saveState(path, seen);
   const rows = listed(prs, owners, byUrl, checkouts);
-  return { lines: table(rows), owners, items: waitingItems(prs, owners), rows, urls: Object.keys(seen) };
+  return { lines: table(rows), owners, items: waitingItems(prs, owners), rows, urls: Object.keys(seen), bases: pullBases(prs) };
 }
 
 /** Returns the text of the watcher's pane for the section titled title,
