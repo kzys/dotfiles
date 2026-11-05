@@ -3,13 +3,19 @@
 
 import { spawn } from "node:child_process";
 
+/** Returns env without Herdr's variables, for a process that doesn't
+ * speak for the pane this one runs in. */
+export function outsidePane(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  return Object.fromEntries(Object.entries(env).filter(([name]) => !name.startsWith("HERDR_")));
+}
+
 /** Returns the output of command with args run in cwd, if given, with no
- * input. Raises if it fails or takes longer than timeoutMs. */
+ * input and outside this process's pane. Raises if it fails or takes longer than timeoutMs. */
 export function run(command: string, args: string[], timeoutMs: number, cwd?: string): Promise<string> {
   return new Promise((resolve, reject) => {
     // Killed outright, so that one ignoring SIGTERM can't hold its caller.
     const child = spawn(command, args, {
-      cwd, stdio: ["ignore", "pipe", "ignore"], timeout: timeoutMs, killSignal: "SIGKILL",
+      cwd, env: outsidePane(process.env), stdio: ["ignore", "pipe", "ignore"], timeout: timeoutMs, killSignal: "SIGKILL",
     });
     const out: Buffer[] = [];
     child.stdout.on("data", (d: Buffer) => out.push(d));

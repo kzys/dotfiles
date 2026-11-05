@@ -100,6 +100,19 @@ class TestAddHooks:
         assert install_claude.add_hooks(settings, '/x/claude-hook') is settings
 
 
+class TestAddAgentHooks:
+    def test_hooks_each_event_and_keeps_the_rest(self):
+        other = {'hooks': [{'type': 'command', 'command': '/x/claude-hook'}]}
+        hooks = install_claude.add_agent_hooks({'hooks': {'SessionStart': [other]}}, '/x/agent-hook')['hooks']
+        assert hooks['SessionStart'] == [other, {'hooks': [
+            {'type': 'command', 'command': '/x/agent-hook claude SessionStart'}]}]
+        assert hooks['Stop'] == [{'hooks': [{'type': 'command', 'command': '/x/agent-hook claude Stop'}]}]
+
+    def test_leaves_installed_hooks_as_they_are(self):
+        settings = install_claude.add_agent_hooks({}, '/x/agent-hook')
+        assert install_claude.add_agent_hooks(settings, '/x/agent-hook') is settings
+
+
 class TestPruneProjects:
     def test_drops_deleted_directories_under_home(self):
         state = {'projects': {'/h/a': {'x': 1}, '/h/gone': {}}, 'other': 1}

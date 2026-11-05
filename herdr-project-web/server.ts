@@ -12,6 +12,7 @@ import { build } from "esbuild";
 import { HerdrEvents } from "./events.ts";
 import * as github from "./github.ts";
 import { HerdrError, request } from "./herdr.ts";
+import { type HookEvent, hookServer, listenOn } from "./hooks.ts";
 import { highlightDiff } from "./highlight.ts";
 import { readLearnings } from "./learnings.ts";
 import { connectors } from "./headless.ts";
@@ -386,3 +387,7 @@ const server = createServer((req, res) => {
 
 // Only this machine: the page shows private work.
 server.listen(port, "127.0.0.1", () => console.log(`herdr-project-web on http://127.0.0.1:${port}/`));
+
+// Only the watcher's server: hooks reach one server, like the checks.
+const hookEvents = new Map<string, HookEvent>();
+if (orgs) await listenOn(hookServer(hookEvents), join(stateDir, "run/server.sock"));

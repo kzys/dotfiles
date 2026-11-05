@@ -1,0 +1,12 @@
+#!/bin/sh
+# agent-hook <agent> <event> posts an agent's hook event, read from stdin,
+# to herdr-project-web. It never fails, so that a hook can't interrupt a
+# session, as when the server is down.
+
+[ "$HERDR_ENV" = 1 ] && [ -n "$HERDR_PANE_ID" ] || exit 0
+state=${XDG_STATE_HOME:-$HOME/.local/state}
+curl --silent --max-time 1 --unix-socket "$state/herdr-project/run/server.sock" \
+    --header "X-Herdr-Pane: $HERDR_PANE_ID" --header "X-Agent-Pid: $$" \
+    --header "Content-Type: application/json" --data-binary @- \
+    "http://localhost/hooks/$1/$2" >/dev/null 2>&1
+exit 0
