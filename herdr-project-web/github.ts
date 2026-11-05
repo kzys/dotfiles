@@ -348,6 +348,7 @@ export function listed(
         ...pr,
         label: label(pr),
         project: found ? projectName(found.project) : null,
+        projectDir: found?.project ?? null,
         agent: !!panes[pr.url],
         pane: checkouts[pr.url]?.pane_id ?? null,
       };

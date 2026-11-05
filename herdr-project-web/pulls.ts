@@ -1,6 +1,6 @@
 // What the page says about an open pull request.
 
-import type { PullRequest, Run } from "./state.ts";
+import type { PullRequest, Run, Section } from "./state.ts";
 
 // What the agent working on a pull request is doing.
 export type AgentState = "working" | "blocked" | "idle" | "unknown";
@@ -44,6 +44,16 @@ export function readiness(pr: PullRequest, agent: AgentState | null = null): [st
   if (agent === "working") return ["agent working", "wait"];
   if (pr.review === "APPROVED") return ["ready to merge", "done"];
   return ["ready for review", "ok"];
+}
+
+/** Returns the sections listing pull requests or entries of the project
+ * in dir, each with only those. */
+export function projectSections(sections: Section[], dir: string): Section[] {
+  return sections.flatMap((s) => {
+    const pullRequests = s.pullRequests?.filter((p) => p.projectDir === dir);
+    const entries = s.entries?.filter((e) => e.projectDir === dir);
+    return pullRequests?.length || entries?.length ? [{ ...s, pullRequests, entries }] : [];
+  });
 }
 
 /** Returns the runs of pr by state, in the order the page shows them. */

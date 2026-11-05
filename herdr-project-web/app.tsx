@@ -6,7 +6,7 @@ import { FileView } from "./files.tsx";
 import { halMessage } from "./hal.ts";
 import { LearningsView } from "./learnings.tsx";
 import { pageTitle, route, tab } from "./pages.ts";
-import { ProjectsColumn, pressing } from "./projects.tsx";
+import { ProjectList, ProjectView, ProjectsColumn, pressing } from "./projects.tsx";
 import type { State } from "./state.ts";
 import { Links } from "./ui.tsx";
 import { WatcherColumn } from "./watcher.tsx";
@@ -30,7 +30,8 @@ function Readout({ text }: { text: string }) {
 
 // The tabs of the console strip, each with its link.
 const TABS = [
-  ["projects", "#", "Projects"],
+  ["inbox", "#", "Inbox"],
+  ["projects", "#projects", "Projects"],
   ["worktrees", "#diffs", "Worktrees"],
   ["learnings", "#learnings", "Learnings"],
 ] as const;
@@ -132,6 +133,8 @@ function App() {
           <LearningsView query={q} />
         ) : at.view === "diff" ? (
           <WorktreeDiffView key={at.dir} dir={at.dir} query={q} state={state} />
+        ) : at.view === "project" ? (
+          <ProjectView key={at.dir} dir={at.dir} state={state} query={q} now={now} />
         ) : at.view === "file" ? (
           <FileView
             dir={at.dir}
@@ -140,6 +143,8 @@ function App() {
           />
         ) : !state ? (
           <p class="empty">Loading…</p>
+        ) : at.view === "projects" ? (
+          <ProjectList state={state} query={q} />
         ) : (
           <main>
             <ProjectsColumn state={state} query={q} waiting={waiting} />

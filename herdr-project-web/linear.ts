@@ -149,6 +149,7 @@ export function entries(issues: Issue[], owners: Record<string, Owner | null>) {
     return {
       label: i.identifier, title: i.title, note: i.summary, detail: i.state, url: i.url || null,
       waiting: i.waiting_on_me, project: found ? projectName(found.project) : null,
+      projectDir: found?.project ?? null,
     };
   });
 }
