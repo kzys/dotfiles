@@ -4,7 +4,8 @@
 import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, readSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, relative } from "node:path";
-import { FULL_AT, type Item, frontMatter, projectItems, watchedItems } from "./inbox.ts";
+import { frontMatter } from "./frontmatter.ts";
+import { FULL_AT, type Item, projectItems, watchedItems } from "./inbox.ts";
 import { isCheckout, lastSubject, worktreeDirs } from "./worktrees.ts";
 
 // A check of a pull request's latest commit.
@@ -398,7 +399,7 @@ export function readState(
   const projects: Project[] = [];
   for (const [dir, readme] of open) {
     const notes = roleNotes(dir);
-    const items = projectItems(dir, readme, notes, byProject.get(dir) ?? []);
+    const items = projectItems(dir, Boolean(readme && frontMatter(readme, "closed")), notes, byProject.get(dir) ?? []);
     const named =
       (readme && frontMatter(readme, "repositories")) || [readme ?? "", ...notes.map(([, t]) => t)].join("\n");
     projects.push({

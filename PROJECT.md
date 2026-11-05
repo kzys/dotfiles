@@ -31,8 +31,8 @@ match.
 
 ## README.md
 
-`README.md` describes the task for all agents, after this front
-matter:
+`README.md` describes the task for all agents, after this YAML front
+matter, so quote a value with `: ` or ` #` in it:
 
 ```
 ---
@@ -45,9 +45,9 @@ name: <name>
 - `name`: a short name for the task, in at most 20 characters.
 - `repositories`: added only when the task works in checkouts under
   `~/repos` directly rather than in worktrees here, as
-  `repositories: ~/repos/<org>/<repo>`, separated by spaces if more
-  than one. Without it, the checkouts are those this directory's notes
-  name.
+  a YAML list of `~/repos/<org>/<repo>`. Worktrees here are found on
+  their own and need no entry. Without it, any `~/repos/<org>/<repo>`
+  that `README.md` or the `AGENT-*.md` notes mention counts instead.
 - `closed`: added only when the project is closed, as `closed: <link>`.
   A link to what carries the outcome and any remaining work, such as a
   pull request or a ticket, or a few words on the outcome if nothing
