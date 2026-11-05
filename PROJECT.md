@@ -108,21 +108,15 @@ other branches.
 
 ## Herdr
 
-Once you know your role, report it so that the pane shows your
-`## Remaining` section, at the start of every session, including
-resumed ones, since a resumed session runs in a new pane:
+Your role is `main` unless you report another. If it is, report it once
+you know it, at the start of every session, including resumed ones:
 
 ```
 herdr pane report-metadata "$HERDR_PANE_ID" --source agent-notes --token role=<role>
 ```
 
 About 5 minutes after the session started, once the task is clear,
-write `README.md` if needed and rename the Herdr workspace to its name,
-once:
-
-```
-herdr-name-workspace <name>
-```
+write `README.md` if needed. The workspace takes its name from there.
 
 ## Closing your role
 

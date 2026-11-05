@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { connected, connectors, structured } from "./headless.ts";
+import { connected, connectors, run, structured } from "./headless.ts";
 import { checkQueue } from "./queues.ts";
 
 test("reads structured output", () => {
@@ -44,4 +44,13 @@ test("checks only sources with connectors", async () => {
   assert.deepEqual([broken.section?.lines, broken.items], [["Cannot check Slack: Error: no"], [item]]);
   assert.equal(checked, 1);
   assert.equal(await connectors("false"), null);
+});
+
+test("a headless session runs outside the pane", async () => {
+  process.env.HERDR_PANE_ID = "w1:p1";
+  try {
+    assert.equal(await run("sh", ["-c", 'printf "%s" "${HERDR_PANE_ID-unset}"'], 5000), "unset");
+  } finally {
+    delete process.env.HERDR_PANE_ID;
+  }
 });

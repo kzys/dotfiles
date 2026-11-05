@@ -1,40 +1,26 @@
-#!/usr/bin/env python3
-"""List or pick session directories with --agent claude (default) or codex."""
+#!/bin/sh
+# agent-session-dirs [--agent <claude|codex>] [--pick] lists the directories
+# past agent sessions ran in, newest first, as tab-separated directory, git
+# branch, last activity and title. With --pick, the user chooses one with
+# fzf, and it prints just the directory.
 
-import os
-import subprocess
-import sys
-from datetime import datetime, timezone
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from herdr_project.agent import codex_sessions, parse_agent
-
-
-def main():
-    selected, argv = parse_agent(sys.argv[1:])
-    if selected == 'claude':
-        command = str(Path(__file__).resolve().with_name('claude-session-dirs'))
-        os.execv(command, [command, *argv])
-    seen = set()
-    rows = []
-    for s in codex_sessions():
-        if s['cwd'] in seen:
-            continue
-        seen.add(s['cwd'])
-        title = ' '.join((s.get('name') or s.get('title') or '').split())
-        timestamp = datetime.fromtimestamp(s['updated_at'], timezone.utc).isoformat()
-        rows.append(f"{s['cwd']}\t{s.get('git_branch') or ''}\t{timestamp}\t{title}")
-    if '--pick' in argv:
-        result = subprocess.run(['fzf', '--height=~7', '--no-sort', '--delimiter=\t'],
-                                input='\n'.join(rows), capture_output=True, text=True)
-        if result.returncode:
-            return result.returncode
-        print(result.stdout.split('\t')[0])
-    else:
-        print('\n'.join(rows))
-    return 0
-
-
-if __name__ == '__main__':
-    sys.exit(main())
+agent=claude
+pick=
+while [ $# -gt 0 ]; do
+    case $1 in
+    --agent) agent=$2 && shift ;;
+    --agent=*) agent=${1#--agent=} ;;
+    --pick) pick=1 ;;
+    esac
+    shift
+done
+state=${XDG_STATE_HOME:-$HOME/.local/state}
+listed=$(curl --silent --fail --max-time 30 --unix-socket "$state/herdr-project/run/server.sock" \
+    "http://localhost/sessions?agent=$agent") || exit 1
+rows=$(printf '%s' "$listed" | jq -r '.[] | [.cwd, .branch, .at, .title] | @tsv')
+if [ -z "$pick" ]; then
+    printf '%s\n' "$rows"
+    exit
+fi
+picked=$(printf '%s\n' "$rows" | fzf --height=~7 --no-sort --delimiter='	' --with-nth=1,2,4) || exit
+printf '%s\n' "$picked" | cut -f1

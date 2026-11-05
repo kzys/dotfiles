@@ -73,6 +73,8 @@ function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // What is typed in a comment is the comment's.
+      if (e.target instanceof HTMLTextAreaElement) return;
       if (e.key === "/" && document.activeElement !== filter.current) {
         e.preventDefault();
         filter.current?.focus();
@@ -129,7 +131,7 @@ function App() {
         ) : at.view === "learnings" ? (
           <LearningsView query={q} />
         ) : at.view === "diff" ? (
-          <WorktreeDiffView dir={at.dir} query={q} />
+          <WorktreeDiffView key={at.dir} dir={at.dir} query={q} state={state} />
         ) : at.view === "file" ? (
           <FileView
             dir={at.dir}

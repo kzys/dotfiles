@@ -59,45 +59,37 @@ class TestUpdate:
 
 
 HERDR = {'type': 'command', 'command': "bash '/h/.claude/hooks/herdr-agent-state.sh' session"}
-HOOK = {'type': 'command', 'command': '/x/claude-hook'}
+def hook(event):
+    return {'type': 'command', 'command': f'/x/agent-hook claude {event}'}
 
 
 class TestAddHooks:
-    def test_adds_the_hook_and_keeps_the_rest(self):
-        assert (
-            install_claude.add_hooks({'theme': 'auto'}, '/x/claude-hook')
-            == {'theme': 'auto', 'hooks': {'SessionStart': [{'hooks': [HOOK]}]}})
+    def test_hooks_each_event_and_keeps_the_rest(self):
+        other = {'hooks': [{'type': 'command', 'command': '/x/mine'}]}
+        settings = {'theme': 'auto', 'hooks': {'SessionStart': [other], 'PreToolUse': [other]}}
+        updated = install_claude.add_hooks(settings, '/x/agent-hook')
+        assert updated['theme'] == 'auto'
+        assert updated['hooks']['SessionStart'] == [other, {'hooks': [hook('SessionStart')]}]
+        assert updated['hooks']['Stop'] == [{'hooks': [hook('Stop')]}]
+        assert updated['hooks']['PreToolUse'] == [other]
 
-    def test_replaces_herdrs_hook(self):
-        settings = {'hooks': {'SessionStart': [{'matcher': 'startup', 'hooks': [HERDR]}]}}
-        assert (
-            install_claude.add_hooks(settings, '/x/claude-hook')
-            == {'hooks': {'SessionStart': [{'hooks': [HOOK]}]}})
+    @pytest.mark.parametrize('command', ['/x/herdr-agent-state.sh', '/x/claude-herdr-session', '/x/bin/claude-hook'])
+    def test_replaces_earlier_hooks(self, command):
+        settings = {'hooks': {'SessionStart': [{'hooks': [{'type': 'command', 'command': command}]}]}}
+        updated = install_claude.add_hooks(settings, '/x/agent-hook')
+        assert updated['hooks']['SessionStart'] == [{'hooks': [hook('SessionStart')]}]
 
-    def test_keeps_other_hooks_in_a_group_with_herdrs(self):
-        mine = {'type': 'command', 'command': 'mine'}
-        settings = {'hooks': {'SessionStart': [{'matcher': 'startup', 'hooks': [HERDR, mine]}]}}
-        assert (
-            install_claude.add_hooks(settings, '/x/claude-hook')
-            == {'hooks': {'SessionStart': [{'matcher': 'startup', 'hooks': [mine]}, {'hooks': [HOOK]}]}})
+    def test_keeps_other_hooks_in_a_group_with_a_replaced_one(self):
+        mine = {'type': 'command', 'command': '/x/mine'}
+        old = {'type': 'command', 'command': '/x/claude-hook'}
+        settings = {'hooks': {'SessionStart': [{'matcher': 'startup', 'hooks': [old, mine]}]}}
+        updated = install_claude.add_hooks(settings, '/x/agent-hook')
+        assert updated['hooks']['SessionStart'] == [
+            {'matcher': 'startup', 'hooks': [mine]}, {'hooks': [hook('SessionStart')]}]
 
-    def test_replaces_the_old_hook_name(self):
-        old = {'type': 'command', 'command': '/x/claude-herdr-session'}
-        settings = {'hooks': {'SessionStart': [{'hooks': [old]}]}}
-        assert (
-            install_claude.add_hooks(settings, '/x/claude-hook')
-            == {'hooks': {'SessionStart': [{'hooks': [HOOK]}]}})
-
-    def test_keeps_other_hooks(self):
-        other = {'hooks': [{'type': 'command', 'command': 'other'}]}
-        settings = {'hooks': {'SessionStart': [other], 'Stop': [other]}}
-        assert (
-            install_claude.add_hooks(settings, '/x/claude-hook')
-            == {'hooks': {'SessionStart': [other, {'hooks': [HOOK]}], 'Stop': [other]}})
-
-    def test_leaves_an_installed_hook_as_it_is(self):
-        settings = {'hooks': {'SessionStart': [{'matcher': 'startup', 'hooks': [{**HOOK, 'timeout': 5}]}]}}
-        assert install_claude.add_hooks(settings, '/x/claude-hook') is settings
+    def test_leaves_installed_hooks_as_they_are(self):
+        settings = install_claude.add_hooks({}, '/x/agent-hook')
+        assert install_claude.add_hooks(settings, '/x/agent-hook') is settings
 
 
 class TestPruneProjects:

@@ -27,7 +27,7 @@ const SOFT = /^(?:optional(?:ly)?|offers?)\b|\b(?:if|unless) (?:the )?user (?:wa
 const SETTLED = ["none", "nothing", "done", "[x]"];
 
 // How full an agent's context is when it should hand over to a new
-// session, in percent, as herdr_project/panes.py has it.
+// session, in percent.
 export const FULL_AT = 80;
 
 // The order of marks in the inbox, most pressing first.

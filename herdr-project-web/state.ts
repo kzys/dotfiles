@@ -3,7 +3,7 @@
 
 import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, readSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { FULL_AT, type Item, frontMatter, projectItems, watchedItems } from "./inbox.ts";
 import { isCheckout, lastSubject, worktreeDirs } from "./worktrees.ts";
 
@@ -70,6 +70,8 @@ export type Worktree = { dir: string; subject: string | null };
 // An agent's pane in Herdr.
 export type Pane = {
   id: string;
+  // Where the agent works.
+  cwd: string | null;
   role: string | null;
   // What Herdr says the agent is doing, like working or idle.
   status: string | null;
@@ -103,6 +105,7 @@ export type Herdr = {
     cwd?: string;
     foreground_cwd?: string;
     agent?: string | null;
+    agent_session?: { value?: string } | null;
     agent_status?: string;
     // What the agent's status line reports, like its role and ctx.
     tokens?: Record<string, string>;
@@ -114,6 +117,9 @@ export type Herdr = {
 export type Watched = { sections: unknown; inbox: unknown; urls?: string[]; at: string };
 
 export type State = {
+  // What the page shows of each agent besides what Herdr says, by pane.
+  controls?: Record<string, import("./agents.ts").AgentView>;
+  undelivered?: import("./agents.ts").Undelivered[];
   // The watcher's sections, or null if it hasn't reported any.
   sections: Section[] | null;
   // When the watcher last reported them, in ISO 8601.
@@ -281,6 +287,21 @@ export function namedCheckouts(text: string, home: string): string[] {
   return [...new Set(dirs)];
 }
 
+/** Returns the checkout in home's ~/repos, laid out as
+ * repos/<org>/<repo>, that holds cwd, or null. */
+export function checkoutOf(cwd: string, home: string): string | null {
+  const [org, repo] = relative(join(home, "repos"), cwd).split("/");
+  return org && repo && !org.startsWith(".") && !repo.startsWith(".") ? join(home, "repos", org, repo) : null;
+}
+
+/** Records in links, by project, that the project in dir works in
+ * checkout, and returns whether it is news. */
+export function linkCheckout(links: Record<string, string[]>, dir: string, checkout: string): boolean {
+  if (links[dir]?.includes(checkout)) return false;
+  links[dir] = [...(links[dir] ?? []), checkout];
+  return true;
+}
+
 /** Reports whether cwd, if any, is dir or under it. */
 function inside(dir: string, cwd?: string): boolean {
   return !!cwd && (cwd === dir || cwd.startsWith(dir + "/"));
@@ -307,9 +328,8 @@ function panesIn(dir: string, herdr: Herdr | null): Herdr["panes"] {
 }
 
 /** Returns the agent panes in herdr working in dir or under it, in the
- * order herdr lists them, with how full each one's context is, as
- * herdr_project/panes.py reads it. A background session reports to the
- * pane that started it, flagging that with the bg token, so then the ctx
+ * order herdr lists them, with how full each one's context is. A
+ * background session reports to the pane that started it, flagging that with the bg token, so then the ctx
  * isn't the pane's own. */
 export function projectPanes(dir: string, herdr: Herdr | null): Pane[] {
   return panesIn(dir, herdr)
@@ -318,6 +338,7 @@ export function projectPanes(dir: string, herdr: Herdr | null): Pane[] {
       const ctx = p.tokens?.bg ? "" : (p.tokens?.ctx ?? "");
       return {
         id: p.pane_id,
+        cwd: p.tokens?.cwd || p.cwd || null,
         role: p.tokens?.role || null,
         status: p.agent_status ?? null,
         ctx: /^\d+%*$/.test(ctx) ? parseInt(ctx, 10) : null,
@@ -347,7 +368,8 @@ export function agentStates(herdr: Herdr | null): Record<string, string> | null 
  * FULL_AT percent full come first, then those with a workspace or
  * something waiting on the user, newest first within each group. The
  * watcher's Panes section keeps only panes outside the listed projects,
- * and goes if none are left. The checkouts a project works in are those
+ * and goes if none are left. checkouts holds the checkouts agents went
+ * into, by project, which it lists too. The others a project works in are those
  * in home's ~/repos that the "repositories" field of its README.md
  * names, or else that it or its notes name. */
 export function readState(
@@ -355,6 +377,7 @@ export function readState(
   projectRoot: string,
   herdr: Herdr | null = null,
   home: string = homedir(),
+  checkouts: Record<string, string[]> = {},
 ): State {
   // Copies, since the Panes section is trimmed below.
   const sections = Array.isArray(watched?.sections) ? (watched.sections as Section[]).map((s) => ({ ...s })) : null;
@@ -383,7 +406,7 @@ export function readState(
       ...projectLabels(dir, readme),
       workspaces: workspaceLabels(dir, herdr),
       panes: projectPanes(dir, herdr),
-      worktrees: [...worktreeDirs(dir), ...namedCheckouts(named, home).filter(isCheckout)].map((d) => ({
+      worktrees: [...worktreeDirs(dir), ...new Set([...namedCheckouts(named, home), ...(checkouts[dir] ?? [])].filter(isCheckout))].map((d) => ({
         dir: d,
         subject: lastSubject(d),
       })),

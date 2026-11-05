@@ -16,7 +16,7 @@ import tomllib
 from pathlib import Path
 
 EVENTS = ('SessionStart', 'UserPromptSubmit', 'PostToolUse', 'Stop')
-HOOK = Path(__file__).resolve().parent / 'bin/codex-hook'
+HOOK = Path(__file__).resolve().parent / 'bin/agent-hook'
 CONFIG = Path(__file__).resolve().parent / 'codex/config.toml'
 
 
@@ -58,12 +58,18 @@ def install_config(home):
 
 
 def add_hooks(settings, command):
+    """settings with command hooked to EVENTS, passing it the agent and
+    event as arguments, in place of bin/codex-hook, which it replaced."""
     hooks = dict(settings.get('hooks', {}))
     for event in EVENTS:
-        groups = list(hooks.get(event, []))
-        if not any(h.get('command') == command
-                   for g in groups for h in g.get('hooks', [])):
-            groups.append({'hooks': [{'type': 'command', 'command': command, 'timeout': 10}]})
+        run = f'{command} codex {event}'
+        groups = []
+        for g in hooks.get(event, []):
+            kept = [h for h in g.get('hooks', []) if 'bin/codex-hook' not in h.get('command', '')]
+            if kept:
+                groups.append({**g, 'hooks': kept})
+        if not any(h.get('command') == run for g in groups for h in g.get('hooks', [])):
+            groups.append({'hooks': [{'type': 'command', 'command': run, 'timeout': 10}]})
         hooks[event] = groups
     return {**settings, 'hooks': hooks}
 

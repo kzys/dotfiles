@@ -56,53 +56,41 @@ cdc --agent codex
 
 The picker and prefix+w shortcut list Claude and Codex sessions together,
 newest first, labeled with their agent. Selecting a saved session resumes it
-with its own agent; selecting a running session focuses its pane. New projects
-have separate Claude and Codex choices. Selecting a project asks which agent
-to start. The inbox picker also resolves items across both agents.
-Other `hp` arguments pass through to the selected agent. Use `--` before
-arguments that should bypass `hp`'s parser.
+with its own agent; selecting a running session focuses its pane. Left and
+right switch the agent a new session starts with. prefix+i lists what waits
+on you instead. Other `hp` arguments pass through to the selected agent. Use
+`--` before arguments that should bypass `hp`'s parser.
 
-In the Herdr app, the `project-picker` mod runs `herdr-project-picker --app`
-in a dialog, and the `projects` mod draws the same picker natively. Bind them
-in `~/.config/herdr-app/keys.json`: `"ctrl-z w": "mod.open:project-picker"`,
-`"ctrl-z e": "mod.open:projects"`. They know which Claude sessions run in the
-app, but not which Codex or OpenCode ones.
-
-Run `./install_codex.py` (Python 3.11+) once to install Herdr's Codex session integration and
-sidebar metadata hooks; `install.sh` also does this when both CLIs are available.
-In Codex, use `/hooks` to review and trust the installed hooks. Hooks report the
-session identity, prompt, directory, branch, model, and context usage when available.
-The picker reads Codex's local session database (including paginated sessions),
-with a rollout fallback for older installations. Codex context percentages are
-available for legacy rollouts; newer paginated history may leave that field blank.
-`herdr-adopt` selects saved Codex sessions to resume, or Claude background sessions.
-
-Both agents receive the same project notes instructions and house rules. Claude
-keeps its existing settings; Codex uses its configured model and approval policy.
-
-`codex/config.toml` holds reusable Codex preferences. The installer merges them
-into `~/.codex/config.toml` (or `$CODEX_HOME/config.toml`), preserving app settings
-and local state. Run `./install_codex.py --config-only` to apply just preferences.
-Auto-review handles approval requests with a reviewer agent; workspace writes
-stay sandboxed. Restart Codex to load the preferences.
+Run `./install_codex.py` (Python 3.11+) once to install Herdr's Codex session
+integration and bin/agent-hook; `install.sh` also does this when both CLIs are
+available. In Codex, use `/hooks` to review and trust the installed hooks.
+`codex/config.toml` holds reusable Codex preferences, which the installer
+merges into `~/.codex/config.toml`, preserving app settings. Run
+`./install_codex.py --config-only` to apply just preferences, and restart Codex
+to load them.
 
 ## herdr-project-web
 
-A localhost-only page showing what `herdr-project --watch` found and the
-open projects under `~/project`, with their agents and what their notes
-say waits on the user, updated as the watcher checks and their files
-change.
-Its Worktrees view shows how each worktree in the projects, and each
-checkout under `~/repos`, differs from where its branch left the
-remote's default branch, uncommitted and untracked files included.
+One server, written in TypeScript, behind all of the above. `hp`, the picker,
+`bin/agent-hook` and `bin/claude-statusline` are small clients of it, over a
+Unix socket at `~/.local/state/herdr-project/run/server.sock`. They need it
+running: without it `hp` and the picker say so and stop, and hooks do nothing.
+Plain `claude` in a shell still works for fixing it.
 
-The watcher needs its packages installed, with Node 22.6 or later: it
-runs herdr-project-web, which checks all of it and serves at
-http://127.0.0.1:9000/. If the page doesn't come up, look in
-`~/.local/state/herdr-project/web.log`. To restart it on new code,
-touch `herdr-project-web/restart.stamp`; open pages reload once it runs
-another commit.
+Its localhost-only page shows the open projects under `~/project`, with their
+agents, what they wait on and what their notes say waits on you, and how each
+worktree differs from where its branch left the remote's default branch.
+Clicking a line number in a diff comments on that line, and the comments go to
+the agent you choose as one message, once it is idle.
+
+The server runs in a pane of the `watch` workspace. Shells in Herdr start it if
+no pane has it, which needs Node 22.13 or later and its packages:
 
 ```
 cd herdr-project-web && npm install
 ```
+
+It serves http://127.0.0.1:9000/. If the page doesn't come up, look in
+`~/.local/state/herdr-project/web.log`. To restart it on new code, touch
+`herdr-project-web/restart.stamp`; open pages reload once it runs another
+commit.

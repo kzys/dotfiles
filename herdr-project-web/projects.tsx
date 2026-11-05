@@ -6,8 +6,9 @@ import { diffHref } from "./diffs.tsx";
 import { FULL_AT, type Item, uniqueKeys } from "./inbox.ts";
 import { fileHref } from "./pages.ts";
 import { statusState } from "./pulls.ts";
+import type { AgentView } from "./agents.ts";
 import type { Pane, Project, State } from "./state.ts";
-import { Linked, matches } from "./ui.tsx";
+import { Linked, matches, send } from "./ui.tsx";
 
 const MARKS: Record<string, string> = {
   you: "you",
@@ -34,9 +35,49 @@ function ItemRow({ item }: { item: Item }) {
   );
 }
 
+const agentUrl = (pane: string, action: string) => `/api/agents/${encodeURIComponent(pane)}/${action}`;
+
+/** Returns what the agent in pane waits for, if anything, its waiting
+ * messages, and a button that focuses its pane. */
+function AgentControls({ pane, view }: { pane: Pane; view: AgentView }) {
+  const [error, setError] = useState<string | null>(null);
+  const act = async (f: () => Promise<void>) => {
+    try {
+      await f();
+      setError(null);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+  const asked = view.permission;
+  return (
+    <div class="agent-controls">
+      {asked && (
+        <div class="agent-permission">
+          <code>{asked.detail}</code>
+        </div>
+      )}
+      {view.queued.map((m) => (
+        <div key={m.id} class="agent-queued">
+          <span class="text">{m.text}</span>
+          <button class="copy" onClick={() => act(() => send("DELETE", agentUrl(pane.id, `messages/${m.id}`)))}>
+            cancel
+          </button>
+        </div>
+      ))}
+      <div>
+        <button class="copy" onClick={() => act(() => send("POST", agentUrl(pane.id, "focus")))}>
+          focus
+        </button>
+      </div>
+      {error && <p class="agent-error">{error}</p>}
+    </div>
+  );
+}
+
 /** Returns the agent panes of a project, each with its role, what it is
- * doing and how full its context is. */
-function PaneRow({ panes }: { panes: Pane[] }) {
+ * doing and how full its context is, and what acts on it. */
+function PaneRow({ panes, agents }: { panes: Pane[]; agents: Record<string, AgentView> }) {
   if (!panes.length) return null;
   return (
     <div class="panes">
@@ -46,6 +87,7 @@ function PaneRow({ panes }: { panes: Pane[] }) {
           <span key={p.id} class="pane" title={`${p.id} · ${p.status ?? "unknown"}`}>
             <span class={`pr-agent agent-${state}`}>{p.role ?? p.id}</span>
             {p.ctx !== null && <span class={p.ctx >= FULL_AT ? "ctx ctx-full" : "ctx"}>{p.ctx}%</span>}
+            {agents[p.id] && <AgentControls pane={p} view={agents[p.id]} />}
           </span>
         );
       })}
@@ -75,7 +117,7 @@ function FileLinks({ project }: { project: Project }) {
   );
 }
 
-function ProjectCard({ project }: { project: Project }) {
+function ProjectCard({ project, agents }: { project: Project; agents: Record<string, AgentView> }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     try {
@@ -100,7 +142,7 @@ function ProjectCard({ project }: { project: Project }) {
           {copied ? "copied" : "path"}
         </button>
       </header>
-      <PaneRow panes={project.panes} />
+      <PaneRow panes={project.panes} agents={agents} />
       <FileLinks project={project} />
       {project.items.length > 0 && (
         <ul>
@@ -111,6 +153,32 @@ function ProjectCard({ project }: { project: Project }) {
           )}
         </ul>
       )}
+    </section>
+  );
+}
+
+/** Returns messages left for agents that are gone, to copy elsewhere or
+ * drop: nothing will deliver them. */
+function Undelivered({ state }: { state: State }) {
+  const left = (state.undelivered ?? []).flatMap((u) => u.messages.map((m) => ({ pane: u.pane, message: m })));
+  if (!left.length) return null;
+  return (
+    <section class="card">
+      <header>
+        <span class="name">undelivered</span>
+        <span class="title">the agents they were for are gone</span>
+      </header>
+      {left.map(({ pane, message }) => (
+        <div key={message.id} class="agent-queued undelivered">
+          <span class="text">{message.text.split("\n")[0]}</span>
+          <button class="copy" onClick={() => navigator.clipboard.writeText(message.text).catch(() => {})}>
+            copy
+          </button>
+          <button class="copy" onClick={() => send("DELETE", agentUrl(pane, `messages/${message.id}`)).catch(() => {})}>
+            drop
+          </button>
+        </div>
+      ))}
     </section>
   );
 }
@@ -140,6 +208,7 @@ export function ProjectsColumn({ state, query, waiting }: { state: State; query:
       <h2>
         Projects <span class="count">{waiting}</span>
       </h2>
+      <Undelivered state={state} />
       {unowned.length > 0 && (
         <section class="card">
           <header>
@@ -154,7 +223,7 @@ export function ProjectsColumn({ state, query, waiting }: { state: State; query:
       )}
       {!query && !unowned.length && !projects.some((p) => p.items.length) && <p class="empty">Nothing waiting.</p>}
       {projects.map((p) => (
-        <ProjectCard key={p.dir} project={p} />
+        <ProjectCard key={p.dir} project={p} agents={state.controls ?? {}} />
       ))}
       {query && !projects.length && !unowned.length && <p class="empty">No match.</p>}
     </div>

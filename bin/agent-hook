@@ -1,0 +1,19 @@
+#!/bin/sh
+# agent-hook <agent> <event> posts an agent's hook event, read from stdin,
+# to herdr-project-web, and prints what it replies for the agent's context.
+# It never fails, so that a hook can't interrupt a session, as when the
+# server is down.
+
+pane=
+[ "$HERDR_ENV" = 1 ] && pane=$HERDR_PANE_ID
+state=${XDG_STATE_HOME:-$HOME/.local/state}
+# Sessions restored with Herdr can start before the server is back, and this
+# is how a resumed one gets its instructions.
+retry=0
+[ "$2" = SessionStart ] && retry=5
+curl --silent --max-time 5 --retry "$retry" --retry-delay 1 --retry-all-errors --retry-max-time 6 --unix-socket "$state/herdr-project/run/server.sock" \
+    --header "X-Herdr-Pane: $pane" --header "X-Agent-Pid: $$" \
+    --header "X-Codex-Thread: ${CODEX_THREAD_ID:-}" \
+    --header "Content-Type: application/json" --data-binary @- \
+    "http://localhost/hooks/$1/$2" 2>/dev/null
+exit 0
