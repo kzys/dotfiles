@@ -114,6 +114,8 @@ export type Herdr = {
 export type Watched = { sections: unknown; inbox: unknown; urls?: string[]; at: string };
 
 export type State = {
+  // What the page shows of each agent besides what Herdr says, by pane.
+  controls?: Record<string, import("./agents.ts").AgentView>;
   // The watcher's sections, or null if it hasn't reported any.
   sections: Section[] | null;
   // When the watcher last reported them, in ISO 8601.

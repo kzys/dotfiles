@@ -25,6 +25,13 @@ export function Linked({ text }: { text: string }) {
   );
 }
 
+/** Sends body to url as the page, raising with the server's error if it
+ * refuses. */
+export async function send(method: string, url: string, body: object = {}) {
+  const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!res.ok) throw new Error((await res.json().catch(() => null))?.error ?? res.statusText);
+}
+
 /** Reports whether any of texts contains query, ignoring case. */
 export const matches = (query: string, ...texts: (string | null)[]) =>
   !query || texts.some((t) => t?.toLowerCase().includes(query));

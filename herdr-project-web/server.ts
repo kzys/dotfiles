@@ -9,6 +9,9 @@ import { homedir } from "node:os";
 import { extname, join, relative } from "node:path";
 import { promisify } from "node:util";
 import { build } from "esbuild";
+import {
+  type AgentActions, type AgentView, Outbox, agentPath, forgetAnswered, fromPage, handleAgent, permission,
+} from "./agents.ts";
 import { HerdrEvents } from "./events.ts";
 import * as github from "./github.ts";
 import { HerdrError, request } from "./herdr.ts";
@@ -22,7 +25,7 @@ import { type PaneHerdr, checkPanes } from "./panes.ts";
 import { type Checked, checkQueue } from "./queues.ts";
 import * as slack from "./slack.ts";
 import {
-  type Herdr, type Watched, openProjects, projectDirs, projectLabels, readProjectFile, readState,
+  type Herdr, type Watched, agentStates, openProjects, projectDirs, projectLabels, readProjectFile, readState,
 } from "./state.ts";
 import { type Found, title, watchWorkspace, watchedFrom } from "./watched.ts";
 import { checkoutDirs, summarize, worktreeDiff, worktreeDirs } from "./worktrees.ts";
@@ -79,7 +82,36 @@ const found = new Map<string, Found>();
 // requests by url, as last found.
 let prUrls: string[] = [];
 const prOwners: Record<string, Owner | null> = {};
-let last = JSON.stringify(readState(watched(), projectRoot));
+// Each pane's last hook event.
+const hookEvents = new Map<string, HookEvent>();
+const outbox = new Outbox(join(stateDir, "outbox.json"), (pane, text) => paneHerdr.run(pane, text), readyForText);
+let last = JSON.stringify(pageState());
+
+/** Returns what the page shows of each agent besides what Herdr says. */
+function agentViews(): Record<string, AgentView> {
+  const views: Record<string, AgentView> = {};
+  for (const [pane, status] of Object.entries(agentStates(herdr) ?? {}))
+    views[pane] = { queued: outbox.queued(pane), permission: permission(hookEvents.get(pane), status) };
+  return views;
+}
+
+/** Reports whether pane still runs an idle agent, as Herdr says right
+ * now, with no permission request open. Text sent to anything else could
+ * answer a prompt, or run in a shell. */
+async function readyForText(pane: string): Promise<boolean> {
+  const { pane: now } = await ask("pane.get", { pane_id: pane });
+  return Boolean(now.agent) && ["idle", "done"].includes(now.agent_status) && hookEvents.get(pane)?.event !== "PermissionRequest";
+}
+
+/** Returns the state for the page. Only the watcher's server can act. */
+function pageState() {
+  return { ...readState(watched(), projectRoot, herdr), ...(orgs ? { controls: agentViews() } : {}) };
+}
+
+/** Sends agents that are free what waits for them. */
+function deliver() {
+  if (orgs) outbox.deliver(agentStates(herdr) ?? {}).then((sent) => sent && refresh());
+}
 
 /** Returns what the checks found, or null before any has. */
 function watched(): Watched | null {
@@ -128,8 +160,12 @@ async function pollHerdr() {
     do {
       again = false;
       const [w, p] = await Promise.all([tryAsk("workspace.list"), tryAsk("pane.list")]);
+      const before = agentStates(herdr) ?? {};
       herdr = w && p ? { workspaces: w.workspaces, panes: p.panes } : null;
       events.update(herdr);
+      forgetAnswered(hookEvents, before, agentStates(herdr) ?? before);
+      if (herdr) for (const pane of hookEvents.keys()) if (!herdr.panes.some((q) => q.pane_id === pane)) hookEvents.delete(pane);
+      deliver();
       refresh();
     } while (again);
   } finally {
@@ -155,7 +191,7 @@ setInterval(pollHerdr, 60_000);
 let titled = "";
 function refresh() {
   const found = watched();
-  const next = JSON.stringify(readState(found, projectRoot, herdr));
+  const next = JSON.stringify(pageState());
   // Tell Herdr how much waits on the user only as it changes.
   const workspace = watchWorkspace(process.env, herdr);
   const text = title(found?.inbox);
@@ -335,11 +371,26 @@ function json(res: ServerResponse, status: number, body: unknown) {
 // any site read the page.
 const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
 
+const agentActions: AgentActions = {
+  outbox,
+  known: (pane) => Object.hasOwn(agentStates(herdr) ?? {}, pane),
+  focus: (pane) => ask("pane.focus", { pane_id: pane }),
+  changed: () => {
+    deliver();
+    refresh();
+  },
+};
+
 const server = createServer((req, res) => {
   const url = new URL(req.url ?? "/", "http://localhost");
   const path = url.pathname;
+  const agent = agentPath(path);
   if (!hosts.has(req.headers.host ?? "")) {
     res.writeHead(403).end();
+  } else if (agent) {
+    // Only the watcher's server, which delivers them, and only the page.
+    if (!orgs || !fromPage(req.headers, hosts)) res.writeHead(403).end();
+    else handleAgent(req, res, agent, agentActions).catch((e) => json(res, 500, { error: e.message }));
   } else if (path === "/api/state") {
     res.writeHead(200, { "Content-Type": "application/json" }).end(last);
   } else if (path === "/api/version") {
@@ -389,5 +440,4 @@ const server = createServer((req, res) => {
 server.listen(port, "127.0.0.1", () => console.log(`herdr-project-web on http://127.0.0.1:${port}/`));
 
 // Only the watcher's server: hooks reach one server, like the checks.
-const hookEvents = new Map<string, HookEvent>();
-if (orgs) await listenOn(hookServer(hookEvents), join(stateDir, "run/server.sock"));
+if (orgs) await listenOn(hookServer(hookEvents, undefined, refresh), join(stateDir, "run/server.sock"));

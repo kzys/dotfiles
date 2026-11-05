@@ -165,6 +165,12 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
 .ctx { font: var(--normal) var(--mono); color: var(--muted); }
 .ctx-full { color: var(--red); font-weight: 600; }
 .card > .panes:last-child { border-bottom: 0; }
+.pane { flex-wrap: wrap; flex-basis: 100%; }
+.agent-controls { flex-basis: 100%; display: grid; gap: var(--space-2); }
+.agent-queued, .agent-permission { display: flex; align-items: baseline; gap: var(--space-3); }
+.agent-queued .text, .agent-permission code { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.agent-permission code { color: var(--red); font: var(--normal) var(--mono); }
+.agent-error { margin: 0; color: var(--red); }
 
 /* A project's worktrees, each linked to its diff. */
 .wt-links {

@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { promisify } from "node:util";
-import { type HookEvent, ancestors, hookPath, hookServer, listenOn, ownsPane } from "./hooks.ts";
+import { type HookEvent, ancestors, hookDetail, hookPath, hookServer, listenOn, ownsPane } from "./hooks.ts";
 
 const shim = join(import.meta.dirname, "../bin/agent-hook");
 
@@ -71,11 +71,44 @@ test("keeps each pane's last event", async (t) => {
   assert.equal((await send(socketPath, "POST", "/hooks/claude/Stop", pane, body))[0], 204);
   assert.deepEqual(
     { ...latest.get("w1:p1"), at: 0 },
-    { agent: "claude", event: "Stop", session: "s1", at: 0 },
+    { agent: "claude", event: "Stop", session: "s1", detail: null, at: 0 },
   );
   const [status, listed] = await send(socketPath, "GET", "/hooks");
   assert.equal(status, 200);
   assert.equal(JSON.parse(listed)["w1:p1"].event, "Stop");
+});
+
+test("keeps what a permission request asks for", async (t) => {
+  const { socketPath, latest, server } = await start();
+  t.after(() => server.close());
+  const body = JSON.stringify({ tool_name: "Bash", tool_input: { command: "ls" } });
+  await send(socketPath, "POST", "/hooks/claude/PermissionRequest", pane, body);
+  assert.equal(latest.get("w1:p1")?.detail, 'Bash: {"command":"ls"}');
+});
+
+test("a permission request's notification doesn't replace it", async (t) => {
+  const { socketPath, latest, server } = await start();
+  t.after(() => server.close());
+  await send(socketPath, "POST", "/hooks/claude/PermissionRequest", pane, JSON.stringify({ tool_name: "Bash" }));
+  await send(socketPath, "POST", "/hooks/claude/Notification", pane, "{}");
+  assert.equal(latest.get("w1:p1")?.event, "PermissionRequest");
+});
+
+test("questions aren't permission requests", () => {
+  assert.equal(hookDetail({ tool_name: "AskUserQuestion", tool_input: {} }), null);
+  assert.equal(hookDetail({ tool_name: "Bash" }), "Bash: {}");
+  assert.match(hookDetail({ tool_name: "Bash", tool_input: "x".repeat(600) })!, /…$/);
+});
+
+test("says when it kept an event", async (t) => {
+  let changes = 0;
+  const latest = new Map<string, HookEvent>();
+  const server = hookServer(latest, async () => ["claude"], () => changes++);
+  const socketPath = join(mkdtempSync(join(tmpdir(), "hk-")), "run/server.sock");
+  await listenOn(server, socketPath);
+  t.after(() => server.close());
+  await send(socketPath, "POST", "/hooks/claude/Stop", pane, "{}");
+  assert.equal(changes, 1);
 });
 
 test("ignores subagents and processes outside the pane", async (t) => {

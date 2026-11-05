@@ -23,7 +23,8 @@ AGENT_HOOK = pathlib.Path(__file__).resolve().parent / 'bin' / 'agent-hook'
 HOOK_EVENTS = ['SessionStart']
 
 # Events agent-hook posts to herdr-project-web.
-AGENT_HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'Notification', 'Stop', 'SessionEnd']
+AGENT_HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PermissionRequest', 'Notification', 'Stop',
+                     'SessionEnd']
 
 # Hooks claude-hook replaces: Herdr's bundled Claude hook, which reports
 # background sessions to the pane that started them, and claude-hook's

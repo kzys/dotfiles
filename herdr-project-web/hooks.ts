@@ -12,7 +12,21 @@ const AGENTS = new Set(["claude", "codex", "opencode"]);
 // Far more than a hook's event needs, to bound what's kept in memory.
 const MAX_BODY = 1 << 20;
 
-export type HookEvent = { agent: string; event: string; session: string | null; at: number };
+// What a permission request asks for is kept to show the user, this long
+// at most.
+const MAX_DETAIL = 500;
+
+export type HookEvent = { agent: string; event: string; session: string | null; detail: string | null; at: number };
+
+// Tools whose prompts ask something other than whether to allow them.
+const QUESTIONS = new Set(["AskUserQuestion", "ExitPlanMode"]);
+
+/** Returns what a hook's event data asks permission for, or null. */
+export function hookDetail(data: { tool_name?: unknown; tool_input?: unknown }): string | null {
+  if (typeof data?.tool_name !== "string" || QUESTIONS.has(data.tool_name)) return null;
+  const detail = `${data.tool_name}: ${JSON.stringify(data.tool_input ?? {})}`;
+  return detail.length > MAX_DETAIL ? `${detail.slice(0, MAX_DETAIL)}…` : detail;
+}
 
 /** Returns the agent and event of a hook's request path, or null if it
  * isn't one. */
@@ -47,7 +61,7 @@ export async function ancestors(pid: number): Promise<string[] | null> {
 }
 
 /** Reads the body of req, or returns null if it's too large. */
-async function readBody(req: IncomingMessage): Promise<string | null> {
+export async function readBody(req: IncomingMessage): Promise<string | null> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {
@@ -62,13 +76,14 @@ async function readBody(req: IncomingMessage): Promise<string | null> {
  * latest, by pane. POST /hooks/:agent/:event takes the event's JSON, with
  * the pane in X-Herdr-Pane and the posting process in X-Agent-Pid, and
  * ignores subagents and processes outside the pane; GET /hooks lists
- * latest. lineage returns a process's ancestors' command lines. */
-export function hookServer(latest: Map<string, HookEvent>, lineage = ancestors): Server {
+ * latest. lineage returns a process's ancestors' command lines, and
+ * changed is called after an event is kept. */
+export function hookServer(latest: Map<string, HookEvent>, lineage = ancestors, changed = () => {}): Server {
   async function post(req: IncomingMessage, res: ServerResponse, hook: { agent: string; event: string }) {
     const at = Date.now();
     const body = await readBody(req);
     if (body === null) return res.writeHead(413).end();
-    let data: { agent_id?: unknown; session_id?: unknown };
+    let data: { agent_id?: unknown; session_id?: unknown; tool_name?: unknown; tool_input?: unknown };
     try {
       data = body ? JSON.parse(body) : {};
     } catch {
@@ -78,8 +93,14 @@ export function hookServer(latest: Map<string, HookEvent>, lineage = ancestors):
     const pid = Number(req.headers["x-agent-pid"]);
     if (typeof pane === "string" && pane && pid > 1 && !data?.agent_id && ownsPane(await lineage(pid))) {
       const session = typeof data?.session_id === "string" ? data.session_id : null;
-      // Checking the ancestors can reorder events close together.
-      if (at >= (latest.get(pane)?.at ?? 0)) latest.set(pane, { ...hook, session, at });
+      const last = latest.get(pane);
+      // Checking the ancestors can reorder events close together, and
+      // Claude Code follows a permission request with a notification of it.
+      const repeats = hook.event === "Notification" && last?.event === "PermissionRequest";
+      if (at >= (last?.at ?? 0) && !repeats) {
+        latest.set(pane, { ...hook, session, detail: hookDetail(data), at });
+        changed();
+      }
     }
     res.writeHead(204).end();
   }
