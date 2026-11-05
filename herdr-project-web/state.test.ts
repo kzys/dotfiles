@@ -5,8 +5,24 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { linkParts } from "./inbox.ts";
 import {
-  type Herdr, type Watched, namedCheckouts, projectFiles, pullRequestLinks, readProjectFile, readState, workspaceLabels,
+  type Herdr, type Watched, checkoutOf, linkCheckout, namedCheckouts, projectFiles, pullRequestLinks, readProjectFile, readState, workspaceLabels,
 } from "./state.ts";
+
+test("finds the checkout holding a directory", () => {
+  assert.equal(checkoutOf("/home/me/repos/o/r/sub/dir", "/home/me"), "/home/me/repos/o/r");
+  assert.equal(checkoutOf("/home/me/repos/o/r", "/home/me"), "/home/me/repos/o/r");
+  assert.equal(checkoutOf("/home/me/repos/o", "/home/me"), null);
+  assert.equal(checkoutOf("/home/me/project/p", "/home/me"), null);
+  assert.equal(checkoutOf("/elsewhere/a/b", "/home/me"), null);
+});
+
+test("remembers each checkout a project works in once", () => {
+  const links = {};
+  assert.equal(linkCheckout(links, "/p", "/r1"), true);
+  assert.equal(linkCheckout(links, "/p", "/r1"), false);
+  assert.equal(linkCheckout(links, "/p", "/r2"), true);
+  assert.deepEqual(links, { "/p": ["/r1", "/r2"] });
+});
 
 test("lists a project's files and reads only those", () => {
   const dir = mkdtempSync(join(tmpdir(), "herdr-project-web-"));
@@ -147,6 +163,10 @@ test("lists the checkouts a project works in after its worktrees", () => {
     [join(p1, "wt"), join(root, "repos/o/r2")],
     [join(root, "repos/o/r1")],
   ]);
+  // Those agents went into count too, each once, if still there.
+  const links = { [p2]: [join(root, "repos/o/r1"), join(root, "repos/o/r2"), join(root, "repos/o/gone")] };
+  const linked = readState(null, projects, null, root, links);
+  assert.deepEqual(linked.projects[1].worktrees.map((w) => w.dir), [join(root, "repos/o/r1"), join(root, "repos/o/r2")]);
 });
 
 test("names the workspaces with panes in a project", () => {

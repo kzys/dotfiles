@@ -3,7 +3,7 @@
 
 import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, readSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { FULL_AT, type Item, frontMatter, projectItems, watchedItems } from "./inbox.ts";
 import { isCheckout, lastSubject, worktreeDirs } from "./worktrees.ts";
 
@@ -284,6 +284,21 @@ export function namedCheckouts(text: string, home: string): string[] {
   return [...new Set(dirs)];
 }
 
+/** Returns the checkout in home's ~/repos, laid out as
+ * repos/<org>/<repo>, that holds cwd, or null. */
+export function checkoutOf(cwd: string, home: string): string | null {
+  const [org, repo] = relative(join(home, "repos"), cwd).split("/");
+  return org && repo && !org.startsWith(".") ? join(home, "repos", org, repo) : null;
+}
+
+/** Records in links, by project, that the project in dir works in
+ * checkout, and returns whether it is news. */
+export function linkCheckout(links: Record<string, string[]>, dir: string, checkout: string): boolean {
+  if (links[dir]?.includes(checkout)) return false;
+  links[dir] = [...(links[dir] ?? []), checkout];
+  return true;
+}
+
 /** Reports whether cwd, if any, is dir or under it. */
 function inside(dir: string, cwd?: string): boolean {
   return !!cwd && (cwd === dir || cwd.startsWith(dir + "/"));
@@ -357,6 +372,7 @@ export function readState(
   projectRoot: string,
   herdr: Herdr | null = null,
   home: string = homedir(),
+  checkouts: Record<string, string[]> = {},
 ): State {
   // Copies, since the Panes section is trimmed below.
   const sections = Array.isArray(watched?.sections) ? (watched.sections as Section[]).map((s) => ({ ...s })) : null;
@@ -385,7 +401,7 @@ export function readState(
       ...projectLabels(dir, readme),
       workspaces: workspaceLabels(dir, herdr),
       panes: projectPanes(dir, herdr),
-      worktrees: [...worktreeDirs(dir), ...namedCheckouts(named, home).filter(isCheckout)].map((d) => ({
+      worktrees: [...worktreeDirs(dir), ...new Set([...namedCheckouts(named, home), ...(checkouts[dir] ?? [])].filter(isCheckout))].map((d) => ({
         dir: d,
         subject: lastSubject(d),
       })),

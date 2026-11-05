@@ -33,7 +33,7 @@ import { claudeSessionDirs, codexContext, codexSessionDirs, codexSessions, repor
 import * as slack from "./slack.ts";
 import { loadState, saveState } from "./statefile.ts";
 import {
-  type Herdr, type Watched, agentStates, openProjects, projectDirs, projectLabels, readProjectFile, readState,
+  type Herdr, type Watched, agentStates, checkoutOf, linkCheckout, openProjects, projectDirs, projectLabels, readProjectFile, readState,
 } from "./state.ts";
 import { type Found, title, watchWorkspace, watchedFrom } from "./watched.ts";
 import { checkoutDirs, summarize, worktreeDiff, worktreeDirs } from "./worktrees.ts";
@@ -93,6 +93,9 @@ const prOwners: Record<string, Owner | null> = {};
 // Each pane's last hook event.
 const hookEvents = new Map<string, HookEvent>();
 const outbox = new Outbox(join(stateDir, "outbox.json"), (pane, text) => paneHerdr.run(pane, text), readyForText);
+// The checkouts under ~/repos each project's agents went into, by project.
+const linksPath = join(stateDir, "checkouts.json");
+const links = (loadState(linksPath) as Record<string, string[]> | null) ?? {};
 let last = JSON.stringify(pageState());
 
 /** Returns what the page shows of each agent besides what Herdr says. */
@@ -113,7 +116,7 @@ async function readyForText(pane: string): Promise<boolean> {
 
 /** Returns the state for the page. Only the watcher's server can act. */
 function pageState() {
-  return { ...readState(watched(), projectRoot, herdr), ...(orgs ? { controls: agentViews() } : {}) };
+  return { ...readState(watched(), projectRoot, herdr, home, links), ...(orgs ? { controls: agentViews() } : {}) };
 }
 
 /** Sends agents that are free what waits for them. */
@@ -477,6 +480,7 @@ function launch(form: URLSearchParams): string {
   const command = agentCommand(agent, argv, directory, origin, { dotfiles, stateDir, pid, now });
   // Herdr already tracks sessions, so keep them out of the background.
   if (form.get("herdr") === "1" && agent === "claude") command.env.CLAUDE_CODE_DISABLE_AGENT_VIEW = "1";
+  if (origin) noteCheckout(directory, origin);
   const workspace = form.get("workspace");
   if (workspace) reportTitle(workspace, directory);
   return launchScript(directory, command);
@@ -499,6 +503,15 @@ const planDeps = {
   now: () => new Date(),
 };
 
+/** Remembers that the project in dir, if any, works in the checkout holding
+ * cwd, if any, so that the page links its diff. */
+function noteCheckout(dir: string | null, cwd: string) {
+  const checkout = checkoutOf(cwd, home);
+  if (!dir || !checkout || !linkCheckout(links, dir, checkout)) return;
+  saveState(linksPath, links);
+  refresh();
+}
+
 /** Returns the current git branch of directory, or "". */
 const gitBranch = (directory: string) => promisify(execFile)("git", ["-C", directory, "branch", "--show-current"], { timeout: 5000 })
   .then(({ stdout }) => stdout.trim(), () => "");
@@ -511,6 +524,7 @@ const clock = (seconds: number) => new Date(seconds * 1000).toLocaleTimeString("
 function statusReport(data: any, who: { pane: string; own: boolean } | null): string {
   const pct = percent(data);
   if (pct === null) return "";
+  noteCheckout(projectDir(data.workspace?.project_dir || data.cwd || "", projectRoot), sessionCwd(data));
   const usage = usageFile(data, projectRoot);
   if (usage) {
     try {
