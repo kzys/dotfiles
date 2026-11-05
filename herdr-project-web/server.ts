@@ -16,7 +16,7 @@ import { HerdrEvents } from "./events.ts";
 import * as github from "./github.ts";
 import { HerdrError, request } from "./herdr.ts";
 import { type HookEvent, type HookHandler, hookServer, listenOn, readBody, speaker } from "./hooks.ts";
-import { highlightDiff } from "./highlight.ts";
+import { highlightDiff, highlightLines } from "./highlight.ts";
 import { frontMatter } from "./inbox.ts";
 import { agentCommand, instructions, launchDirectory, launchScript, parseAgent, projectDir } from "./launch.ts";
 import { readLearnings } from "./learnings.ts";
@@ -36,7 +36,7 @@ import {
   type Herdr, type Watched, agentStates, checkoutOf, linkCheckout, openProjects, projectDirs, projectLabels, readProjectFile, readState,
 } from "./state.ts";
 import { type Found, title, watchWorkspace, watchedFrom } from "./watched.ts";
-import { checkoutDirs, summarize, worktreeDiff, worktreeDirs } from "./worktrees.ts";
+import { type PullBases, changedSince, checkoutDirs, fileLines, setBase, summarize, worktreeDiff, worktreeDirs } from "./worktrees.ts";
 
 const here = import.meta.dirname;
 const home = homedir();
@@ -89,6 +89,8 @@ const found = new Map<string, Found>();
 // The URLs of the open pull requests, and the projects of the pull
 // requests by url, as last found.
 let prUrls: string[] = [];
+// What open pull requests merge into, as last found.
+let pullBases: PullBases = {};
 const prOwners: Record<string, Owner | null> = {};
 // Each pane's last hook event.
 const hookEvents = new Map<string, HookEvent>();
@@ -314,7 +316,7 @@ async function checkPullRequests() {
   let items = found.get(title)?.items ?? [];
   try {
     let owners: Record<string, Owner | null>;
-    ({ lines, rows, items, owners, urls: prUrls } = await github.poll(
+    ({ lines, rows, items, owners, urls: prUrls, bases: pullBases } = await github.poll(
       prHerdr, projectRoot, join(stateDir, "pull-requests.json"), orgs!));
     Object.assign(prOwners, owners);
   } catch (e) {
@@ -386,6 +388,15 @@ function json(res: ServerResponse, status: number, body: unknown) {
 // any site read the page.
 const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
 
+/** Sets the base the request asks for, of a worktree the page lists, and
+ * returns the status to answer with. */
+async function setBaseFrom(req: IncomingMessage): Promise<number> {
+  const { dir, branch, base } = JSON.parse((await readBody(req)) ?? "{}");
+  if (!projectWorktrees().some((p) => p.worktrees.includes(dir))) return 404;
+  if (typeof branch !== "string" || !(base === null || typeof base === "string")) return 400;
+  return (await setBase(dir, branch, base)) ? 204 : 409;
+}
+
 const agentActions: AgentActions = {
   outbox,
   known: (pane) => Object.hasOwn(agentStates(herdr) ?? {}, pane),
@@ -403,6 +414,9 @@ const server = createServer((req, res) => {
   const agent = agentPath(path);
   if (!hosts.has(req.headers.host ?? "")) {
     res.writeHead(403).end();
+  } else if (path === "/api/base") {
+    if (req.method !== "POST" || !fromPage(req.headers, hosts)) res.writeHead(403).end();
+    else setBaseFrom(req).then((status) => res.writeHead(status).end(), (e) => json(res, 500, { error: e.message }));
   } else if (agent) {
     // Only the watcher's server, which delivers them, and only the page.
     if (!orgs || !fromPage(req.headers, hosts)) res.writeHead(403).end();
@@ -420,7 +434,7 @@ const server = createServer((req, res) => {
   } else if (path === "/api/worktrees") {
     // Worktrees aren't watched, so git is asked each time.
     Promise.all(
-      projectWorktrees().map(async (p) => ({ ...p, worktrees: await Promise.all(p.worktrees.map(summarize)) })),
+      projectWorktrees().map(async (p) => ({ ...p, worktrees: await Promise.all(p.worktrees.map((w) => summarize(w, pullBases))) })),
     )
       .then((projects) => json(res, 200, projects))
       .catch((e) => json(res, 500, { error: e.message }));
@@ -429,10 +443,21 @@ const server = createServer((req, res) => {
     const dir = url.searchParams.get("dir");
     if (!projectWorktrees().some((p) => p.worktrees.includes(dir ?? ""))) json(res, 404, { error: "no such worktree" });
     else
-      worktreeDiff(dir!)
+      worktreeDiff(dir!, pullBases)
         .then(highlightDiff)
         .then((diff) => json(res, 200, diff))
         .catch((e) => json(res, 500, { error: e.message }));
+  } else if (path === "/api/lines") {
+    // More context for a diff: only the worktrees the page lists, like it.
+    const q = url.searchParams;
+    const dir = q.get("dir");
+    const path = q.get("path") ?? "";
+    const listed = projectWorktrees().some((p) => p.worktrees.includes(dir ?? ""));
+    // Newer lines would pass for unchanged ones in the diff taken then.
+    if (listed && changedSince(dir!, path, Number(q.get("at")))) return void json(res, 409, { error: "the file changed" });
+    const lines = listed ? fileLines(dir!, path, Number(q.get("from")), Number(q.get("to"))) : null;
+    if (lines === null) json(res, 404, { error: "no such file" });
+    else highlightLines(q.get("path")!, lines).then((tokens) => json(res, 200, tokens));
   } else if (path === "/api/file") {
     // Only the files of the projects the page lists, not any file asked for.
     const dir = url.searchParams.get("dir");

@@ -461,6 +461,26 @@ code { font-family: var(--mono); font-size: var(--normal); }
   cursor: pointer;
 }
 .diffs h2 .layout button.here { color: var(--panel); background: var(--fg); border-color: var(--fg); }
+.expand {
+  margin-right: var(--space-3);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--panel-edge);
+  background: var(--panel);
+  color: var(--muted);
+  font: var(--small) var(--sans);
+  cursor: pointer;
+}
+.expand:hover { color: var(--accent); border-color: var(--accent); }
+.sent-note {
+  position: fixed;
+  right: var(--space-5);
+  bottom: var(--space-5);
+  z-index: 1;
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+}
 .ln-comment { cursor: pointer; }
 .ln-comment:hover { color: var(--accent); }
 .comment-row td { padding: var(--space-3); background: var(--well); }

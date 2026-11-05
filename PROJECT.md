@@ -106,6 +106,9 @@ exception: tools read their config from that checkout, so start a
 branch there with `git switch -c` from where it is, and don't switch to
 other branches.
 
+For a branch stacked on another, name the parent when creating it, as in
+`git worktree add -b <branch> <path> <parent>`, so that its diff starts there.
+
 ## Herdr
 
 Your role is `main` unless you report another. If it is, report it once

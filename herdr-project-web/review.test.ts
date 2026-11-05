@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { FileDiff } from "./diff.ts";
-import { type Comment, commentKey, displaced, reviewMessage, reviewers, withComment } from "./review.ts";
+import { type Comment, clearReviewer, commentKey, displaced, reviewMessage, reviewers, withComment } from "./review.ts";
 
 const comment = (path: string, line: number, body: string, side: "old" | "new" = "new"): Comment => ({ path, side, line, code: "x()", body });
 
@@ -43,8 +43,21 @@ test("offers the agents inside the diff first, in a stable order", () => {
     { name: "b", worktrees: [{ dir: "/other" }], panes: [{ id: "w2:p1", role: "main", cwd: "/r" }] },
     { name: "c", worktrees: [{ dir: "/r" }], panes: [{ id: "w0:p1", role: "main", cwd: "/r/sub" }] },
   ];
-  assert.deepEqual(reviewers(projects, "/r"), [["w0:p1", "c · main (w0:p1)"], ["w1:p1", "a · main (w1:p1)"], ["w1:p2", "a · w1:p2"]]);
+  assert.deepEqual(reviewers(projects, "/r"), [
+    { id: "w0:p1", label: "c · main (w0:p1)", inside: true },
+    { id: "w1:p1", label: "a · main (w1:p1)", inside: false },
+    { id: "w1:p2", label: "a · w1:p2", inside: false },
+  ]);
   assert.deepEqual(reviewers([...projects].reverse(), "/r"), reviewers(projects, "/r"));
+});
+
+test("doesn't guess which agent the comments are for", () => {
+  const agent = (id: string, inside: boolean) => ({ id, label: id, inside });
+  assert.equal(clearReviewer([agent("a", false)])?.id, "a");
+  assert.equal(clearReviewer([agent("a", true), agent("b", false)])?.id, "a");
+  assert.equal(clearReviewer([agent("a", false), agent("b", false)]), null);
+  assert.equal(clearReviewer([agent("a", true), agent("b", true)]), null);
+  assert.equal(clearReviewer([]), null);
 });
 
 test("finds comments whose line moved or left the diff", () => {

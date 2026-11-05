@@ -80,6 +80,11 @@ Plain `claude` in a shell still works for fixing it.
 Its localhost-only page shows the open projects under `~/project`, with their
 agents, what they wait on and what their notes say waits on you, and how each
 worktree differs from where its branch left the remote's default branch.
+A branch's diff starts from its pull request's base, for the open ones the
+watcher finds (yours, updated in the last two weeks), else the base chosen on
+the page, which `gh pr create` also uses, else the branch it was created from
+until that is merged, else the default branch.
+
 Clicking a line number in a diff comments on that line, and the comments go to
 the agent you choose as one message, once it is idle.
 

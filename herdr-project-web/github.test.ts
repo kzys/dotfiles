@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import {
   type PollHerdr, agentPane, checkoutPanes, events, fetch, owner, poll, pullRequests, remember,
-  repoName, runs, screen, searchQuery, waitingItems, wakeMessage, worktrees,
+  repoName, runs, screen, searchQuery, waitingItems, wakeMessage, worktrees, pullBases, type Pull,
 } from "./github.ts";
 import { notesTexts } from "./owners.ts";
 import type { HerdrPane } from "./panes.ts";
@@ -281,4 +281,11 @@ test("wakes the agent in the checkout over one in the project", async () => {
   assert.deepEqual(rows.map((r) => [r.project, r.agent, r.pane]), [["20261001-a", true, "w2:p1"]]);
   await poll(herdr, join(root, "project"), state, [], async () => responses.shift());
   assert.deepEqual(calls.filter((c) => c[0] === "run").map((c) => c[1]), ["w2:p1"]);
+});
+
+test("reads what open pull requests in the repository merge into", () => {
+  const pr = (over: object) => ({ repo: "o/r", head: "o/r", branch: "b", base: "parent", state: "OPEN", ...over }) as Pull;
+  assert.deepEqual(pullBases([
+    pr({}), pr({ branch: "merged", state: "MERGED" }), pr({ branch: "fork", head: "me/r" }), pr({ branch: "none", base: undefined }),
+  ]), { "o/r:b": "parent" });
 });
