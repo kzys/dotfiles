@@ -106,13 +106,13 @@ function agentViews(): Record<string, AgentView> {
   return views;
 }
 
-/** Reports whether pane still runs session, if known, idle, as Herdr says
- * right now, with no permission request open. Text sent to anything else
- * could answer a prompt, run in a shell, or reach another agent. */
-async function readyForText(pane: string, session: string | undefined): Promise<boolean> {
+/** Returns the session in pane, "" if unknown, if it runs an idle agent, as
+ * Herdr says right now, with no permission request open, or else null.
+ * Text sent to anything else could answer a prompt, or run in a shell. */
+async function readyForText(pane: string): Promise<string | null> {
   const { pane: now } = await ask("pane.get", { pane_id: pane });
-  if (session && now.agent_session?.value && session !== now.agent_session.value) return false;
-  return Boolean(now.agent) && ["idle", "done"].includes(now.agent_status) && hookEvents.get(pane)?.event !== "PermissionRequest";
+  const free = Boolean(now.agent) && ["idle", "done"].includes(now.agent_status) && hookEvents.get(pane)?.event !== "PermissionRequest";
+  return free ? (now.agent_session?.value ?? "") : null;
 }
 
 /** Returns the state for the page. Only the watcher's server can act. */
@@ -574,9 +574,11 @@ async function nameWorkspaces() {
  * session may run in a new pane, or in one that had another's role. */
 async function reportRole(pane: string, data: any) {
   const got = await tryAsk("pane.get", { pane_id: pane });
+  // Herdr not answering says nothing about the role the pane has.
+  if (!got) return;
   const resuming = data.source === "resume";
   const reported = resuming && typeof data.transcript_path === "string" ? reportedRole(data.transcript_path) : null;
-  const role = roleToReport(got?.pane?.tokens?.role || null, resuming, reported);
+  const role = roleToReport(got.pane?.tokens?.role || null, resuming, reported);
   if (role) await tryAsk("pane.report_metadata", { pane_id: pane, source: "agent-notes", tokens: { role } });
 }
 

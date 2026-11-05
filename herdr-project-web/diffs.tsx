@@ -133,15 +133,15 @@ function Code({ line }: { line: DiffLine }) {
   );
 }
 
-/** The comments on a diff, kept in this browser until they are sent, and
- * the one being written, which outlives its box, as when folding a file. */
+/** The comments on a diff, kept in this browser until they are sent, even
+ * as they are written, and the one being written. */
 type Review = {
   comments: Comment[];
   editing: Comment | null;
-  // Starts on a line, keeping what was being written on another.
   edit: (at: Comment) => void;
   write: (body: string) => void;
   save: () => void;
+  // Stops writing, putting back what the comment said before.
   cancel: () => void;
   remove: (gone: Comment[]) => void;
 };
@@ -157,6 +157,7 @@ function useReview(dir: string): Review {
     }
   });
   const [editing, setEditing] = useState<Comment | null>(null);
+  const before = useRef("");
   const update = (change: (all: Comment[]) => Comment[]) => {
     setComments((all) => {
       const next = change(all);
@@ -166,24 +167,24 @@ function useReview(dir: string): Review {
       return next;
     });
   };
-  const commit = () => {
-    if (editing) update((all) => withComment(all, editing));
-  };
   return {
     comments,
     editing,
     edit: (at) => {
-      if (editing && commentKey(editing) === commentKey(at)) return;
-      commit();
-      const saved = comments.find((c) => commentKey(c) === commentKey(at));
-      setEditing({ ...at, body: saved?.body ?? "" });
+      const body = comments.find((c) => commentKey(c) === commentKey(at))?.body ?? "";
+      before.current = body;
+      setEditing({ ...at, body });
     },
-    write: (body) => setEditing((c) => c && { ...c, body }),
-    save: () => {
-      commit();
+    write: (body) => {
+      if (!editing) return;
+      setEditing({ ...editing, body });
+      update((all) => withComment(all, { ...editing, body }));
+    },
+    save: () => setEditing(null),
+    cancel: () => {
+      if (editing) update((all) => withComment(all, { ...editing, body: before.current }));
       setEditing(null);
     },
-    cancel: () => setEditing(null),
     remove: (gone) => update((all) => all.filter((c) => !gone.some((g) => commentKey(g) === commentKey(c)))),
   };
 }
@@ -238,8 +239,7 @@ function CommentBox({ review }: { review: Review }) {
   );
 }
 
-/** Returns the rows under a line with its comment or the box writing one.
- * A comment shows only under the line it was written on: see displaced. */
+/** Returns the rows under a line with its comment or the box writing one. */
 function CommentRows({ ats, review, span }: { ats: (Comment | null)[]; review: Review; span: number }) {
   const keys = new Set<string>();
   return (
@@ -249,7 +249,7 @@ function CommentRows({ ats, review, span }: { ats: (Comment | null)[]; review: R
         const key = commentKey(at);
         keys.add(key);
         const editing = review.editing && commentKey(review.editing) === key;
-        const saved = review.comments.find((c) => commentKey(c) === key && c.code === at.code);
+        const saved = review.comments.find((c) => commentKey(c) === key);
         if (!editing && !saved) return [];
         return [
           <tr key={key} class="comment-row">

@@ -20,11 +20,11 @@ const free = (status: string | undefined) => status === "idle" || status === "do
 
 /** Keeps messages for agents in path by pane, surviving restarts, and
  * sends them with send once ready, which looks at the pane again, says
- * it can still take them, given their session. */
+ * it can take them, returning the session in it, "" if unknown, or null. */
 export class Outbox {
   private path: string;
   private send: (pane: string, text: string) => Promise<unknown>;
-  private ready: (pane: string, session: string | undefined) => Promise<boolean>;
+  private ready: (pane: string) => Promise<string | null>;
   private queues: Record<string, Queued[]>;
   private sending = new Set<string>();
   private next = 0;
@@ -32,7 +32,7 @@ export class Outbox {
   constructor(
     path: string,
     send: (pane: string, text: string) => Promise<unknown>,
-    ready: (pane: string, session: string | undefined) => Promise<boolean>,
+    ready: (pane: string) => Promise<string | null>,
   ) {
     this.path = path;
     this.send = send;
@@ -75,10 +75,12 @@ export class Outbox {
   }
 
   private async deliverTo(pane: string): Promise<boolean> {
-    const messages = this.queued(pane);
     this.sending.add(pane);
     try {
-      if (!(await this.ready(pane, messages[0].session))) return false;
+      const session = await this.ready(pane);
+      if (session === null) return false;
+      const messages = this.queued(pane).filter((m) => !m.session || !session || m.session === session);
+      if (!messages.length) return false;
       await this.send(pane, messages.map((m) => m.text).join("\n\n"));
       // Messages can arrive while it sends.
       this.set(pane, this.queued(pane).filter((m) => !messages.some((s) => s.id === m.id)));

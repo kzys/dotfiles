@@ -10,7 +10,7 @@ import type { HookEvent } from "./hooks.ts";
 
 const file = () => join(mkdtempSync(join(tmpdir(), "outbox-")), "outbox.json");
 const none = async () => {};
-const yes = async () => true;
+const yes = async () => "";
 
 test("holds messages until the agent is idle, then sends them as one", async () => {
   const sent: [string, string][] = [];
@@ -57,22 +57,27 @@ test("sends a message once, and keeps one that arrives meanwhile", async () => {
 
 test("holds messages when the pane turns out not to be ready", async () => {
   const sent: string[] = [];
-  let ready = false;
+  let ready: string | null = null;
   const outbox = new Outbox(file(), async (_, t) => void sent.push(t), async () => ready);
   outbox.add("w1:p1", "hello");
   assert.equal(await outbox.deliver({ "w1:p1": "idle" }), false);
   assert.equal(outbox.queued("w1:p1").length, 1);
-  ready = true;
+  ready = "";
   assert.equal(await outbox.deliver({ "w1:p1": "idle" }), true);
   assert.deepEqual(sent, ["hello"]);
 });
 
-test("asks whether the session the messages are for can take them", async () => {
-  const asked: (string | undefined)[] = [];
-  const outbox = new Outbox(file(), none, async (_, s) => (asked.push(s), false));
-  outbox.add("w1:p1", "hello", "s1");
-  await outbox.deliver({ "w1:p1": "idle" });
-  assert.deepEqual(asked, ["s1"]);
+test("sends only what is for the session in the pane", async () => {
+  const sent: string[] = [];
+  const outbox = new Outbox(file(), async (_, t) => void sent.push(t), async () => "s2");
+  outbox.add("w1:p1", "for the old one", "s1");
+  outbox.add("w1:p1", "for this one", "s2");
+  outbox.add("w1:p1", "for anyone");
+  assert.equal(await outbox.deliver({ "w1:p1": "idle" }), true);
+  assert.deepEqual(sent, ["for this one\n\nfor anyone"]);
+  assert.deepEqual(outbox.queued("w1:p1").map((m) => m.text), ["for the old one"]);
+  assert.equal(await outbox.deliver({ "w1:p1": "idle" }), false);
+  assert.equal(sent.length, 1);
 });
 
 test("nothing delivers messages to a pane without their agent", () => {

@@ -5,8 +5,9 @@ import { type FileDiff, filePath } from "./diff.ts";
 
 export type Comment = { path: string; side: "old" | "new"; line: number; code: string; body: string };
 
-/** Returns what identifies the line a comment is on. */
-export const commentKey = (c: Pick<Comment, "path" | "side" | "line">) => `${c.path}:${c.side}:${c.line}`;
+/** Returns what identifies the line a comment is on, its code included:
+ * after an edit above it, its number holds another line. */
+export const commentKey = (c: Pick<Comment, "path" | "side" | "line" | "code">) => `${c.path}:${c.side}:${c.line}:${c.code}`;
 
 /** Returns comments with the one on c's line replaced by c, or removed if
  * c says nothing, in the order of the diff's files and lines. */
@@ -43,15 +44,15 @@ export function reviewers(
 /** Returns the comments no line of files holds any more: their line left
  * the diff, or now reads differently, as when an agent edited above it. */
 export function displaced(comments: Comment[], files: FileDiff[]): Comment[] {
-  const lines = new Map<string, string>();
+  const lines = new Set<string>();
   for (const file of files) {
     const path = filePath(file);
     for (const hunk of file.hunks) {
       for (const l of hunk.lines) {
         const side = l.kind === "del" ? "old" : "new";
-        if (l[side] !== null) lines.set(commentKey({ path, side, line: l[side]! }), l.text);
+        if (l[side] !== null) lines.add(commentKey({ path, side, line: l[side]!, code: l.text }));
       }
     }
   }
-  return comments.filter((c) => lines.get(commentKey(c)) !== c.code);
+  return comments.filter((c) => !lines.has(commentKey(c)));
 }

@@ -10,12 +10,17 @@ test("keeps one comment per line, in the diff's order", () => {
   comments = withComment(comments, comment("a.ts", 9, "first"));
   comments = withComment(comments, comment("a.ts", 9, "edited"));
   assert.deepEqual(comments.map((c) => c.body), ["edited", "second"]);
-  assert.equal(commentKey(comments[0]), "a.ts:new:9");
+  assert.equal(commentKey(comments[0]), "a.ts:new:9:x()");
 });
 
 test("an old and a new line with one number are different lines", () => {
   const both = withComment([comment("a.ts", 3, "new")], comment("a.ts", 3, "old", "old"));
   assert.equal(both.length, 2);
+});
+
+test("a line with other code under the same number is another line", () => {
+  const moved = withComment([comment("a.ts", 3, "on x()")], { ...comment("a.ts", 3, "on y()"), code: "y()" });
+  assert.deepEqual(moved.map((c) => c.body).sort(), ["on x()", "on y()"]);
 });
 
 test("emptying a comment removes it", () => {

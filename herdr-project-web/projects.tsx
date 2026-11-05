@@ -157,7 +157,7 @@ function ProjectCard({ project, agents }: { project: Project; agents: Record<str
   );
 }
 
-/** Returns messages left for panes that are gone, to copy elsewhere or
+/** Returns messages left for agents that are gone, to copy elsewhere or
  * drop: nothing will deliver them. */
 function Undelivered({ state }: { state: State }) {
   const left = (state.undelivered ?? []).flatMap((u) => u.messages.map((m) => ({ pane: u.pane, message: m })));
@@ -166,7 +166,7 @@ function Undelivered({ state }: { state: State }) {
     <section class="card">
       <header>
         <span class="name">undelivered</span>
-        <span class="title">their agents' panes are gone</span>
+        <span class="title">the agents they were for are gone</span>
       </header>
       {left.map(({ pane, message }) => (
         <div key={message.id} class="agent-queued undelivered">
