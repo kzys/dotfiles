@@ -2,7 +2,7 @@
 
 import { Fragment } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
-import { type DiffLine, type FileDiff, type Gap, type Hunk, edgeLine, expandHunks, filePath, gapAt, splitRows } from "./diff.ts";
+import { type DiffLine, type FileDiff, type Gap, type Hunk, expandHunks, filePath, gapAt, splitRows } from "./diff.ts";
 import type { HighlightedDiff } from "./highlight.ts";
 import { type Comment, type Reviewer, clearReviewer, commentKey, displaced, reviewMessage, reviewers, withComment } from "./review.ts";
 import type { State } from "./state.ts";
@@ -339,7 +339,8 @@ function useSender(review: Review, wt: HighlightedDiff | null, state: State | nu
 
 /** Returns the choice of agent, where there is one to make. */
 function AgentPicker({ sender }: { sender: Sender }) {
-  if (sender.agents.length < 2) return null;
+  // One agent needs no choice, unless the one chosen left, with this one.
+  if (!sender.agents.length || (sender.agents.length === 1 && sender.target)) return null;
   return (
     <select value={sender.target?.id ?? ""} aria-label="Agent" onChange={(e) => sender.pick(e.currentTarget.value)}>
       {!sender.target && <option value="">choose an agent</option>}
@@ -579,6 +580,7 @@ export function WorktreeDiffView({ dir, query, state }: { dir: string; query: st
   const [fetched, error, at, refresh] = useFetched<HighlightedDiff>(`/api/diff?dir=${encodeURIComponent(dir)}`);
   const [more, setMore] = useState<Record<string, Expanded>>({});
   const [lineError, setLineError] = useState<string | null>(null);
+  const expanding = useRef(new Set<string>());
   // Lines shown stay until the file's changes do, as when git is asked again.
   const expandedOf = (f: FileDiff) => {
     const e = more[fileKey(f)];
@@ -593,21 +595,23 @@ export function WorktreeDiffView({ dir, query, state }: { dir: string; query: st
     if (!gap) return;
     const from = end === "start" || gap.to === null ? gap.from : Math.max(gap.from, gap.to - STEP + 1);
     const to = end === "end" ? gap.to! : Math.min(gap.to ?? Infinity, gap.from + STEP - 1);
-    // One line more on the side that meets a hunk, which shows whether the
-    // file still matches this diff.
-    const above = end === "start" && i > 0 ? edgeLine(hunks[i - 1], "last") : null;
-    const below = end === "end" ? edgeLine(hunks[i], "first") : null;
-    const range = { from: from - (above === null ? 0 : 1), to: to + (below === null ? 0 : 1) };
-    const query = new URLSearchParams({ dir, path: filePath(original), from: String(range.from), to: String(range.to) });
+    const query = new URLSearchParams({
+      dir, path: filePath(original), from: String(from), to: String(to), at: String(fetched!.at),
+    });
+    // Another expansion would start from these hunks too, and undo this one.
+    if (expanding.current.has(fileKey(original))) return;
+    expanding.current.add(fileKey(original));
     try {
       const res = await fetch(`/api/lines?${query}`);
-      if (!res.ok) throw new Error((await res.json()).error);
-      const read: Pick<DiffLine, "text" | "tokens">[] = await res.json();
-      if ((above !== null && read[0]?.text !== above) || (below !== null && read.at(-1)?.text !== below)) {
+      const stale = () => {
         refresh();
-        throw new Error("the file changed, so its diff was read again");
-      }
-      const texts = read.slice(above === null ? 0 : 1, below === null ? undefined : -1);
+        return new Error("the file changed, so its diff was read again");
+      };
+      if (res.status === 409) throw stale();
+      if (!res.ok) throw new Error((await res.json()).error);
+      const texts: Pick<DiffLine, "text" | "tokens">[] = await res.json();
+      // A gap between hunks is all there; only the last can run out.
+      if (gap.to !== null && texts.length !== to - from + 1) throw stale();
       const lines = texts.map((t, n): DiffLine => ({ ...t, kind: "ctx", old: from + n + gap.offset, new: from + n }));
       setMore((all) => ({
         ...all,
@@ -621,6 +625,8 @@ export function WorktreeDiffView({ dir, query, state }: { dir: string; query: st
       setLineError(null);
     } catch (e) {
       setLineError((e as Error).message);
+    } finally {
+      expanding.current.delete(fileKey(original));
     }
   };
   const shown = files.filter((f) => matches(query, f.from, f.to));

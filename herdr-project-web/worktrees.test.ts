@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, renameSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseDiff } from "./diff.ts";
-import { checkoutDirs, createdFrom, fileLines, lastSubject, setBase, summarize, worktreeDiff, worktreeDirs } from "./worktrees.ts";
+import { changedSince, checkoutDirs, createdFrom, fileLines, lastSubject, setBase, summarize, worktreeDiff, worktreeDirs } from "./worktrees.ts";
 
 test("diffs a worktree from where its branch left the remote's default", async () => {
   const root = mkdtempSync(join(tmpdir(), "herdr-project-web-"));
@@ -124,6 +124,35 @@ test("reads lines of a file in the worktree and nothing outside it", () => {
 });
 
 const log = (...entries: [number, string][]) => entries.map(([at, message]) => `refs/heads/x@{${at}} ${message}`).join("\n");
+
+test("reads lines without their line ends", () => {
+  const dir = mkdtempSync(join(tmpdir(), "herdr-project-web-"));
+  writeFileSync(join(dir, "f"), "one\r\ntwo\r\n");
+  assert.deepEqual(fileLines(dir, "f", 1, 5), ["one", "two"]);
+});
+
+test("tells whether a file changed since a diff was taken", () => {
+  const dir = mkdtempSync(join(tmpdir(), "herdr-project-web-"));
+  writeFileSync(join(dir, "f"), "x\n");
+  assert.equal(changedSince(dir, "f", Date.now() + 60_000), false);
+  assert.equal(changedSince(dir, "f", Date.now() - 60_000), true);
+  assert.equal(changedSince(dir, "gone", 200_000), true);
+});
+
+test("a file moved into place counts as changed, whatever its modified time", () => {
+  const dir = mkdtempSync(join(tmpdir(), "herdr-project-web-"));
+  writeFileSync(join(dir, "old"), "x\n");
+  utimesSync(join(dir, "old"), 100, 100);
+  const at = Date.now() - 1000;
+  renameSync(join(dir, "old"), join(dir, "f"));
+  assert.equal(changedSince(dir, "f", at), true);
+});
+
+test("doesn't read a file that isn't the diff's text", () => {
+  const dir = mkdtempSync(join(tmpdir(), "herdr-project-web-"));
+  writeFileSync(join(dir, "f"), "o\0n\0e\0\n");
+  assert.equal(fileLines(dir, "f", 1, 1), null);
+});
 
 test("reads what a branch was created from", () => {
   assert.equal(createdFrom(log([9, "commit: x"], [5, "branch: Created from parent"]), "", "child"), "parent");

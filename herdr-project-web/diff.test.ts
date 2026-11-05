@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { type DiffLine, type Hunk, edgeLine, expandHunks, gapAt, parseDiff, splitRows, unquote } from "./diff.ts";
+import { type DiffLine, type Hunk, expandHunks, gapAt, parseDiff, splitRows, unquote } from "./diff.ts";
 
 test("reads git's diffs into files and lines", () => {
   const text = [
@@ -75,16 +75,6 @@ test("a file with no hunks has no gaps", () => {
 
 test("numbers the old file past the last hunk by where that hunk ends", () => {
   assert.deepEqual(gapAt([hunk("@@ -1,10 +1,13 @@")], 1), { from: 14, to: null, offset: -3 });
-});
-
-test("finds what a hunk shows of the new file at its edges", () => {
-  const lines: DiffLine[] = [
-    { kind: "del", text: "gone", old: 1, new: null }, { kind: "ctx", text: "a", old: 2, new: 1 },
-    { kind: "add", text: "b", old: null, new: 2 }, { kind: "note", text: "No newline", old: null, new: null },
-  ];
-  assert.equal(edgeLine({ header: "", lines }, "first"), "a");
-  assert.equal(edgeLine({ header: "", lines }, "last"), "b");
-  assert.equal(edgeLine(undefined, "first"), null);
 });
 
 test("reads a hunk that only adds or only removes", () => {

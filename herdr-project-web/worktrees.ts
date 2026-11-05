@@ -46,6 +46,8 @@ export type WorktreeDiff = Summary & {
   // How many untracked files the diff leaves out: past the first ones,
   // and repositories nested in the worktree.
   omitted: number;
+  // When git was asked for it, in milliseconds.
+  at: number;
   // The local branches it could start from instead.
   baseOptions: string[];
   // The base chosen for it, in use or not, or null.
@@ -347,15 +349,31 @@ const CONTEXT = 10;
 // A file larger than this isn't read for more context.
 const MAX_FILE = 5 << 20;
 
+/** Reports whether the file at path in dir changed at or after the time
+ * since, in milliseconds, so that it may not match a diff taken then. A
+ * file moved into place keeps its modified time, so ctime counts too. */
+export function changedSince(dir: string, path: string, since: number): boolean {
+  try {
+    const { mtimeMs, ctimeMs } = statSync(join(dir, path));
+    return Math.max(mtimeMs, ctimeMs) >= since;
+  } catch {
+    return true;
+  }
+}
+
 /** Returns lines from through to of the file at path in dir, as they are
- * now, numbered from 1, or null if it isn't a file in dir that can be read. */
+ * now, numbered from 1, or null if it isn't a file in dir that can be read.
+ * Line ends don't count, as in the diffs of files git normalizes. */
 export function fileLines(dir: string, path: string, from: number, to: number): string[] | null {
   try {
     const root = realpathSync(dir);
     const file = realpathSync(join(dir, path));
     const stat = statSync(file);
     if (!file.startsWith(`${root}/`) || !stat.isFile() || stat.size > MAX_FILE) return null;
-    const lines = readFileSync(file, "utf8").split("\n");
+    const text = readFileSync(file, "utf8");
+    // Text only in git's eyes, like UTF-16, doesn't have the diff's lines.
+    if (text.includes("\0")) return null;
+    const lines = text.split(/\r?\n/);
     // A last newline ends the last line, rather than starting another.
     if (lines.at(-1) === "") lines.pop();
     return lines.slice(from - 1, to);
@@ -371,7 +389,7 @@ export async function worktreeDiff(dir: string, pulls: PullBases = {}): Promise<
   const listing = untracked(dir);
   listing.catch(() => {});
   const [summary, from, born] = await inspect(dir, pulls);
-  const result: WorktreeDiff = { ...summary, commits: [], diff: "", omitted: 0, baseOptions: [], chosenBase: null };
+  const result: WorktreeDiff = { ...summary, commits: [], diff: "", omitted: 0, at: Date.now(), baseOptions: [], chosenBase: null };
   if (summary.error) return result;
   try {
     const [options, chosen, log, diff, others] = await Promise.all([

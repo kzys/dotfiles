@@ -243,13 +243,6 @@ export function gapAt(hunks: Hunk[], i: number): Gap | null {
   return { from, to, offset };
 }
 
-/** Returns what hunk shows of the new file as its first or last line, or
- * null if it shows none. */
-export function edgeLine(hunk: Hunk | undefined, end: "first" | "last"): string | null {
-  const lines = (hunk?.lines ?? []).filter((l) => l.kind === "add" || l.kind === "ctx");
-  return (end === "first" ? lines[0] : lines.at(-1))?.text ?? null;
-}
-
 /** Returns hunks with lines, those of the gap at i from its start, added
  * to the hunk before it, or from its end, to the hunk after it, joining the
  * two once they touch. */

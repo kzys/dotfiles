@@ -36,7 +36,7 @@ import {
   type Herdr, type Watched, agentStates, checkoutOf, linkCheckout, openProjects, projectDirs, projectLabels, readProjectFile, readState,
 } from "./state.ts";
 import { type Found, title, watchWorkspace, watchedFrom } from "./watched.ts";
-import { type PullBases, checkoutDirs, fileLines, setBase, summarize, worktreeDiff, worktreeDirs } from "./worktrees.ts";
+import { type PullBases, changedSince, checkoutDirs, fileLines, setBase, summarize, worktreeDiff, worktreeDirs } from "./worktrees.ts";
 
 const here = import.meta.dirname;
 const home = homedir();
@@ -451,9 +451,11 @@ const server = createServer((req, res) => {
     // More context for a diff: only the worktrees the page lists, like it.
     const q = url.searchParams;
     const dir = q.get("dir");
-    const lines = projectWorktrees().some((p) => p.worktrees.includes(dir ?? ""))
-      ? fileLines(dir!, q.get("path") ?? "", Number(q.get("from")), Number(q.get("to")))
-      : null;
+    const path = q.get("path") ?? "";
+    const listed = projectWorktrees().some((p) => p.worktrees.includes(dir ?? ""));
+    // Newer lines would pass for unchanged ones in the diff taken then.
+    if (listed && changedSince(dir!, path, Number(q.get("at")))) return void json(res, 409, { error: "the file changed" });
+    const lines = listed ? fileLines(dir!, path, Number(q.get("from")), Number(q.get("to"))) : null;
     if (lines === null) json(res, 404, { error: "no such file" });
     else highlightLines(q.get("path")!, lines).then((tokens) => json(res, 200, tokens));
   } else if (path === "/api/file") {
