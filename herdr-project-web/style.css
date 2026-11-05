@@ -171,6 +171,7 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
 .agent-queued .text, .agent-permission code { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .agent-permission code { color: var(--red); font: var(--normal) var(--mono); }
 .agent-error { margin: 0; color: var(--red); }
+.undelivered { padding: var(--space-2) var(--space-5); }
 
 /* A project's worktrees, each linked to its diff. */
 .wt-links {
@@ -460,6 +461,15 @@ code { font-family: var(--mono); font-size: var(--normal); }
   cursor: pointer;
 }
 .diffs h2 .layout button.here { color: var(--panel); background: var(--fg); border-color: var(--fg); }
+.ln-comment { cursor: pointer; }
+.ln-comment:hover { color: var(--accent); }
+.comment-row td { padding: var(--space-3); background: var(--well); }
+.comment { display: grid; gap: var(--space-2); max-width: 720px; font-family: var(--sans, inherit); white-space: normal; }
+.comment textarea { width: 100%; box-sizing: border-box; font: inherit; padding: var(--space-2); }
+.comment-body { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.comment-actions, .review-bar { display: flex; align-items: center; gap: var(--space-3); }
+.review-bar { flex-wrap: wrap; margin: 0; padding: var(--space-3) var(--space-5); border-top: 1px solid var(--panel-edge); }
+.comment-moved { flex-basis: 100%; display: flex; align-items: baseline; gap: var(--space-3); color: var(--muted); overflow-wrap: anywhere; }
 .diff-split { table-layout: fixed; }
 .diff-split .ln-col { width: 52px; }
 .diff-split .code { white-space: pre-wrap; overflow-wrap: anywhere; }

@@ -6,7 +6,12 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { type HookEvent, readBody } from "./hooks.ts";
 import { loadState, saveState } from "./statefile.ts";
 
-export type Queued = { id: string; text: string; at: number };
+// A message, for the session in its pane when it was written, if known: a
+// later agent in that pane didn't ask for it.
+export type Queued = { id: string; text: string; at: number; session?: string };
+
+// Messages for a pane that is gone, as Herdr gives a moved pane a new id.
+export type Undelivered = { pane: string; messages: Queued[] };
 
 // What the page shows of an agent, besides what Herdr says of it.
 export type AgentView = { queued: Queued[]; permission: { detail: string; at: number } | null };
@@ -15,16 +20,20 @@ const free = (status: string | undefined) => status === "idle" || status === "do
 
 /** Keeps messages for agents in path by pane, surviving restarts, and
  * sends them with send once ready, which looks at the pane again, says
- * it can still take them. */
+ * it can still take them, given their session. */
 export class Outbox {
   private path: string;
   private send: (pane: string, text: string) => Promise<unknown>;
-  private ready: (pane: string) => Promise<boolean>;
+  private ready: (pane: string, session: string | undefined) => Promise<boolean>;
   private queues: Record<string, Queued[]>;
   private sending = new Set<string>();
   private next = 0;
 
-  constructor(path: string, send: (pane: string, text: string) => Promise<unknown>, ready: (pane: string) => Promise<boolean>) {
+  constructor(
+    path: string,
+    send: (pane: string, text: string) => Promise<unknown>,
+    ready: (pane: string, session: string | undefined) => Promise<boolean>,
+  ) {
     this.path = path;
     this.send = send;
     this.ready = ready;
@@ -36,9 +45,14 @@ export class Outbox {
     return this.queues[pane] ?? [];
   }
 
-  /** Queues text for pane. */
-  add(pane: string, text: string, at = Date.now()) {
-    this.set(pane, [...this.queued(pane), { id: `${at}-${this.next++}`, text, at }]);
+  /** Returns all the messages waiting, by pane. */
+  all(): Record<string, Queued[]> {
+    return this.queues;
+  }
+
+  /** Queues text for session, if known, in pane. */
+  add(pane: string, text: string, session?: string, at = Date.now()) {
+    this.set(pane, [...this.queued(pane), { id: `${at}-${this.next++}`, text, at, ...(session ? { session } : {}) }]);
   }
 
   /** Removes the message with id from pane's queue, and returns whether
@@ -64,7 +78,7 @@ export class Outbox {
     const messages = this.queued(pane);
     this.sending.add(pane);
     try {
-      if (!(await this.ready(pane))) return false;
+      if (!(await this.ready(pane, messages[0].session))) return false;
       await this.send(pane, messages.map((m) => m.text).join("\n\n"));
       // Messages can arrive while it sends.
       this.set(pane, this.queued(pane).filter((m) => !messages.some((s) => s.id === m.id)));
@@ -82,6 +96,16 @@ export class Outbox {
     else delete this.queues[pane];
     saveState(this.path, this.queues);
   }
+}
+
+/** Returns the messages nothing will deliver, from queued, what the outbox
+ * holds by pane, and sessions, the session of each pane with an agent:
+ * those of panes without an agent, or with another session. */
+export function undelivered(queued: Record<string, Queued[]>, sessions: Record<string, string>): Undelivered[] {
+  return Object.entries(queued).flatMap(([pane, all]) => {
+    const messages = all.filter((m) => !Object.hasOwn(sessions, pane) || (m.session && sessions[pane] && m.session !== sessions[pane]));
+    return messages.length ? [{ pane, messages }] : [];
+  });
 }
 
 /** Returns the permission an agent waits for, from its last hook event
@@ -112,6 +136,8 @@ export type AgentActions = {
   outbox: Outbox;
   // Whether pane has an agent.
   known: (pane: string) => boolean;
+  // The session of the agent in pane, if known.
+  session: (pane: string) => string | undefined;
   focus: (pane: string) => Promise<unknown>;
   // Called after anything the page shows changed.
   changed: () => void;
@@ -158,7 +184,7 @@ export async function handleAgent(
   if (!actions.known(pane)) return reply(404, "no such agent");
   if (action === "messages") {
     if (typeof body.text !== "string" || !body.text.trim()) return reply(400, "no text");
-    actions.outbox.add(pane, body.text.trim());
+    actions.outbox.add(pane, body.text.trim(), actions.session(pane));
     actions.changed();
     return reply(204);
   }

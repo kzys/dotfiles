@@ -70,6 +70,8 @@ export type Worktree = { dir: string; subject: string | null };
 // An agent's pane in Herdr.
 export type Pane = {
   id: string;
+  // Where the agent works.
+  cwd: string | null;
   role: string | null;
   // What Herdr says the agent is doing, like working or idle.
   status: string | null;
@@ -117,6 +119,7 @@ export type Watched = { sections: unknown; inbox: unknown; urls?: string[]; at: 
 export type State = {
   // What the page shows of each agent besides what Herdr says, by pane.
   controls?: Record<string, import("./agents.ts").AgentView>;
+  undelivered?: import("./agents.ts").Undelivered[];
   // The watcher's sections, or null if it hasn't reported any.
   sections: Section[] | null;
   // When the watcher last reported them, in ISO 8601.
@@ -288,7 +291,7 @@ export function namedCheckouts(text: string, home: string): string[] {
  * repos/<org>/<repo>, that holds cwd, or null. */
 export function checkoutOf(cwd: string, home: string): string | null {
   const [org, repo] = relative(join(home, "repos"), cwd).split("/");
-  return org && repo && !org.startsWith(".") ? join(home, "repos", org, repo) : null;
+  return org && repo && !org.startsWith(".") && !repo.startsWith(".") ? join(home, "repos", org, repo) : null;
 }
 
 /** Records in links, by project, that the project in dir works in
@@ -335,6 +338,7 @@ export function projectPanes(dir: string, herdr: Herdr | null): Pane[] {
       const ctx = p.tokens?.bg ? "" : (p.tokens?.ctx ?? "");
       return {
         id: p.pane_id,
+        cwd: p.tokens?.cwd || p.cwd || null,
         role: p.tokens?.role || null,
         status: p.agent_status ?? null,
         ctx: /^\d+%*$/.test(ctx) ? parseInt(ctx, 10) : null,
@@ -364,7 +368,8 @@ export function agentStates(herdr: Herdr | null): Record<string, string> | null 
  * FULL_AT percent full come first, then those with a workspace or
  * something waiting on the user, newest first within each group. The
  * watcher's Panes section keeps only panes outside the listed projects,
- * and goes if none are left. The checkouts a project works in are those
+ * and goes if none are left. checkouts holds the checkouts agents went
+ * into, by project, which it lists too. The others a project works in are those
  * in home's ~/repos that the "repositories" field of its README.md
  * names, or else that it or its notes name. */
 export function readState(

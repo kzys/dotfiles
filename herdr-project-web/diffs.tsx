@@ -1,9 +1,12 @@
 // The page's view of the worktrees in the projects and their diffs.
 
-import { useState } from "preact/hooks";
+import { Fragment } from "preact";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { type DiffLine, type FileDiff, filePath, splitRows } from "./diff.ts";
 import type { HighlightedDiff } from "./highlight.ts";
-import { Refresh, matches, useFetched } from "./ui.tsx";
+import { type Comment, commentKey, displaced, reviewMessage, reviewers, withComment } from "./review.ts";
+import type { State } from "./state.ts";
+import { Refresh, matches, send, useFetched } from "./ui.tsx";
 import type { Summary } from "./worktrees.ts";
 
 // Files with more lines than this start folded.
@@ -130,13 +133,214 @@ function Code({ line }: { line: DiffLine }) {
   );
 }
 
+/** The comments on a diff, kept in this browser until they are sent, and
+ * the one being written, which outlives its box, as when folding a file. */
+type Review = {
+  comments: Comment[];
+  editing: Comment | null;
+  // Starts on a line, keeping what was being written on another.
+  edit: (at: Comment) => void;
+  write: (body: string) => void;
+  save: () => void;
+  cancel: () => void;
+  remove: (gone: Comment[]) => void;
+};
+
+/** Returns the review of the diff of dir. */
+function useReview(dir: string): Review {
+  const key = `review:${dir}`;
+  const [comments, setComments] = useState<Comment[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(key) ?? "[]");
+    } catch {
+      return [];
+    }
+  });
+  const [editing, setEditing] = useState<Comment | null>(null);
+  const update = (change: (all: Comment[]) => Comment[]) => {
+    setComments((all) => {
+      const next = change(all);
+      try {
+        localStorage.setItem(key, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
+  const commit = () => {
+    if (editing) update((all) => withComment(all, editing));
+  };
+  return {
+    comments,
+    editing,
+    edit: (at) => {
+      if (editing && commentKey(editing) === commentKey(at)) return;
+      commit();
+      const saved = comments.find((c) => commentKey(c) === commentKey(at));
+      setEditing({ ...at, body: saved?.body ?? "" });
+    },
+    write: (body) => setEditing((c) => c && { ...c, body }),
+    save: () => {
+      commit();
+      setEditing(null);
+    },
+    cancel: () => setEditing(null),
+    remove: (gone) => update((all) => all.filter((c) => !gone.some((g) => commentKey(g) === commentKey(c)))),
+  };
+}
+
+/** Returns the comment a diff line can take, or null for a line that isn't
+ * in a file. Lines removed count by their old number, and all others by
+ * their new one, on either side of a split view. */
+function anchor(path: string, line: DiffLine): Comment | null {
+  const side = line.kind === "del" ? "old" : "new";
+  const number = line[side];
+  return line.kind === "note" || number === null ? null : { path, side, line: number, code: line.text, body: "" };
+}
+
+/** Returns a line's number, which starts a comment on it when clicked. */
+function LineNumber({ at, shown, review, kind }: { at: Comment | null; shown: number | null; review: Review; kind?: string }) {
+  const cls = `ln${kind ? ` line-${kind}` : ""}${at ? " ln-comment" : ""}`;
+  return (
+    <td class={cls} title={at ? "Comment on this line" : undefined} onClick={at ? () => review.edit(at) : undefined}>
+      {shown}
+    </td>
+  );
+}
+
+/** Returns the box that writes the comment being edited. */
+function CommentBox({ review }: { review: Review }) {
+  const { path, line, body } = review.editing!;
+  const box = useRef<HTMLTextAreaElement>(null);
+  // Not autofocus, which browsers honour once per page.
+  useEffect(() => box.current?.focus(), [path, line]);
+  return (
+    <div class="comment">
+      <textarea
+        ref={box}
+        rows={3}
+        value={body}
+        aria-label={`Comment on ${path} line ${line}`}
+        onInput={(e) => review.write(e.currentTarget.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) review.save();
+          if (e.key === "Escape") review.cancel();
+        }}
+      />
+      <div class="comment-actions">
+        <button class="copy" onClick={review.save}>
+          save
+        </button>
+        <button class="copy" onClick={review.cancel}>
+          cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Returns the rows under a line with its comment or the box writing one.
+ * A comment shows only under the line it was written on: see displaced. */
+function CommentRows({ ats, review, span }: { ats: (Comment | null)[]; review: Review; span: number }) {
+  const keys = new Set<string>();
+  return (
+    <>
+      {ats.flatMap((at) => {
+        if (!at || keys.has(commentKey(at))) return [];
+        const key = commentKey(at);
+        keys.add(key);
+        const editing = review.editing && commentKey(review.editing) === key;
+        const saved = review.comments.find((c) => commentKey(c) === key && c.code === at.code);
+        if (!editing && !saved) return [];
+        return [
+          <tr key={key} class="comment-row">
+            <td colSpan={span}>
+              {editing ? (
+                <CommentBox review={review} />
+              ) : (
+                <div class="comment">
+                  <p class="comment-body">{saved!.body}</p>
+                  <div class="comment-actions">
+                    <button class="copy" onClick={() => review.edit(at)}>
+                      edit
+                    </button>
+                    <button class="copy" onClick={() => review.remove([saved!])}>
+                      delete
+                    </button>
+                  </div>
+                </div>
+              )}
+            </td>
+          </tr>,
+        ];
+      })}
+    </>
+  );
+}
+
+/** Returns what sends the review to one of the agents working in the diff,
+ * where it waits until that agent is free, and lists comments whose lines
+ * changed, to send as they are or drop. */
+function SendReview({ review, wt, state }: { review: Review; wt: HighlightedDiff; state: State | null }) {
+  const agents = state?.controls ? reviewers(state.projects, wt.dir) : [];
+  const [picked, pick] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const pane = agents.some(([id]) => id === picked) ? picked : (agents[0]?.[0] ?? null);
+  const count = review.comments.length;
+  const moved = displaced(review.comments, wt.fileDiffs);
+  if (!count) return status ? <p class="review-bar">{status}</p> : null;
+  const submit = async () => {
+    const sent = review.comments;
+    setSending(true);
+    try {
+      await send("POST", `/api/agents/${encodeURIComponent(pane!)}/messages`, { text: reviewMessage(wt.dir, wt.branch, sent) });
+      review.remove(sent);
+      setStatus(`Sent to ${agents.find(([id]) => id === pane)?.[1]}. It gets them when it is free.`);
+    } catch (e) {
+      setStatus(`Couldn't send them: ${(e as Error).message}`);
+    } finally {
+      setSending(false);
+    }
+  };
+  return (
+    <div class="review-bar">
+      <span>
+        {count} comment{count === 1 ? "" : "s"}
+      </span>
+      {agents.length > 1 && (
+        <select value={pane ?? ""} aria-label="Agent" onChange={(e) => pick(e.currentTarget.value)}>
+          {agents.map(([id, label]) => (
+            <option key={id} value={id}>
+              {label}
+            </option>
+          ))}
+        </select>
+      )}
+      <button class="copy" disabled={!pane || sending} onClick={submit}>
+        {pane ? `send to ${agents.find(([id]) => id === pane)?.[1]}` : "no agent to send to"}
+      </button>
+      {status && <span class="agent-error">{status}</span>}
+      {moved.map((c) => (
+        <div key={commentKey(c)} class="comment-moved">
+          <span>
+            {c.path}:{c.line} changed: {c.body}
+          </span>
+          <button class="copy" onClick={() => review.remove([c])}>
+            delete
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** Returns the cells of one side of a split row: line's number in the
  * file of that side, and its text. */
-function Side({ line, side }: { line: DiffLine | null; side: "old" | "new" }) {
+function Side({ line, side, path, review }: { line: DiffLine | null; side: "old" | "new"; path: string; review: Review }) {
   if (!line) return <td class="blank" colSpan={2} />;
   return (
     <>
-      <td class={`ln line-${line.kind}`}>{line[side]}</td>
+      <LineNumber at={anchor(path, line)} shown={line[side]} review={review} kind={line.kind} />
       <td class={`code line-${line.kind}`}>
         <Code line={line} />
       </td>
@@ -146,7 +350,7 @@ function Side({ line, side }: { line: DiffLine | null; side: "old" | "new" }) {
 
 /** Returns file's diff, folded or not, as a table of its lines, in one
  * column or side by side as layout says. */
-function FileView({ file, id, layout }: { file: FileDiff; id: string; layout: Layout }) {
+function FileView({ file, id, layout, review }: { file: FileDiff; id: string; layout: Layout; review: Review }) {
   const lines = file.hunks.reduce((n, h) => n + h.lines.length, 0);
   const [open, setOpen] = useState(lines <= FOLD_LINES);
   const path = filePath(file);
@@ -190,19 +394,29 @@ function FileView({ file, id, layout }: { file: FileDiff; id: string; layout: La
                   </tr>
                   {layout === "split"
                     ? splitRows(h).map(([old, now], j) => (
-                        <tr key={j}>
-                          <Side line={old} side="old" />
-                          <Side line={now} side="new" />
-                        </tr>
+                        <Fragment key={j}>
+                          <tr>
+                            <Side line={old} side="old" path={path} review={review} />
+                            <Side line={now} side="new" path={path} review={review} />
+                          </tr>
+                          <CommentRows
+                            ats={[old && anchor(path, old), now && anchor(path, now)]}
+                            review={review}
+                            span={4}
+                          />
+                        </Fragment>
                       ))
                     : h.lines.map((l, j) => (
-                        <tr key={j} class={`line line-${l.kind}`}>
-                          <td class="ln">{l.old}</td>
-                          <td class="ln">{l.new}</td>
-                          <td class="code">
-                            <Code line={l} />
-                          </td>
-                        </tr>
+                        <Fragment key={j}>
+                          <tr class={`line line-${l.kind}`}>
+                            <LineNumber at={l.kind === "del" ? anchor(path, l) : null} shown={l.old} review={review} />
+                            <LineNumber at={l.kind === "del" ? null : anchor(path, l)} shown={l.new} review={review} />
+                            <td class="code">
+                              <Code line={l} />
+                            </td>
+                          </tr>
+                          <CommentRows ats={[anchor(path, l)]} review={review} span={3} />
+                        </Fragment>
                       ))}
                 </tbody>
               ))}
@@ -215,8 +429,9 @@ function FileView({ file, id, layout }: { file: FileDiff; id: string; layout: La
 
 /** Returns the diff of the worktree in dir, from where its branch
  * started, with its files matching query. */
-export function WorktreeDiffView({ dir, query }: { dir: string; query: string }) {
+export function WorktreeDiffView({ dir, query, state }: { dir: string; query: string; state: State | null }) {
   const [layout, setLayout] = useLayout();
+  const review = useReview(dir);
   const [wt, error, at, refresh] = useFetched<HighlightedDiff>(`/api/diff?dir=${encodeURIComponent(dir)}`);
   const files = wt?.fileDiffs ?? [];
   const shown = files.filter((f) => matches(query, f.from, f.to));
@@ -279,9 +494,10 @@ export function WorktreeDiffView({ dir, query }: { dir: string; query: string })
               </p>
             )}
             {!files.length && !wt.error && <p class="empty file-note">No changes.</p>}
+            <SendReview review={review} wt={wt} state={state} />
           </section>
           {shown.map((f) => (
-            <FileView key={`${f.from}:${f.to}`} file={f} id={fileId(files.indexOf(f))} layout={layout} />
+            <FileView key={`${f.from}:${f.to}`} file={f} id={fileId(files.indexOf(f))} layout={layout} review={review} />
           ))}
           {files.length > 0 && !shown.length && <p class="empty">No match.</p>}
         </>

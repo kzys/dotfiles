@@ -14,6 +14,7 @@ test("finds the checkout holding a directory", () => {
   assert.equal(checkoutOf("/home/me/repos/o", "/home/me"), null);
   assert.equal(checkoutOf("/home/me/project/p", "/home/me"), null);
   assert.equal(checkoutOf("/elsewhere/a/b", "/home/me"), null);
+  assert.equal(checkoutOf("/home/me/repos/o/.cache/x", "/home/me"), null);
 });
 
 test("remembers each checkout a project works in once", () => {
@@ -107,10 +108,10 @@ test("reads what the watcher found and the projects' notes", () => {
   };
   const withHerdr = readState(watched, projects, herdr);
   assert.deepEqual(withHerdr.projects.map((p) => [p.name, p.workspaces, p.panes]), [
-    ["20261019-z", ["zed"], [{ id: "w2:p1", role: "main", status: "idle", ctx: 85 },
-                             { id: "w2:p2", role: null, status: "working", ctx: null }]],
+    ["20261019-z", ["zed"], [{ id: "w2:p1", cwd: p3, role: "main", status: "idle", ctx: 85 },
+                             { id: "w2:p2", cwd: join(p3, "wt"), role: null, status: "working", ctx: null }]],
     ["a", [], []],
-    ["20261017-b", ["bee"], [{ id: "w4:p1", role: null, status: "idle", ctx: null }]],
+    ["20261017-b", ["bee"], [{ id: "w4:p1", cwd: join(p2, "wt"), role: null, status: "idle", ctx: null }]],
     ["20261016-c", ["done"], []],
   ]);
   // Panes in projects show with them, not in the watcher's section,

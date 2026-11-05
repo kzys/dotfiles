@@ -10,7 +10,7 @@ import { dirname, extname, join, relative } from "node:path";
 import { promisify } from "node:util";
 import { build } from "esbuild";
 import {
-  type AgentActions, type AgentView, Outbox, agentPath, forgetAnswered, fromPage, handleAgent, permission,
+  type AgentActions, type AgentView, Outbox, agentPath, forgetAnswered, fromPage, handleAgent, permission, undelivered,
 } from "./agents.ts";
 import { HerdrEvents } from "./events.ts";
 import * as github from "./github.ts";
@@ -106,17 +106,20 @@ function agentViews(): Record<string, AgentView> {
   return views;
 }
 
-/** Reports whether pane still runs an idle agent, as Herdr says right
- * now, with no permission request open. Text sent to anything else could
- * answer a prompt, or run in a shell. */
-async function readyForText(pane: string): Promise<boolean> {
+/** Reports whether pane still runs session, if known, idle, as Herdr says
+ * right now, with no permission request open. Text sent to anything else
+ * could answer a prompt, run in a shell, or reach another agent. */
+async function readyForText(pane: string, session: string | undefined): Promise<boolean> {
   const { pane: now } = await ask("pane.get", { pane_id: pane });
+  if (session && now.agent_session?.value && session !== now.agent_session.value) return false;
   return Boolean(now.agent) && ["idle", "done"].includes(now.agent_status) && hookEvents.get(pane)?.event !== "PermissionRequest";
 }
 
 /** Returns the state for the page. Only the watcher's server can act. */
 function pageState() {
-  return { ...readState(watched(), projectRoot, herdr, home, links), ...(orgs ? { controls: agentViews() } : {}) };
+  const sessions = Object.fromEntries((herdr?.panes ?? []).filter((p) => p.agent).map((p) => [p.pane_id, p.agent_session?.value ?? ""]));
+  const left = herdr ? undelivered(outbox.all(), sessions) : [];
+  return { ...readState(watched(), projectRoot, herdr, home, links), ...(orgs ? { controls: agentViews(), undelivered: left } : {}) };
 }
 
 /** Sends agents that are free what waits for them. */
@@ -386,6 +389,7 @@ const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
 const agentActions: AgentActions = {
   outbox,
   known: (pane) => Object.hasOwn(agentStates(herdr) ?? {}, pane),
+  session: (pane) => herdr?.panes.find((p) => p.pane_id === pane)?.agent_session?.value,
   focus: (pane) => ask("pane.focus", { pane_id: pane }),
   changed: () => {
     deliver();
@@ -508,7 +512,11 @@ const planDeps = {
 function noteCheckout(dir: string | null, cwd: string) {
   const checkout = checkoutOf(cwd, home);
   if (!dir || !checkout || !linkCheckout(links, dir, checkout)) return;
-  saveState(linksPath, links);
+  try {
+    saveState(linksPath, links);
+  } catch (e) {
+    console.error("herdr-project-web:", e);
+  }
   refresh();
 }
 

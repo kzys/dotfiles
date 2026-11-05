@@ -5,7 +5,7 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { type AgentActions, Outbox, agentPath, forgetAnswered, fromPage, handleAgent, permission } from "./agents.ts";
+import { type AgentActions, Outbox, agentPath, forgetAnswered, fromPage, handleAgent, permission, undelivered } from "./agents.ts";
 import type { HookEvent } from "./hooks.ts";
 
 const file = () => join(mkdtempSync(join(tmpdir(), "outbox-")), "outbox.json");
@@ -65,6 +65,28 @@ test("holds messages when the pane turns out not to be ready", async () => {
   ready = true;
   assert.equal(await outbox.deliver({ "w1:p1": "idle" }), true);
   assert.deepEqual(sent, ["hello"]);
+});
+
+test("asks whether the session the messages are for can take them", async () => {
+  const asked: (string | undefined)[] = [];
+  const outbox = new Outbox(file(), none, async (_, s) => (asked.push(s), false));
+  outbox.add("w1:p1", "hello", "s1");
+  await outbox.deliver({ "w1:p1": "idle" });
+  assert.deepEqual(asked, ["s1"]);
+});
+
+test("nothing delivers messages to a pane without their agent", () => {
+  const m = (id: string, session?: string) => ({ id, text: id, at: 0, ...(session ? { session } : {}) });
+  const queued = { gone: [m("a")], same: [m("b", "s1")], other: [m("c", "s1"), m("d")], unknown: [m("e", "s1")] };
+  assert.deepEqual(undelivered(queued, { same: "s1", other: "s2", unknown: "" }), [
+    { pane: "gone", messages: [m("a")] }, { pane: "other", messages: [m("c", "s1")] },
+  ]);
+});
+
+test("lists the panes with messages waiting", () => {
+  const outbox = new Outbox(file(), none, yes);
+  outbox.add("w1:p1", "hello");
+  assert.deepEqual(Object.keys(outbox.all()), ["w1:p1"]);
 });
 
 test("cancels a waiting message", () => {
@@ -130,12 +152,13 @@ test("queues and cancels messages for known agents", async (t) => {
   const outbox = new Outbox(file(), none, yes);
   let changes = 0;
   const send = await serve(t, {
-    outbox, known: (p) => p === "w1:p1", focus: none, changed: () => changes++,
+    outbox, known: (p) => p === "w1:p1", session: () => "s1", focus: none, changed: () => changes++,
   });
   assert.equal(await send("POST", "messages", { text: "  " }), 400);
   assert.equal(await send("POST", "messages", { text: " hi " }), 204);
   const [{ id, text }] = outbox.queued("w1:p1");
   assert.equal(text, "hi");
+  assert.equal(outbox.queued("w1:p1")[0].session, "s1");
   assert.equal(await send("DELETE", `messages/${id}`), 204);
   assert.equal(await send("DELETE", `messages/${id}`), 404);
   assert.equal(changes, 2);
@@ -143,7 +166,7 @@ test("queues and cancels messages for known agents", async (t) => {
 
 test("refuses agents it doesn't know", async (t) => {
   const send = await serve(t, {
-    outbox: new Outbox(file(), none, yes), known: () => false, focus: none, changed: () => {},
+    outbox: new Outbox(file(), none, yes), known: () => false, session: () => undefined, focus: none, changed: () => {},
   });
   assert.equal(await send("POST", "messages", { text: "hi" }), 404);
 });
@@ -151,7 +174,7 @@ test("refuses agents it doesn't know", async (t) => {
 test("focuses a known agent's pane", async (t) => {
   const focused: string[] = [];
   const send = await serve(t, {
-    outbox: new Outbox(file(), none, yes), known: () => true, focus: async (p) => void focused.push(p), changed: () => {},
+    outbox: new Outbox(file(), none, yes), known: () => true, session: () => undefined, focus: async (p) => void focused.push(p), changed: () => {},
   });
   assert.equal(await send("POST", "focus"), 204);
   assert.deepEqual(focused, ["w1:p1"]);

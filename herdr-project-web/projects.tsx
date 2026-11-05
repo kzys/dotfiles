@@ -157,6 +157,32 @@ function ProjectCard({ project, agents }: { project: Project; agents: Record<str
   );
 }
 
+/** Returns messages left for panes that are gone, to copy elsewhere or
+ * drop: nothing will deliver them. */
+function Undelivered({ state }: { state: State }) {
+  const left = (state.undelivered ?? []).flatMap((u) => u.messages.map((m) => ({ pane: u.pane, message: m })));
+  if (!left.length) return null;
+  return (
+    <section class="card">
+      <header>
+        <span class="name">undelivered</span>
+        <span class="title">their agents' panes are gone</span>
+      </header>
+      {left.map(({ pane, message }) => (
+        <div key={message.id} class="agent-queued undelivered">
+          <span class="text">{message.text.split("\n")[0]}</span>
+          <button class="copy" onClick={() => navigator.clipboard.writeText(message.text).catch(() => {})}>
+            copy
+          </button>
+          <button class="copy" onClick={() => send("DELETE", agentUrl(pane, `messages/${message.id}`)).catch(() => {})}>
+            drop
+          </button>
+        </div>
+      ))}
+    </section>
+  );
+}
+
 /** Reports whether item surely waits on the user: tagged [you] or
  * found by the watcher, not guessed or suggested. */
 export const pressing = (item: Item) => !["?", "maybe", "close"].includes(item.mark);
@@ -182,6 +208,7 @@ export function ProjectsColumn({ state, query, waiting }: { state: State; query:
       <h2>
         Projects <span class="count">{waiting}</span>
       </h2>
+      <Undelivered state={state} />
       {unowned.length > 0 && (
         <section class="card">
           <header>

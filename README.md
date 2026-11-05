@@ -80,6 +80,8 @@ Plain `claude` in a shell still works for fixing it.
 Its localhost-only page shows the open projects under `~/project`, with their
 agents, what they wait on and what their notes say waits on you, and how each
 worktree differs from where its branch left the remote's default branch.
+Clicking a line number in a diff comments on that line, and the comments go to
+the agent you choose as one message, once it is idle.
 
 The server runs in a pane of the `watch` workspace. Shells in Herdr start it if
 no pane has it, which needs Node 22.13 or later and its packages:
