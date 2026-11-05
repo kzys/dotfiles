@@ -13,11 +13,21 @@ Each task has a scratch directory under `~/project`; this task's is
     ├── AGENT-<role>.md    each agent's notes
     ├── <worktree>/        git worktrees for branches
     └── ...                scripts, logs and data for the task
+
+~/repos/
+└── <org>/                 a GitHub organization
+    ├── LEARNINGS.md       what earlier tasks learned about it
+    └── <repo>/            a checkout of its repository
 ```
 
 Read `README.md` and the `## Remaining` and `## Findings` sections of
 each `AGENT-*.md` first, if they exist; read their logs only when you
 need the history of earlier work.
+
+Once the task is clear, grep `~/repos/kzys/LEARNINGS.md`, and
+`~/repos/<org>/LEARNINGS.md` of the GitHub organization it is about if
+there is one, for its systems and topics. Read only the `##` sections that
+match.
 
 ## README.md
 
