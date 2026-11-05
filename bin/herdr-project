@@ -4,10 +4,21 @@
 # args. A new session started outside ~/project gets a new project. The
 # server works out how; this replaces itself with what it says, so that
 # the agent is the pane's own process.
+#
+# herdr-project --watch [<org>...] runs that server in this pane, watching
+# the user's open pull requests, in the given GitHub organizations if any,
+# with what else it watches: see herdr-project-web/server.ts.
+#
+# herdr-project --start-watch starts it in a new Herdr workspace named
+# watch, unless a pane already has it.
 
 here=$(dirname "$(readlink -f "$0")")
 case $1 in
---watch | --start-watch | --remaining) exec "$here/herdr-project-py" "$@" ;;
+--watch | --start-watch)
+    WATCH_TTY=$(tty 2>/dev/null) && export WATCH_TTY
+    exec node --experimental-strip-types --disable-warning=ExperimentalWarning \
+        "$here/../herdr-project-web/watch-main.ts" "$@"
+    ;;
 esac
 
 for arg in "$@"; do
@@ -20,7 +31,7 @@ script=$(curl --silent --fail-with-body --max-time 10 \
     --data-urlencode "cwd=$(pwd -P)" --data-urlencode "pid=$$" \
     --data-urlencode "herdr=${HERDR_ENV:-}" --data-urlencode "workspace=${HERDR_WORKSPACE_ID:-}" \
     "$@" http://localhost/launch) || {
-    echo "herdr-project: ${script:-the server is not answering. herdr-project --watch runs it.}" >&2
+    echo "herdr-project: ${script:-the server is not answering. See ~/.local/state/herdr-project/web.log.}" >&2
     exit 1
 }
 eval "$script"

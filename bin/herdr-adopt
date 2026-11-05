@@ -1,46 +1,19 @@
-#!/usr/bin/env python3
-"""Adopt Claude background sessions or saved Codex sessions into Herdr."""
+#!/bin/sh
+# herdr-adopt [--agent <claude|codex>] picks Claude background sessions, or
+# saved Codex ones, and opens each in Herdr.
 
-import os
-import shlex
-import subprocess
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from herdr_project.agent import codex_sessions, parse_agent
-from herdr_project.herdr import herdr
-
-
-def main():
-    selected, _ = parse_agent(sys.argv[1:])
-    if selected == 'claude':
-        command = str(Path(__file__).resolve().with_name('claude-adopt'))
-        os.execv(command, [command])
-    sessions = codex_sessions()
-    lines = [f"{s['id']}\t{' '.join((s.get('name') or s.get('title') or '(untitled)').split())}\t{s['cwd']}"
-             for s in sessions]
-    picked = subprocess.run(['fzf', '--multi', '--reverse', '--delimiter=\t',
-                             '--with-nth=2..', '--prompt=adopt> '],
-                            input='\n'.join(lines), capture_output=True, text=True)
-    if picked.returncode:
-        return
-    panes = herdr('pane', 'list')['result']['panes']
-    for line in picked.stdout.splitlines():
-        sid, title, cwd = line.split('\t', 2)
-        running = next((p for p in panes if p.get('agent') == 'codex' and
-                        (p.get('agent_session') or {}).get('value') == sid), None)
-        if running:
-            herdr('agent', 'focus', running['pane_id'])
-            continue
-        if not Path(cwd).is_dir():
-            continue
-        created = herdr('workspace', 'create', '--cwd', cwd, '--label', title)
-        pane = created['result']['root_pane']['pane_id']
-        launcher = shlex.quote(str(Path(__file__).resolve().with_name('herdr-project')))
-        herdr('pane', 'run', pane,
-              f'{launcher} --agent codex --resume {shlex.quote(sid)}')
-
-
-if __name__ == '__main__':
-    main()
+here=$(dirname "$(readlink -f "$0")")
+case "$*" in
+*codex*) ;;
+*) exec "$here/claude-adopt" ;;
+esac
+socket=${XDG_STATE_HOME:-$HOME/.local/state}/herdr-project/run/server.sock
+curl --silent --fail --max-time 30 --unix-socket "$socket" 'http://localhost/sessions?list=codex' |
+    jq -r '.[] | [.id, ([.name, .title] | map(select(. != null and . != "")) | .[0] // "(untitled)"), .cwd] | @tsv' |
+    fzf --multi --reverse --delimiter='	' --with-nth=2.. --prompt='adopt> ' |
+    while IFS='	' read -r id _ cwd; do
+        [ -d "$cwd" ] || continue
+        jq -n --arg id "codex:$id" --arg cwd "$cwd" '{row: ["session", $cwd, $id, ""], agent: "codex"}' |
+            curl --silent --fail --unix-socket "$socket" --header 'Content-Type: application/json' \
+                --data-binary @- http://localhost/picker/open
+    done

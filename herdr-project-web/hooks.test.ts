@@ -100,10 +100,20 @@ test("questions aren't permission requests", () => {
   assert.match(hookDetail({ tool_name: "Bash", tool_input: "x".repeat(600) })!, /…$/);
 });
 
+test("replies with what the handler returns, for owned panes and others", async (t) => {
+  const seen: (string | null)[] = [];
+  const server = hookServer(new Map(), async () => ["claude --bg-pty-host 3"], async (p) => (seen.push(p), "context"));
+  const socketPath = join(mkdtempSync(join(tmpdir(), "hk-")), "run/server.sock");
+  await listenOn(server, socketPath);
+  t.after(() => server.close());
+  assert.deepEqual(await send(socketPath, "POST", "/hooks/claude/SessionStart", pane, "{}"), [200, "context"]);
+  assert.deepEqual(seen, [null]);
+});
+
 test("says when it kept an event", async (t) => {
   let changes = 0;
   const latest = new Map<string, HookEvent>();
-  const server = hookServer(latest, async () => ["claude"], () => changes++);
+  const server = hookServer(latest, async () => ["claude"], async () => (changes++, ""));
   const socketPath = join(mkdtempSync(join(tmpdir(), "hk-")), "run/server.sock");
   await listenOn(server, socketPath);
   t.after(() => server.close());
@@ -121,6 +131,16 @@ test("ignores subagents and processes outside the pane", async (t) => {
   t.after(() => owned.server.close());
   await send(owned.socketPath, "POST", "/hooks/claude/Stop", pane, JSON.stringify({ agent_id: "a1" }));
   assert.equal(owned.latest.size, 0);
+});
+
+test("a Codex started by another's thread doesn't speak for the pane", async (t) => {
+  const { socketPath, latest, server } = await start();
+  t.after(() => server.close());
+  const headers = { ...pane, "X-Codex-Thread": "parent" };
+  await send(socketPath, "POST", "/hooks/codex/Stop", headers, JSON.stringify({ session_id: "child" }));
+  assert.equal(latest.size, 0);
+  await send(socketPath, "POST", "/hooks/codex/Stop", headers, JSON.stringify({ session_id: "parent" }));
+  assert.equal(latest.size, 1);
 });
 
 test("refuses what isn't a hook's event", async (t) => {
@@ -153,6 +173,18 @@ test("the shim posts stdin as the pane's event", async (t) => {
   run.child.stdin!.end(JSON.stringify({ session_id: "s2" }));
   await run;
   assert.equal(latest.get("w2:p3")?.session, "s2");
+});
+
+test("the shim prints the server's reply, even outside Herdr", async (t) => {
+  const state = mkdtempSync(join(tmpdir(), "hk-"));
+  const server = hookServer(new Map(), async () => [], async () => "context\n");
+  await listenOn(server, join(state, "herdr-project/run/server.sock"));
+  t.after(() => server.close());
+  const run = promisify(execFile)(shim, ["claude", "SessionStart"], {
+    env: { ...process.env, XDG_STATE_HOME: state, HERDR_ENV: "", HERDR_PANE_ID: "" },
+  });
+  run.child.stdin!.end("{}");
+  assert.equal((await run).stdout, "context\n");
 });
 
 test("the shim succeeds with the server down, and outside Herdr", async () => {

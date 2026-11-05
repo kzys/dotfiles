@@ -72,17 +72,29 @@ export async function readBody(req: IncomingMessage): Promise<string | null> {
   return Buffer.concat(chunks).toString();
 }
 
+/** Returns the Herdr pane a request speaks for, from X-Herdr-Pane, with
+ * the posting process in X-Agent-Pid, and whether the process really runs
+ * in it, or null if it names no pane. */
+export async function speaker(req: IncomingMessage, lineage = ancestors): Promise<{ pane: string; own: boolean } | null> {
+  const pane = req.headers["x-herdr-pane"];
+  const pid = Number(req.headers["x-agent-pid"]);
+  if (typeof pane !== "string" || !pane) return null;
+  return { pane, own: pid > 1 && ownsPane(await lineage(pid)) };
+}
+
+// What happened, with the pane the agent owns, if any.
+export type HookHandler = (pane: string | null, hook: { agent: string; event: string }, data: any) => Promise<string>;
+
 /** Returns a server that keeps the last hook event of each pane in
  * latest, by pane. POST /hooks/:agent/:event takes the event's JSON, with
- * the pane in X-Herdr-Pane and the posting process in X-Agent-Pid, and
- * ignores subagents and processes outside the pane; GET /hooks lists
- * latest. lineage returns a process's ancestors' command lines, and
- * changed is called after an event is kept. Other requests go to other,
- * given the request's path. */
+ * the pane as speaker reads it, ignores subagents, and replies with what
+ * handle returns, for the agent's context; GET /hooks lists latest.
+ * lineage returns a process's ancestors' command lines. Other requests go
+ * to other, given the request's URL. */
 export function hookServer(
   latest: Map<string, HookEvent>,
   lineage = ancestors,
-  changed = () => {},
+  handle: HookHandler = async () => "",
   other = (_req: IncomingMessage, res: ServerResponse, _url: URL) => void res.writeHead(404).end(),
 ): Server {
   async function post(req: IncomingMessage, res: ServerResponse, hook: { agent: string; event: string }) {
@@ -95,19 +107,21 @@ export function hookServer(
     } catch {
       return res.writeHead(400).end();
     }
-    const pane = req.headers["x-herdr-pane"];
-    const pid = Number(req.headers["x-agent-pid"]);
-    if (typeof pane === "string" && pane && pid > 1 && !data?.agent_id && ownsPane(await lineage(pid))) {
+    // Nor does a Codex started by another's thread own the pane.
+    const thread = req.headers["x-codex-thread"];
+    if (data?.agent_id || (hook.agent === "codex" && thread && thread !== data?.session_id)) return res.writeHead(204).end();
+    const who = await speaker(req, lineage);
+    const pane = who?.own ? who.pane : null;
+    if (pane) {
       const session = typeof data?.session_id === "string" ? data.session_id : null;
       const last = latest.get(pane);
       // Checking the ancestors can reorder events close together, and
       // Claude Code follows a permission request with a notification of it.
       const repeats = hook.event === "Notification" && last?.event === "PermissionRequest";
-      if (at >= (last?.at ?? 0) && !repeats) {
-        latest.set(pane, { ...hook, session, detail: hookDetail(data), at });
-        changed();
-      }
+      if (at >= (last?.at ?? 0) && !repeats) latest.set(pane, { ...hook, session, detail: hookDetail(data), at });
     }
+    const reply = await handle(pane, hook, data);
+    if (reply) return res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" }).end(reply);
     res.writeHead(204).end();
   }
   return createServer((req, res) => {

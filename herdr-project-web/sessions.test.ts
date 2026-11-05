@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { codexContext, codexSessions, reportedRole, title, transcriptDir, transcripts } from "./sessions.ts";
+import { claudeSessionDirs, codexContext, codexSessionDirs, codexSessions, reportedRole, title, transcriptDir, transcripts } from "./sessions.ts";
 
 const temp = () => mkdtempSync(join(tmpdir(), "sessions-"));
 const lines = (...records: object[]) => records.map((r) => JSON.stringify(r)).join("\n") + "\n";
@@ -85,4 +85,22 @@ test("reads the context usage from a rollout's last count", () => {
   writeFileSync(path, lines(count(20), count(50), { payload: {} }));
   assert.equal(codexContext(path), 25);
   assert.equal(codexContext(join(temp(), "none")), null);
+});
+
+test("lists the directories sessions ran in, newest first, once each", () => {
+  const home = temp();
+  const dir = join(home, ".claude/projects/-x");
+  mkdirSync(dir, { recursive: true });
+  const record = (cwd: string, at: string) => ({ cwd, gitBranch: "main", timestamp: at });
+  writeFileSync(join(dir, "a.jsonl"), lines(record("/a", "2026-01-01"), { type: "ai-title", aiTitle: "Old" }));
+  writeFileSync(join(dir, "b.jsonl"), lines({ type: "ai-title", aiTitle: "New" }, record("/a", "2026-03-01")));
+  writeFileSync(join(dir, "c.jsonl"), lines(record("/b", "2026-02-01")));
+  assert.deepEqual(claudeSessionDirs(home).map((d) => [d.cwd, d.title]), [["/a", "New"], ["/b", ""]]);
+});
+
+test("lists Codex's directories once each", () => {
+  const dirs = codexSessionDirs([
+    { id: "1", cwd: "/a", updated_at: 2, name: "  New  one " }, { id: "2", cwd: "/a", updated_at: 1 }, { id: "3", cwd: "/b", updated_at: 0, git_branch: "x" },
+  ]);
+  assert.deepEqual(dirs.map((d) => [d.cwd, d.title, d.branch]), [["/a", "New one", ""], ["/b", "", "x"]]);
 });

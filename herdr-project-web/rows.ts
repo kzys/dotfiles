@@ -246,6 +246,22 @@ export type OpenHerdr = {
   run: (pane: string, command: string) => Promise<unknown>;
 };
 
+/** Returns the agents' workspaces to name after the projects they work in,
+ * by project directory, from herdr, skipping projects in done. projectOf
+ * returns the project holding a directory, and nameOf its name, or "". */
+export function workspacesToName(
+  herdr: Herdr | null, done: Set<string>, projectOf: (cwd: string) => string | null, nameOf: (dir: string) => string,
+): { dir: string; workspace: string; name: string }[] {
+  const found = new Map<string, { dir: string; workspace: string; name: string }>();
+  for (const p of herdr?.panes ?? []) {
+    const dir = p.agent ? projectOf(p.tokens?.cwd || p.cwd || "") : null;
+    if (!dir || done.has(dir) || found.has(dir)) continue;
+    const name = nameOf(dir);
+    if (name) found.set(dir, { dir, workspace: p.workspace_id, name });
+  }
+  return [...found.values()];
+}
+
 /** Opens in Herdr what plan returned. */
 export async function open(planned: Plan, herdr: OpenHerdr) {
   if ("focus" in planned) return void (await herdr.focus(planned.focus));

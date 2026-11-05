@@ -53,6 +53,9 @@ function tail(path: string, bytes: number): [string, number] {
   }
 }
 
+/** Returns the last bytes of the file at path. */
+export const tailOf = (path: string, bytes: number) => tail(path, bytes)[0];
+
 /** Returns the title of the session in transcript: the one it was renamed
  * to, the one claude generated, or else its first prompt on one line, cut
  * to 60 characters. Returns "" if there is none. Reads only the last tail
@@ -191,4 +194,72 @@ export function codexContext(path: string): number | null {
     } catch {}
   }
   return null;
+}
+
+export type SessionDir = { cwd: string; branch: string; at: string; title: string };
+
+/** Returns the last record with a cwd in the transcript at path, or null.
+ * cwd never changes within a session, so its end is enough, unless it has
+ * no such record. */
+function lastCwd(path: string): { cwd: string; gitBranch?: string; timestamp?: string } | null {
+  for (const bytes of [65536, Infinity]) {
+    const [text, size] = tail(path, bytes);
+    for (const line of text.split("\n").reverse()) {
+      if (!line.includes('"cwd"')) continue;
+      try {
+        const record = JSON.parse(line);
+        if (record.cwd) return record;
+      } catch {}
+    }
+    if (size <= bytes) break;
+  }
+  return null;
+}
+
+/** Returns the directories past Claude Code sessions in home ran in, newest
+ * first, each with the most recent session's branch and title. */
+export function claudeSessionDirs(home = homedir()): SessionDir[] {
+  const root = join(home, ".claude/projects");
+  const seen = new Map<string, SessionDir & { path: string }>();
+  let dirs: string[] = [];
+  try {
+    dirs = readdirSync(root);
+  } catch {}
+  for (const dir of dirs) {
+    let names: string[] = [];
+    try {
+      names = readdirSync(join(root, dir)).filter((n) => n.endsWith(".jsonl"));
+    } catch {}
+    for (const name of names) {
+      const path = join(root, dir, name);
+      try {
+        const record = lastCwd(path);
+        if (!record?.timestamp) continue;
+        const known = seen.get(record.cwd);
+        if (!known || record.timestamp > known.at) {
+          seen.set(record.cwd, { cwd: record.cwd, branch: record.gitBranch ?? "", at: record.timestamp, title: "", path });
+        }
+      } catch {}
+    }
+  }
+  return [...seen.values()].sort((a, b) => b.at.localeCompare(a.at)).map(({ path, ...dir }) => {
+    try {
+      return { ...dir, title: title(path) };
+    } catch {
+      return dir;
+    }
+  });
+}
+
+/** Returns the directories of sessions, Codex's, newest first. */
+export function codexSessionDirs(sessions: CodexSession[]): SessionDir[] {
+  const seen = new Set<string>();
+  return sessions.flatMap((s) => {
+    if (seen.has(s.cwd)) return [];
+    seen.add(s.cwd);
+    return [{
+      cwd: s.cwd, branch: s.git_branch ?? "", at: new Date(s.updated_at * 1000).toISOString(),
+      title: (s.name || s.title || "").split(/\s+/).filter(Boolean).join(" "),
+    }];
+  });
 }

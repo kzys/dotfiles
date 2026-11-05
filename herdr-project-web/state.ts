@@ -310,9 +310,8 @@ function panesIn(dir: string, herdr: Herdr | null): Herdr["panes"] {
 }
 
 /** Returns the agent panes in herdr working in dir or under it, in the
- * order herdr lists them, with how full each one's context is, as
- * herdr_project/panes.py reads it. A background session reports to the
- * pane that started it, flagging that with the bg token, so then the ctx
+ * order herdr lists them, with how full each one's context is. A
+ * background session reports to the pane that started it, flagging that with the bg token, so then the ctx
  * isn't the pane's own. */
 export function projectPanes(dir: string, herdr: Herdr | null): Pane[] {
   return panesIn(dir, herdr)

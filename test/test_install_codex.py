@@ -45,3 +45,12 @@ def test_installs_new_config_and_keeps_file_permissions(tmp_path):
     install_codex.install_config(home)
     assert path.stat().st_mode & 0o777 == 0o640
     assert tomllib.loads(path.read_text())['model'] == 'example'
+
+
+def test_hooks_each_event_in_place_of_the_old_hook():
+    old = {'hooks': [{'type': 'command', 'command': '/x/bin/codex-hook'}]}
+    other = {'hooks': [{'type': 'command', 'command': '/x/herdr'}]}
+    updated = install_codex.add_hooks({'hooks': {'Stop': [old, other]}}, '/x/agent-hook')
+    assert updated['hooks']['Stop'] == [
+        other, {'hooks': [{'type': 'command', 'command': '/x/agent-hook codex Stop', 'timeout': 10}]}]
+    assert install_codex.add_hooks(updated, '/x/agent-hook') == updated

@@ -3,7 +3,7 @@
 // change.
 
 import { execFile } from "node:child_process";
-import { type FSWatcher, openSync, readFileSync, watch, writeSync } from "node:fs";
+import { type FSWatcher, openSync, readFileSync, watch, writeFileSync, writeSync } from "node:fs";
 import { type IncomingMessage, type ServerResponse, createServer } from "node:http";
 import { homedir } from "node:os";
 import { dirname, extname, join, relative } from "node:path";
@@ -15,18 +15,23 @@ import {
 import { HerdrEvents } from "./events.ts";
 import * as github from "./github.ts";
 import { HerdrError, request } from "./herdr.ts";
-import { type HookEvent, hookServer, listenOn, readBody } from "./hooks.ts";
+import { type HookEvent, type HookHandler, hookServer, listenOn, readBody, speaker } from "./hooks.ts";
 import { highlightDiff } from "./highlight.ts";
-import { agentCommand, launchDirectory, launchScript, parseAgent } from "./launch.ts";
+import { frontMatter } from "./inbox.ts";
+import { agentCommand, instructions, launchDirectory, launchScript, parseAgent, projectDir } from "./launch.ts";
 import { readLearnings } from "./learnings.ts";
 import { connectors } from "./headless.ts";
 import * as linear from "./linear.ts";
 import { type Owner, notesTexts } from "./owners.ts";
 import { type PaneHerdr, checkPanes } from "./panes.ts";
 import { type Checked, checkQueue } from "./queues.ts";
-import { type OpenHerdr, background, choices, inboxChoices, open, paneRecords, plan, rowNotes } from "./rows.ts";
-import { codexSessions } from "./sessions.ts";
+import {
+  codexTokens, lastPrompt, percent, resumedText, roleToReport, sessionCwd, sessionReport, statusLine, statusTokens, usageFile,
+} from "./report.ts";
+import { type OpenHerdr, background, choices, inboxChoices, open, paneRecords, plan, rowNotes, workspacesToName } from "./rows.ts";
+import { claudeSessionDirs, codexContext, codexSessionDirs, codexSessions, reportedRole } from "./sessions.ts";
 import * as slack from "./slack.ts";
+import { loadState, saveState } from "./statefile.ts";
 import {
   type Herdr, type Watched, agentStates, openProjects, projectDirs, projectLabels, readProjectFile, readState,
 } from "./state.ts";
@@ -193,6 +198,7 @@ setInterval(pollHerdr, 60_000);
 // The title Herdr has, or is being told.
 let titled = "";
 function refresh() {
+  if (orgs) nameWorkspaces().catch((e) => console.error("herdr-project-web:", e));
   const found = watched();
   const next = JSON.stringify(pageState());
   // Tell Herdr how much waits on the user only as it changes.
@@ -493,6 +499,100 @@ const planDeps = {
   now: () => new Date(),
 };
 
+/** Returns the current git branch of directory, or "". */
+const gitBranch = (directory: string) => promisify(execFile)("git", ["-C", directory, "branch", "--show-current"], { timeout: 5000 })
+  .then(({ stdout }) => stdout.trim(), () => "");
+
+const clock = (seconds: number) => new Date(seconds * 1000).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+
+/** Returns the status line for data, the status Claude Code posted, leaving
+ * its usage for the picker and reporting it to who's pane for the sidebar
+ * afterwards: a slow Herdr mustn't blank the line. */
+function statusReport(data: any, who: { pane: string; own: boolean } | null): string {
+  const pct = percent(data);
+  if (pct === null) return "";
+  const usage = usageFile(data, projectRoot);
+  if (usage) {
+    try {
+      writeFileSync(usage[0], `${usage[1]}\n`);
+    } catch {}
+  }
+  if (who) {
+    gitBranch(sessionCwd(data)).then((branch) => {
+      const tokens = statusTokens(data, pct, lastPrompt(data.transcript_path), branch, home, who.own);
+      return tryAsk("pane.report_metadata", { pane_id: who.pane, source: "claude-statusline", tokens });
+    });
+  }
+  return `${statusLine(data, pct, Date.now() / 1000, clock)}\n`;
+}
+
+// The projects whose workspace has been named, so that a name the user
+// gives one afterwards stays. Those open when this first runs count: their
+// workspaces have their names already.
+const namedPath = join(stateDir, "named.json");
+const named = new Set((loadState(namedPath) as string[] | null) ?? projectDirs(projectRoot));
+saveState(namedPath, [...named]);
+
+/** Names agents' workspaces after their projects, once, as soon as a
+ * project has a name. */
+async function nameWorkspaces() {
+  const nameOf = (dir: string) => {
+    const text = readProjectReadme(dir);
+    return (text && frontMatter(text, "name")) || "";
+  };
+  for (const { dir, workspace, name } of workspacesToName(herdr, named, (cwd) => projectDir(cwd, projectRoot), nameOf)) {
+    if (!(await tryAsk("workspace.rename", { workspace_id: workspace, label: name }))) continue;
+    named.add(dir);
+    saveState(namedPath, [...named]);
+    await reportTitle(workspace, dir);
+  }
+}
+
+/** Reports a starting session's role to pane: see roleToReport. A resumed
+ * session may run in a new pane, or in one that had another's role. */
+async function reportRole(pane: string, data: any) {
+  const got = await tryAsk("pane.get", { pane_id: pane });
+  const resuming = data.source === "resume";
+  const reported = resuming && typeof data.transcript_path === "string" ? reportedRole(data.transcript_path) : null;
+  const role = roleToReport(got?.pane?.tokens?.role || null, resuming, reported);
+  if (role) await tryAsk("pane.report_metadata", { pane_id: pane, source: "agent-notes", tokens: { role } });
+}
+
+/** Reports what the Codex hook in data says to pane, leaving the context
+ * usage in the project for the picker. */
+async function codexReport(pane: string, event: string, data: any) {
+  if (!data.session_id || !data.cwd) return;
+  const session = codexSessions().find((s) => s.id === data.session_id);
+  const pct = codexContext(data.transcript_path || session?.rollout_path || "");
+  if (pct !== null) {
+    try {
+      writeFileSync(join(session?.cwd ?? data.cwd, `codex-${data.session_id}.json`), JSON.stringify({ used_percentage: pct }));
+    } catch {}
+  }
+  const tokens = codexTokens(event, data, session, pct, await gitBranch(data.cwd));
+  await tryAsk("pane.report_metadata", { pane_id: pane, source: "codex-hook", tokens });
+}
+
+/** Reports a hook event to Herdr. */
+async function reportHook(pane: string, agent: string, event: string, data: any) {
+  if (event === "SessionStart") await reportRole(pane, data);
+  if (agent === "claude" && event === "SessionStart") {
+    const report = sessionReport(data, pane, Date.now() * 1_000_000);
+    if (report) await tryAsk("pane.report_agent_session", report);
+  }
+  if (agent === "codex") await codexReport(pane, event, data);
+}
+
+/** Acts on a hook event, returning what to add to the agent's context
+ * first: the agent is waiting, and gives up on a slow reply. */
+const onHook: HookHandler = async (pane, { agent, event }, data) => {
+  if (pane) reportHook(pane, agent, event, data).catch((e) => console.error("herdr-project-web:", e));
+  refresh();
+  if (agent !== "claude" || event !== "SessionStart" || data.source !== "resume" || typeof data.cwd !== "string") return "";
+  const dir = projectDir(data.cwd, projectRoot);
+  return dir ? resumedText(instructions(dir, dotfiles, new Date())) : "";
+};
+
 /** Serves what herdr-project and the picker ask for on the socket. */
 async function socketRequest(req: IncomingMessage, res: ServerResponse, url: URL) {
   const path = url.pathname;
@@ -504,6 +604,13 @@ async function socketRequest(req: IncomingMessage, res: ServerResponse, url: URL
     if (body === null) return void res.writeHead(413).end("arguments too long");
     const script = launch(new URLSearchParams(body));
     res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" }).end(script);
+  } else if (req.method === "POST" && path === "/statusline") {
+    const line = statusReport(JSON.parse((await readBody(req)) ?? "{}"), await speaker(req));
+    res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" }).end(line);
+  } else if (req.method === "GET" && path === "/sessions") {
+    // Codex's, with what opening one needs, or the directories they ran in.
+    if (url.searchParams.get("list") === "codex") json(res, 200, codexSessions());
+    else json(res, 200, url.searchParams.get("agent") === "codex" ? codexSessionDirs(codexSessions()) : claudeSessionDirs());
   } else if (req.method === "GET" && path === "/picker") {
     const rows = url.searchParams.has("inbox")
       ? inboxChoices(await panes(), codexSessions(), JSON.parse(last))
@@ -524,7 +631,7 @@ async function socketRequest(req: IncomingMessage, res: ServerResponse, url: URL
 
 // Only the watcher's server: hooks reach one server, like the checks.
 if (orgs) {
-  const hookListener = hookServer(hookEvents, undefined, refresh, (req, res, url) => {
+  const hookListener = hookServer(hookEvents, undefined, onHook, (req, res, url) => {
     socketRequest(req, res, url).catch((e) => res.writeHead(500).end(String(e.message)));
   });
   await listenOn(hookListener, join(stateDir, "run/server.sock"));

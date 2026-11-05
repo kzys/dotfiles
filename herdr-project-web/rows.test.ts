@@ -3,7 +3,9 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { type OpenHerdr, type PaneRecord, type PlanDeps, choices, inboxChoices, notes, open, paneRecords, plan, rowNotes } from "./rows.ts";
+import {
+  type OpenHerdr, type PaneRecord, type PlanDeps, choices, inboxChoices, notes, open, paneRecords, plan, rowNotes, workspacesToName,
+} from "./rows.ts";
 import { transcriptDir } from "./sessions.ts";
 import type { State } from "./state.ts";
 
@@ -146,6 +148,22 @@ function recorder() {
   };
   return { calls, herdr };
 }
+
+test("names the workspaces of agents in projects with a name, once each", () => {
+  const herdr = { workspaces: [], panes: [
+    { pane_id: "w1:p1", workspace_id: "w1", agent: "opencode", cwd: "/project/a/sub" },
+    { pane_id: "w1:p2", workspace_id: "w1", agent: "claude", cwd: "/x", tokens: { cwd: "/project/a" } },
+    { pane_id: "w2:p1", workspace_id: "w2", agent: "claude", cwd: "/project/done" },
+    { pane_id: "w3:p1", workspace_id: "w3", agent: "claude", cwd: "/project/unnamed" },
+    { pane_id: "w4:p1", workspace_id: "w4", agent: null, cwd: "/project/shell" },
+    { pane_id: "w5:p1", workspace_id: "w5", agent: "claude", cwd: "/elsewhere" },
+  ] };
+  const projectOf = (cwd: string) => /^\/project\/[^/]+/.exec(cwd)?.[0] ?? null;
+  const nameOf = (dir: string) => (dir.endsWith("unnamed") ? "" : dir.split("/").pop()!);
+  assert.deepEqual(workspacesToName(herdr, new Set(["/project/done"]), projectOf, nameOf), [
+    { dir: "/project/a", workspace: "w1", name: "a" },
+  ]);
+});
 
 test("opens a plan in a tab, or a workspace named for the project", async () => {
   const dir = project(temp(), "p", "name: short\n");

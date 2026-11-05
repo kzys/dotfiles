@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Point Claude Code's status line at bin/claude-statusline and its
-hooks at bin/claude-hook and bin/agent-hook, and drop entries for
-deleted directories from ~/.claude.json.
+hooks at bin/agent-hook, and drop entries for deleted directories from
+~/.claude.json.
 
 ~/.claude/settings.json also holds settings Claude Code writes itself, so
 it can't be a symlink into this repository like the other config files.
@@ -16,20 +16,16 @@ import sys
 SETTINGS = pathlib.Path.home() / '.claude' / 'settings.json'
 STATE = pathlib.Path.home() / '.claude.json'
 STATUSLINE = pathlib.Path(__file__).resolve().parent / 'bin' / 'claude-statusline'
-HOOK = pathlib.Path(__file__).resolve().parent / 'bin' / 'claude-hook'
-AGENT_HOOK = pathlib.Path(__file__).resolve().parent / 'bin' / 'agent-hook'
-
-# Events claude-hook handles.
-HOOK_EVENTS = ['SessionStart']
+HOOK = pathlib.Path(__file__).resolve().parent / 'bin' / 'agent-hook'
 
 # Events agent-hook posts to herdr-project-web.
-AGENT_HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PermissionRequest', 'Notification', 'Stop',
-                     'SessionEnd']
+HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PermissionRequest', 'Notification', 'Stop',
+               'SessionEnd']
 
-# Hooks claude-hook replaces: Herdr's bundled Claude hook, which reports
-# background sessions to the pane that started them, and claude-hook's
-# old name.
-REPLACED_HOOKS = ['herdr-agent-state.sh', 'claude-herdr-session']
+# Hooks agent-hook replaces: Herdr's bundled Claude hook, which reports
+# background sessions to the pane that started them, and earlier ones of
+# this repository.
+REPLACED_HOOKS = ['herdr-agent-state.sh', 'claude-herdr-session', 'claude-hook']
 
 # The status line shows countdowns, so rerun it while the session is
 # idle too.
@@ -57,37 +53,24 @@ def runs(group, command):
 
 
 def replaced(hook):
-    """Whether claude-hook replaces hook."""
+    """Whether agent-hook replaces hook."""
     return any(name in hook.get('command', '') for name in REPLACED_HOOKS)
 
 
 def add_hooks(settings, command):
-    """settings with command hooked to HOOK_EVENTS, in place of the hooks
-    it replaces."""
+    """settings with command hooked to HOOK_EVENTS, passing it the agent
+    and event as arguments, in place of the hooks it replaces."""
     hooks = dict(settings.get('hooks', {}))
     for event in HOOK_EVENTS:
+        run = f'{command} claude {event}'
         groups = []
         for g in hooks.get(event, []):
             kept = [h for h in g.get('hooks', []) if not replaced(h)]
             if kept:
                 groups.append({**g, 'hooks': kept})
-        if not any(runs(g, command) for g in groups):
-            groups.append({'hooks': [{'type': 'command', 'command': command}]})
-        hooks[event] = groups
-    if hooks == settings.get('hooks'):
-        return settings
-    return {**settings, 'hooks': hooks}
-
-
-def add_agent_hooks(settings, command):
-    """settings with command hooked to AGENT_HOOK_EVENTS, passing it the
-    agent and event as arguments."""
-    hooks = dict(settings.get('hooks', {}))
-    for event in AGENT_HOOK_EVENTS:
-        run = f'{command} claude {event}'
-        groups = hooks.get(event, [])
         if not any(runs(g, run) for g in groups):
-            hooks[event] = [*groups, {'hooks': [{'type': 'command', 'command': run}]}]
+            groups.append({'hooks': [{'type': 'command', 'command': run}]})
+        hooks[event] = groups
     if hooks == settings.get('hooks'):
         return settings
     return {**settings, 'hooks': hooks}
@@ -154,7 +137,6 @@ def main():
     settings = load(SETTINGS)
     try:
         updated = add_hooks(update(settings, str(STATUSLINE)), str(HOOK))
-        updated = add_agent_hooks(updated, str(AGENT_HOOK))
     except ValueError as e:
         sys.exit(f'{SETTINGS}: {e}')
     if updated != settings:
