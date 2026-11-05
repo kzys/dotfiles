@@ -64,19 +64,6 @@ export function waiting(item: string): string | null {
   return LIKELY.test(item) ? "?" : null;
 }
 
-/** Returns field key from the front matter of README.md text, "" if it
- * has no such field. The front matter starts at the first line, between
- * lines of ---. */
-export function frontMatter(readme: string, key: string): string {
-  const lines = readme.split("\n");
-  if (lines[0] !== "---") return "";
-  for (const line of lines.slice(1)) {
-    if (line === "---") break;
-    if (line.startsWith(`${key}:`)) return line.slice(key.length + 1).trim();
-  }
-  return "";
-}
-
 /** Reports whether the agent's notes text close its role, with a line
  * starting with "closed:" and a link or a few words, before the first
  * section. */
@@ -102,18 +89,17 @@ export function settled(text: string): boolean {
 export const rank = (item: Item) => ORDER[item.mark] ?? ORDER["?"];
 
 /** Returns what waits on the user in the project in directory, whose
- * README.md is readme, or null if it has none, and whose notes are
- * [role, text] pairs, followed by watched, the watcher's items for it,
+ * notes are [role, text] pairs, followed by watched, the watcher's items for it,
  * the most pressing first. If the watcher found nothing, it also
  * suggests closing the project when every open role looks finished, or
  * else each role that does. A closed project has none. */
 export function projectItems(
   directory: string,
-  readme: string | null,
+  closed: boolean,
   notes: [string, string][],
   watched: Item[] = [],
 ): Item[] {
-  if (readme !== null && frontMatter(readme, "closed")) return [];
+  if (closed) return [];
   const open = notes.filter(([, t]) => !roleClosed(t));
   const items: Item[] = [];
   for (const [role, text] of open) {

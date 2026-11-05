@@ -17,7 +17,7 @@ import * as github from "./github.ts";
 import { HerdrError, request } from "./herdr.ts";
 import { type HookEvent, type HookHandler, hookServer, listenOn, readBody, speaker } from "./hooks.ts";
 import { highlightDiff, highlightLines } from "./highlight.ts";
-import { frontMatter } from "./inbox.ts";
+import { frontMatter } from "./frontmatter.ts";
 import { agentCommand, instructions, launchDirectory, launchScript, parseAgent, projectDir } from "./launch.ts";
 import { readLearnings } from "./learnings.ts";
 import { connectors } from "./headless.ts";

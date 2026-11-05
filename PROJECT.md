@@ -13,16 +13,26 @@ Each task has a scratch directory under `~/project`; this task's is
     ├── AGENT-<role>.md    each agent's notes
     ├── <worktree>/        git worktrees for branches
     └── ...                scripts, logs and data for the task
+
+~/repos/
+└── <org>/                 a GitHub organization
+    ├── LEARNINGS.md       what earlier tasks learned about it
+    └── <repo>/            a checkout of its repository
 ```
 
 Read `README.md` and the `## Remaining` and `## Findings` sections of
 each `AGENT-*.md` first, if they exist; read their logs only when you
 need the history of earlier work.
 
+Once the task is clear, grep `~/repos/kzys/LEARNINGS.md`, and
+`~/repos/<org>/LEARNINGS.md` of the GitHub organization it is about if
+there is one, for its systems and topics. Read only the `##` sections that
+match.
+
 ## README.md
 
-`README.md` describes the task for all agents, after this front
-matter:
+`README.md` describes the task for all agents, after this YAML front
+matter, so quote a value with `: ` or ` #` in it:
 
 ```
 ---
@@ -35,9 +45,9 @@ name: <name>
 - `name`: a short name for the task, in at most 20 characters.
 - `repositories`: added only when the task works in checkouts under
   `~/repos` directly rather than in worktrees here, as
-  `repositories: ~/repos/<org>/<repo>`, separated by spaces if more
-  than one. Without it, the checkouts are those this directory's notes
-  name.
+  a YAML list of `~/repos/<org>/<repo>`. Worktrees here are found on
+  their own and need no entry. Without it, any `~/repos/<org>/<repo>`
+  that `README.md` or the `AGENT-*.md` notes mention counts instead.
 - `closed`: added only when the project is closed, as `closed: <link>`.
   A link to what carries the outcome and any remaining work, such as a
   pull request or a ticket, or a few words on the outcome if nothing

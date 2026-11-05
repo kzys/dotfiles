@@ -155,7 +155,7 @@ test("lists the checkouts a project works in after its worktrees", () => {
   for (const d of [join(p1, "wt"), join(root, "repos/o/r1"), join(root, "repos/o/r2")])
     writeFileSync(join(d, ".git"), "gitdir: elsewhere\n");
   // The field wins over what the notes name.
-  writeFileSync(join(p1, "README.md"), "---\nrepositories: ~/repos/o/r2 ~/repos/o/gone\n---\nIn ~/repos/o/r1.\n");
+  writeFileSync(join(p1, "README.md"), "---\nrepositories: [~/repos/o/r2, ~/repos/o/gone]\n---\nIn ~/repos/o/r1.\n");
   writeFileSync(join(p1, "AGENT-main.md"), "## Remaining\n- [you] Pick one\n");
   writeFileSync(join(p2, "AGENT-main.md"), "## Remaining\n- [you] Check ~/repos/o/r1\n");
 

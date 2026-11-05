@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { frontMatter } from "./inbox.ts";
+import { frontMatter } from "./frontmatter.ts";
 import { type Agent, AGENTS, newProject, quote } from "./launch.ts";
 import { type CodexSession, codexContext, reportedRole, title, transcriptDir, transcripts } from "./sessions.ts";
 import type { Herdr, State } from "./state.ts";
