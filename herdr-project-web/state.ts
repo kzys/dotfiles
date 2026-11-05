@@ -30,6 +30,8 @@ export type PullRequest = {
   runs?: Run[];
   review: string | null;
   project: string | null;
+  // The directory of its project, from watchers that keep it.
+  projectDir?: string | null;
   agent: boolean;
   // The agent's pane, from watchers that keep it.
   pane?: string | null;
@@ -62,6 +64,8 @@ export type Entry = {
   // that say.
   done?: boolean;
   project: string | null;
+  // The directory of its project, from watchers that keep it.
+  projectDir?: string | null;
 };
 
 // A worktree or checkout, with the subject of its last commit, if git

@@ -3,12 +3,14 @@
 
 import { useMemo, useState } from "preact/hooks";
 import { diffHref } from "./diffs.tsx";
+import { FileSection } from "./files.tsx";
 import { FULL_AT, type Item, uniqueKeys } from "./inbox.ts";
-import { fileHref } from "./pages.ts";
-import { statusState } from "./pulls.ts";
+import { fileHref, projectHref } from "./pages.ts";
+import { projectSections, statusState } from "./pulls.ts";
 import type { AgentView } from "./agents.ts";
 import type { Pane, Project, State } from "./state.ts";
 import { Linked, matches, send } from "./ui.tsx";
+import { WatchSection } from "./watcher.tsx";
 
 const MARKS: Record<string, string> = {
   you: "you",
@@ -136,7 +138,9 @@ function ProjectCard({ project, agents }: { project: Project; agents: Record<str
               {w}
             </span>
           ))}
-        <span class="name">{project.name}</span>
+        <a class="name" href={projectHref(project.dir)}>
+          {project.name}
+        </a>
         <span class="title">{project.title}</span>
         <button class="copy" onClick={copy} title={`Copy ${project.dir}`}>
           {copied ? "copied" : "path"}
@@ -154,6 +158,72 @@ function ProjectCard({ project, agents }: { project: Project; agents: Record<str
         </ul>
       )}
     </section>
+  );
+}
+
+/** Returns what the filter looks for in project p itself. */
+function projectTexts(p: Project): (string | null)[] {
+  const wts = p.worktrees.flatMap((w) => [w.dir.split("/").pop()!, w.subject]);
+  return [p.name, p.title, ...p.workspaces, ...wts, ...p.files.map((f) => f.name)];
+}
+
+/** Returns the page listing the projects in state matching query, each
+ * with how many of its items surely wait on the user. */
+export function ProjectList({ state, query }: { state: State; query: string }) {
+  const projects = state.projects.filter((p) => matches(query, ...projectTexts(p)));
+  return (
+    <div class="diffs">
+      <h2>
+        Projects <span class="count">{projects.length}</span>
+      </h2>
+      {projects.length ? (
+        <section class="card">
+          <ul class="wts">
+            {projects.map((p) => {
+              const waiting = p.items.filter(pressing).length;
+              return (
+                <li key={p.dir} class="wt">
+                  <a class="wt-name" href={projectHref(p.dir)}>
+                    {p.name}
+                  </a>
+                  <span class="title">{p.title}</span>
+                  {waiting > 0 && <span class="count">{waiting}</span>}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : (
+        <p class="empty">{query ? "No match." : "No open projects."}</p>
+      )}
+    </div>
+  );
+}
+
+/** Returns the page of the project in dir: its card, what the watcher
+ * found for it matching query, and its README.md. */
+export function ProjectView({ dir, state, query, now }: { dir: string; state: State | null; query: string; now: number }) {
+  const project = state?.projects.find((p) => p.dir === dir);
+  const readme = project?.files.find((f) => f.name === "README.md");
+  return (
+    <div class="diffs">
+      <h2>
+        <a href="#projects">Projects</a> / {project?.name ?? dir.split("/").pop()}
+      </h2>
+      {!state ? (
+        <p class="empty">Loading…</p>
+      ) : !project ? (
+        <p class="empty">No open project here.</p>
+      ) : (
+        <>
+          <ProjectCard project={project} agents={state.controls ?? {}} />
+          {projectSections(state.sections ?? [], project.dir).map((s) => (
+            <WatchSection key={s.title} section={s} query={query} agents={state.agents ?? null} now={now} />
+          ))}
+          {readme && <FileSection dir={dir} name={readme.name} at={readme.at} />}
+        </>
+      )}
+    </div>
   );
 }
 
@@ -194,9 +264,7 @@ export function ProjectsColumn({ state, query, waiting }: { state: State; query:
   const projects = useMemo(
     () =>
       state.projects.flatMap((p) => {
-        const wts = p.worktrees.flatMap((w) => [w.dir.split("/").pop()!, w.subject]);
-        const names = [p.name, p.title, ...p.workspaces, ...wts, ...p.files.map((f) => f.name)];
-        if (matches(query, ...names)) return [p];
+        if (matches(query, ...projectTexts(p))) return [p];
         const items = p.items.filter((i) => matches(query, i.text, i.role));
         return items.length ? [{ ...p, items }] : [];
       }),
@@ -206,7 +274,7 @@ export function ProjectsColumn({ state, query, waiting }: { state: State; query:
   return (
     <div class="column">
       <h2>
-        Projects <span class="count">{waiting}</span>
+        Inbox <span class="count">{waiting}</span>
       </h2>
       <Undelivered state={state} />
       {unowned.length > 0 && (

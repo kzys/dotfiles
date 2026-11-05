@@ -188,6 +188,7 @@ export function entries(conversations: Conversation[], owners: Record<string, Ow
     waiting: waiting(c),
     done: !!c.done,
     project: owners[key(c)] ? projectName(owners[key(c)]!.project) : null,
+    projectDir: owners[key(c)]?.project ?? null,
   }));
   const rank = (r: (typeof rows)[number]) => (r.waiting ? 0 : 4) + (r.done ? 2 : 0) + (r.project === null ? 1 : 0);
   return rows.sort((a, b) => rank(a) - rank(b));

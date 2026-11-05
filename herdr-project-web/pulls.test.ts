@@ -1,7 +1,27 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { agentState, readiness } from "./pulls.ts";
-import { type PullRequest, agentStates } from "./state.ts";
+import { agentState, projectSections, readiness } from "./pulls.ts";
+import { type Entry, type PullRequest, agentStates } from "./state.ts";
+
+test("keeps what the watcher found for one project", () => {
+  // Projects can share a name, so only the directory tells them apart.
+  const pr = (number: number, projectDir: string | null): PullRequest => ({
+    url: `u${number}`, repo: "o/r", number, label: `r#${number}`, title: "t", draft: false,
+    checks: null, failed: [], review: null, project: "same", projectDir, agent: false,
+  });
+  const entry = (label: string, projectDir: string | null): Entry =>
+    ({ label, title: "t", url: null, waiting: false, project: "same", projectDir });
+  const section = { at: null, lines: ["l"] };
+  const found = projectSections([
+    { ...section, title: "Pull requests", pullRequests: [pr(1, "/p/a"), pr(2, "/p/b"), pr(3, null)] },
+    { ...section, title: "Slack", entries: [entry("c1", "/p/b"), entry("c2", "/p/a")] },
+    { ...section, title: "Linear", entries: [entry("c3", "/p/b")] },
+    { ...section, title: "Other" },
+  ], "/p/a");
+  assert.deepEqual(found.map((s) => s.title), ["Pull requests", "Slack"]);
+  assert.deepEqual(found[0].pullRequests?.map((p) => p.number), [1]);
+  assert.deepEqual(found[1].entries?.map((e) => e.label), ["c2"]);
+});
 
 test("says where a pull request stands", () => {
   const pr: PullRequest = {

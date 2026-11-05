@@ -70,9 +70,9 @@ test("polls Slack", async () => {
   assert.deepEqual(lines, ["* #C1 alpha about 1.5", "#C2", "    about "]);
   assert.deepEqual(rows, [
     { label: "#C1", title: "about 1.5", url: "https://x.slack.com/archives/C1/p15",
-      waiting: true, done: false, project: "alpha" },
+      waiting: true, done: false, project: "alpha", projectDir: join(dir, "a") },
     { label: "#C2", title: "about ", url: "https://x.slack.com/archives/C2/p",
-      waiting: false, done: false, project: null },
+      waiting: false, done: false, project: null, projectDir: null },
   ]);
   assert.deepEqual(calls, [["Slack #C1", "about 1.5 (a)"]]);
 });

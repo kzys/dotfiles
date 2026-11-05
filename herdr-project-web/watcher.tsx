@@ -159,7 +159,9 @@ function EntryRow({ entry }: { entry: Entry }) {
   );
 }
 
-function WatchSection({
+/** Returns section, the pull requests or entries in it matching query,
+ * with when it was and will be checked. */
+export function WatchSection({
   section,
   query,
   agents,

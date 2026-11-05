@@ -52,7 +52,8 @@ test("polls Linear", async () => {
     `  ABC-3     Backlog     ${blank} about ABC-3`,
   ]);
   assert.deepEqual(rows[0], { label: "ABC-2", title: "Title ABC-2", note: "about ABC-2", detail: "In Progress",
-                              url: "https://linear.app/x/issue/ABC-2", waiting: true, project: "a" });
+                              url: "https://linear.app/x/issue/ABC-2", waiting: true, project: "a",
+                              projectDir: join(dir, "a") });
   assert.deepEqual((rows as { label: string }[]).map((r) => r.label), ["ABC-2", "ABC-1", "ABC-3"]);
   assert.deepEqual(calls, [["Linear ABC-2", "about ABC-2 (a)"]]);
 });
