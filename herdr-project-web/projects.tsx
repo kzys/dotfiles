@@ -6,7 +6,7 @@ import { diffHref } from "./diffs.tsx";
 import { FileSection } from "./files.tsx";
 import { FULL_AT, type Item, uniqueKeys } from "./inbox.ts";
 import { fileHref, projectHref } from "./pages.ts";
-import { projectSections, statusState } from "./pulls.ts";
+import { agentCounts, projectSections, statusState } from "./pulls.ts";
 import type { AgentView } from "./agents.ts";
 import type { Pane, Project, State } from "./state.ts";
 import { Linked, matches, send } from "./ui.tsx";
@@ -167,8 +167,23 @@ function projectTexts(p: Project): (string | null)[] {
   return [p.name, p.title, ...p.workspaces, ...wts, ...p.files.map((f) => f.name)];
 }
 
+/** Returns how many agents panes has, and how many are in each state. */
+function AgentCounts({ panes }: { panes: Pane[] }) {
+  if (!panes.length) return null;
+  return (
+    <span class="agent-counts">
+      {panes.length === 1 ? "1 agent" : `${panes.length} agents`}
+      {agentCounts(panes).map(([state, n]) => (
+        <span key={state} class={`pr-agent agent-${state}`}>
+          {n} {state}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 /** Returns the page listing the projects in state matching query, each
- * with how many of its items surely wait on the user. */
+ * with its agents and how many Herdr tabs it has. */
 export function ProjectList({ state, query }: { state: State; query: string }) {
   const projects = state.projects.filter((p) => matches(query, ...projectTexts(p)));
   return (
@@ -179,18 +194,16 @@ export function ProjectList({ state, query }: { state: State; query: string }) {
       {projects.length ? (
         <section class="card">
           <ul class="wts">
-            {projects.map((p) => {
-              const waiting = p.items.filter(pressing).length;
-              return (
-                <li key={p.dir} class="wt">
-                  <a class="wt-name" href={projectHref(p.dir)}>
-                    {p.name}
-                  </a>
-                  <span class="title">{p.title}</span>
-                  {waiting > 0 && <span class="count">{waiting}</span>}
-                </li>
-              );
-            })}
+            {projects.map((p) => (
+              <li key={p.dir} class="wt">
+                <a class="wt-name" href={projectHref(p.dir)}>
+                  {p.name}
+                </a>
+                <span class="title">{p.title}</span>
+                <AgentCounts panes={p.panes} />
+                {p.tabs > 0 && <span class="agent-counts">{p.tabs === 1 ? "1 tab" : `${p.tabs} tabs`}</span>}
+              </li>
+            ))}
           </ul>
         </section>
       ) : (

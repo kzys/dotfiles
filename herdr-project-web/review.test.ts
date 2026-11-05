@@ -1,9 +1,37 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { FileDiff } from "./diff.ts";
-import { type Comment, clearReviewer, commentKey, displaced, reviewMessage, reviewers, withComment } from "./review.ts";
+import { type Comment, clearReviewer, commentKey, displaced, receiverStarted, receiverStatus, reviewMessage, reviewers, withComment } from "./review.ts";
 
 const comment = (path: string, line: number, body: string, side: "old" | "new" = "new"): Comment => ({ path, side, line, code: "x()", body });
+
+test("says what the agent sent to is doing", () => {
+  const message = { id: "1", text: "t", at: 0 };
+  const state = {
+    agents: { a: "working", b: "done", c: "blocked" },
+    controls: { a: { queued: [message], permission: null }, b: { queued: [], permission: null } },
+  };
+  assert.deepEqual(receiverStatus(state, "a", false), ["working", "working, 1 waiting to reach it"]);
+  assert.deepEqual(receiverStatus(state, "b", true), ["idle", "idle"]);
+  assert.deepEqual(receiverStatus(state, "b", false), ["idle", "idle, not seen working yet"]);
+  assert.deepEqual(receiverStatus(state, "c", false), ["blocked", "blocked"]);
+  assert.deepEqual(receiverStatus(state, "gone", false), ["unknown", "gone"]);
+  assert.deepEqual(receiverStatus({ agents: null, controls: {} }, "a", false), ["unknown", "unknown"]);
+  assert.deepEqual(receiverStatus(null, "a", false), ["unknown", "unknown"]);
+  const lost = { ...state, undelivered: [{ pane: "a", messages: [message] }] };
+  assert.deepEqual(receiverStatus(lost, "a", false), ["working", "working, 1 undelivered"]);
+});
+
+test("tells an agent working on what it was sent from one busy before it", () => {
+  const message = { id: "1", text: "t", at: 0 };
+  const state = (status: string, queued: typeof message[]) =>
+    ({ agents: { a: status }, controls: { a: { queued, permission: null } } });
+  assert.equal(receiverStarted(state("working", [message]), "a"), false);
+  assert.equal(receiverStarted(state("idle", []), "a"), false);
+  assert.equal(receiverStarted(state("working", []), "a"), true);
+  assert.equal(receiverStarted(state("blocked", []), "a"), true);
+  assert.equal(receiverStarted(null, "a"), false);
+});
 
 test("keeps one comment per line, in the diff's order", () => {
   let comments = withComment([], comment("b.ts", 1, "second"));

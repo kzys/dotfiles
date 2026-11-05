@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { agentState, projectSections, readiness } from "./pulls.ts";
+import { agentCounts, agentState, projectSections, readiness } from "./pulls.ts";
 import { type Entry, type PullRequest, agentStates } from "./state.ts";
+
+test("counts agents by state", () => {
+  const panes = ["idle", "working", "done", "blocked", "working", null].map((status) => ({ status }));
+  assert.deepEqual(agentCounts(panes), [["blocked", 1], ["working", 2], ["idle", 2], ["unknown", 1]]);
+  assert.deepEqual(agentCounts([]), []);
+});
 
 test("keeps what the watcher found for one project", () => {
   // Projects can share a name, so only the directory tells them apart.

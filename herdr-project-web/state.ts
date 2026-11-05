@@ -95,6 +95,8 @@ export type Project = {
   worktrees: Worktree[];
   // The agent panes in Herdr working in dir.
   panes: Pane[];
+  // How many Herdr tabs have a pane working in dir.
+  tabs: number;
   items: Item[];
   // The files directly in dir, as projectFiles lists them.
   files: ProjectFile[];
@@ -332,6 +334,12 @@ function panesIn(dir: string, herdr: Herdr | null): Herdr["panes"] {
   return herdr.panes.filter((p) => inside(dir, p.tokens?.cwd || p.cwd) || inside(dir, p.foreground_cwd));
 }
 
+/** Returns how many tabs in herdr have a pane working in dir or under
+ * it. */
+export function projectTabs(dir: string, herdr: Herdr | null): number {
+  return new Set(panesIn(dir, herdr).map((p) => p.tab_id)).size;
+}
+
 /** Returns the agent panes in herdr working in dir or under it, in the
  * order herdr lists them, with how full each one's context is. A
  * background session reports to the pane that started it, flagging that with the bg token, so then the ctx
@@ -411,6 +419,7 @@ export function readState(
       ...projectLabels(dir, readme),
       workspaces: workspaceLabels(dir, herdr),
       panes: projectPanes(dir, herdr),
+      tabs: projectTabs(dir, herdr),
       worktrees: [...worktreeDirs(dir), ...new Set([...namedCheckouts(named, home), ...(checkouts[dir] ?? [])].filter(isCheckout))].map((d) => ({
         dir: d,
         subject: lastSubject(d),

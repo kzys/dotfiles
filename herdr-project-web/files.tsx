@@ -14,11 +14,12 @@ function useFile(dir: string, name: string, at: number | null) {
   const fetched = useFetched<FileText>(
     `/api/file?dir=${encodeURIComponent(dir)}&name=${encodeURIComponent(name)}`,
   );
+  const [, , , refresh] = fetched;
   // useFetched fetches it first; fetch again only on changes.
   const first = useRef(true);
   useEffect(() => {
     if (first.current) first.current = false;
-    else fetched[3]();
+    else refresh();
   }, [at]);
   return fetched;
 }

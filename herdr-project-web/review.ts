@@ -2,6 +2,8 @@
 // agent as one message.
 
 import { type FileDiff, filePath } from "./diff.ts";
+import { type AgentState, statusState } from "./pulls.ts";
+import type { State } from "./state.ts";
 
 export type Comment = { path: string; side: "old" | "new"; line: number; code: string; body: string };
 
@@ -51,6 +53,37 @@ export function clearReviewer(agents: Reviewer[]): Reviewer | null {
   const inside = agents.filter((a) => a.inside);
   if (inside.length === 1) return inside[0];
   return agents.length === 1 ? agents[0] : null;
+}
+
+type Receiving = Pick<State, "agents" | "controls" | "undelivered">;
+
+/** Returns how many messages for the agent in pane wait to reach it and
+ * how many never will, as when it restarted as another session. */
+function waitingFor(state: Receiving, pane: string): [number, number] {
+  const lost = state.undelivered?.find((u) => u.pane === pane)?.messages.length ?? 0;
+  return [(state.controls?.[pane]?.queued.length ?? 0) - lost, lost];
+}
+
+/** Reports whether state shows the agent in pane busy with nothing left
+ * to reach it, so with what it was sent. */
+export function receiverStarted(state: Receiving | null, pane: string): boolean {
+  const agent = statusState(state?.agents?.[pane]);
+  return !!state && (agent === "working" || agent === "blocked") && waitingFor(state, pane)[0] <= 0;
+}
+
+/** Returns what the agent in pane is doing according to state, as its
+ * state and in words, with what hasn't reached it. An agent is idle both
+ * before and after working, so unless started, when it was seen working,
+ * its being idle says nothing of what it was sent. */
+export function receiverStatus(state: Receiving | null, pane: string, started: boolean): [AgentState, string] {
+  const status = state?.agents?.[pane];
+  if (!state?.agents) return ["unknown", "unknown"];
+  if (status === undefined) return ["unknown", "gone"];
+  const agent = statusState(status);
+  const [queued, lost] = waitingFor(state, pane);
+  if (lost) return [agent, `${agent}, ${lost} undelivered`];
+  if (queued > 0) return [agent, `${agent}, ${queued} waiting to reach it`];
+  return [agent, agent === "idle" && !started ? "idle, not seen working yet" : agent];
 }
 
 /** Returns the comments no line of files holds any more: their line left
