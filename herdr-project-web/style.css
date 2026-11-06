@@ -89,7 +89,7 @@ main {
   main { grid-template-columns: minmax(0, 1fr); }
 }
 
-h2 {
+.diffs > h2, .column > h2 {
   display: flex;
   align-items: baseline;
   gap: var(--space-3);
@@ -99,7 +99,7 @@ h2 {
   text-transform: uppercase;
   color: var(--muted);
 }
-h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
+.diffs > h2::after, .column > h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
 .count { color: var(--accent); font-weight: 600; }
 
 /* Panels. */
@@ -151,7 +151,7 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
 }
 .copy:hover { color: var(--accent); border-color: var(--accent); }
 
-.card ul { margin: 0; padding: var(--space-2) 0; list-style: none; }
+.card > ul { margin: 0; padding: var(--space-2) 0; list-style: none; }
 /* A project's agent panes, with how full their context is. */
 .panes {
   display: flex;
@@ -378,7 +378,7 @@ code { font-family: var(--mono); font-size: var(--normal); }
 
 /* Worktrees and their diffs. */
 .diffs { margin-top: var(--space-6); }
-.diffs h2 a:hover { color: var(--accent); }
+.diffs > h2 a:hover { color: var(--accent); }
 .diffs h2 .copy { order: 1; }
 .stat { flex: none; font: var(--normal) var(--mono); }
 .stat-add { color: var(--ok); }
@@ -535,32 +535,25 @@ code { font-family: var(--mono); font-size: var(--normal); }
 .markdown { font-size: var(--normal); line-height: 1.55; overflow-wrap: anywhere; }
 .markdown > :first-child { margin-top: 0; }
 .markdown > :last-child { margin-bottom: 0; }
-.markdown p, .markdown blockquote, .markdown pre, .markdown table { margin: var(--space-2) 0; }
-.markdown h1, .markdown h2, .markdown h3, .markdown h4, .markdown h5, .markdown h6 {
-  margin: var(--space-4) 0 var(--space-2);
-  color: var(--fg);
-  font: 600 var(--normal) var(--sans);
-  text-transform: none;
-}
-.markdown h1, .markdown h2 { font-size: var(--large); }
-.card .markdown ul, .markdown ul { margin: var(--space-2) 0; padding: 0 0 0 var(--space-6); list-style: disc; }
-.card .markdown ol, .markdown ol { margin: var(--space-2) 0; padding: 0 0 0 var(--space-7); }
-.markdown li { margin: var(--space-1) 0; }
-.markdown li > p { margin: 0; }
+.markdown li p { margin: 0; }
 .markdown code { padding: 0 var(--space-2); background: var(--well); }
 .markdown pre { padding: var(--space-3) var(--space-4); background: var(--well); overflow-x: auto; }
 .markdown pre code { padding: 0; background: none; }
-.markdown blockquote { padding-left: var(--space-4); border-left: 3px solid var(--panel-edge); color: var(--muted); }
+.markdown blockquote { margin-inline: 0; padding-left: var(--space-4); border-left: 3px solid var(--panel-edge); color: var(--muted); }
 .markdown a, .learn-topic h3 a { border-bottom: 1px solid var(--faint); }
 .markdown a:hover, .learn-topic h3 a:hover { border-color: var(--accent); }
 .markdown table { display: block; overflow-x: auto; border-collapse: collapse; }
 .markdown th, .markdown td { padding: var(--space-1) var(--space-3); border: 1px solid var(--panel-edge); text-align: left; }
 .markdown hr { border: 0; border-top: 1px solid var(--panel-edge); }
 .learn-topic .markdown + .markdown { margin-top: var(--space-2); }
+.learn-topic .markdown ul { padding-left: var(--space-6); }
+.learn-topic .markdown ol { padding-left: var(--space-7); }
 
 /* Markdown whose blocks take comments. Each block's number sits in the
    gutter left of the text, however deep the block is nested. */
-.markdown.reviewed { position: relative; }
+.markdown.reviewed { position: relative; max-width: 52rem; margin: 0 auto; font-size: 1rem; }
+.markdown.reviewed code, .markdown.reviewed pre { font-family: var(--mono); font-size: 0.9em; }
+.markdown.reviewed pre code { font-size: 1em; }
 .md-line {
   position: absolute;
   left: calc(-1 * var(--space-7));
@@ -570,7 +563,7 @@ code { font-family: var(--mono); font-size: var(--normal); }
   background: none;
   color: var(--faint);
   font: var(--small) var(--mono);
-  line-height: 20px;
+  line-height: 1.55rem;
   text-align: right;
   cursor: pointer;
   opacity: 0;
@@ -578,13 +571,16 @@ code { font-family: var(--mono); font-size: var(--normal); }
 .md-block:hover > .md-line, .md-block.commented > .md-line, .md-line:focus-visible { opacity: 1; }
 .md-line:hover { color: var(--accent); }
 .markdown.reviewed > .md-block:first-child > :nth-child(2) { margin-top: 0; }
-.markdown li > .md-block > p { margin: 0; }
-.md-block > .comment { max-width: none; margin: var(--space-2) 0; padding: var(--space-3); background: var(--well); }
+.md-block > .comment { max-width: none; font-size: var(--normal); margin: var(--space-2) 0; padding: var(--space-3); background: var(--well); }
+.front-matter { margin-bottom: var(--space-5); padding-bottom: var(--space-4); border-bottom: 1px solid var(--panel-edge); }
+.front-matter h1 { margin: 0; line-height: 1.3; }
+.markdown .front-name { margin: var(--space-1) 0 0; color: var(--muted); font: var(--normal) var(--mono); }
+.markdown .front-others { margin: var(--space-2) 0 0; padding: 0; background: none; color: var(--muted); font: var(--normal) var(--mono); white-space: pre-wrap; }
 .file-page .review-bar { position: sticky; bottom: 0; margin: var(--space-4) calc(-1 * var(--space-7)) calc(-1 * var(--space-5)); background: var(--panel); }
 
 /* A project's file, on its own page. */
 /* Not clipped, so the review bar can stick to the window. */
-.file-page { max-width: 52rem; padding: var(--space-5) var(--space-7); overflow: visible; }
+.file-page { padding: var(--space-5) var(--space-7); overflow: visible; }
 .file-text { margin: 0; font: var(--normal) var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
 @media (max-width: 900px) {
   .learn-org { grid-template-columns: minmax(0, 1fr); }
