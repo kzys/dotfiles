@@ -1,10 +1,12 @@
-// Comments on a diff's lines, kept in the browser until they go to an
-// agent as one message.
+// Comments on the lines of a diff or a Markdown file, kept in the browser
+// until they go to an agent as one message.
 
 import { type FileDiff, filePath } from "./diff.ts";
 import { type AgentState, statusState } from "./pulls.ts";
 import type { State } from "./state.ts";
 
+// code is what it is on: one line of a diff, or the lines of a Markdown
+// block, which start at line.
 export type Comment = { path: string; side: "old" | "new"; line: number; code: string; body: string };
 
 /** Returns what identifies the line a comment is on, its code included:
@@ -19,27 +21,29 @@ export function withComment(comments: Comment[], c: Comment): Comment[] {
   return all.sort((a, b) => a.path.localeCompare(b.path) || a.line - b.line || a.side.localeCompare(b.side));
 }
 
-/** Returns the message that gives an agent comments on the diff of dir,
+/** Returns the message that gives an agent comments on what is in dir,
  * on branch if it has one. */
 export function reviewMessage(dir: string, branch: string | null, comments: Comment[]): string {
   const parts = comments.map((c) => {
     const removed = c.side === "old" ? " (removed line)" : "";
-    return `${c.path}:${c.line}${removed}\n> ${c.code}\n${c.body.trim()}`;
+    const lines = c.code.split("\n");
+    const to = lines.length > 1 ? `-${c.line + lines.length - 1}` : "";
+    return `${c.path}:${c.line}${to}${removed}\n${lines.map((l) => `> ${l}`).join("\n")}\n${c.body.trim()}`;
   });
   return `Review comments on ${dir}${branch ? ` (${branch})` : ""}. Address each, then say what you did.\n\n${parts.join("\n\n")}`;
 }
 
 export type Reviewer = { id: string; label: string; inside: boolean };
 
-/** Returns the agents that can take comments on the diff of dir: those of
- * the projects that work in it, the ones inside it first, in an order that
- * stays put as projects change rank. */
+/** Returns the agents that can take comments on what is in dir, a project
+ * or a worktree: those of the projects that work in it, the ones inside it
+ * first, in an order that stays put as projects change rank. */
 export function reviewers(
-  projects: { name: string; worktrees: { dir: string }[]; panes: { id: string; role: string | null; cwd: string | null }[] }[],
+  projects: { name: string; dir: string; worktrees: { dir: string }[]; panes: { id: string; role: string | null; cwd: string | null }[] }[],
   dir: string,
 ): Reviewer[] {
   const within = (cwd: string | null) => cwd === dir || !!cwd?.startsWith(`${dir}/`);
-  return projects.filter((p) => p.worktrees.some((w) => w.dir === dir))
+  return projects.filter((p) => p.dir === dir || p.worktrees.some((w) => w.dir === dir))
     .flatMap((p) => p.panes.map((a) => ({
       id: a.id, label: a.role ? `${p.name} · ${a.role} (${a.id})` : `${p.name} · ${a.id}`, inside: within(a.cwd),
     })))
@@ -84,6 +88,13 @@ export function receiverStatus(state: Receiving | null, pane: string, started: b
   if (lost) return [agent, `${agent}, ${lost} undelivered`];
   if (queued > 0) return [agent, `${agent}, ${queued} waiting to reach it`];
   return [agent, agent === "idle" && !started ? "idle, not seen working yet" : agent];
+}
+
+/** Returns the comments no block of a Markdown file at path holds any
+ * more, as blocks lists them. */
+export function displacedFromBlocks(comments: Comment[], path: string, blocks: { line: number; code: string }[]): Comment[] {
+  const held = new Set(blocks.map((b) => commentKey({ path, side: "new", ...b })));
+  return comments.filter((c) => !held.has(commentKey(c)));
 }
 
 /** Returns the comments no line of files holds any more: their line left

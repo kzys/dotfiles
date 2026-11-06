@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { FileDiff } from "./diff.ts";
-import { type Comment, clearReviewer, commentKey, displaced, receiverStarted, receiverStatus, reviewMessage, reviewers, withComment } from "./review.ts";
+import { type Comment, clearReviewer, commentKey, displaced, displacedFromBlocks, receiverStarted, receiverStatus, reviewMessage, reviewers, withComment } from "./review.ts";
 
 const comment = (path: string, line: number, body: string, side: "old" | "new" = "new"): Comment => ({ path, side, line, code: "x()", body });
 
@@ -65,11 +65,16 @@ test("gives the agent each comment with its place and code", () => {
   assert.match(reviewMessage("/repo", null, []), /^Review comments on \/repo\./);
 });
 
+test("gives a comment on a block all its lines", () => {
+  const text = reviewMessage("/p", null, [{ ...comment("README.md", 3, "why?"), code: "- one\n  two" }]);
+  assert.equal(text.split("\n\n")[1], "README.md:3-4\n> - one\n>   two\nwhy?");
+});
+
 test("offers the agents inside the diff first, in a stable order", () => {
   const projects = [
-    { name: "a", worktrees: [{ dir: "/r" }], panes: [{ id: "w1:p1", role: "main", cwd: "/p" }, { id: "w1:p2", role: null, cwd: null }] },
-    { name: "b", worktrees: [{ dir: "/other" }], panes: [{ id: "w2:p1", role: "main", cwd: "/r" }] },
-    { name: "c", worktrees: [{ dir: "/r" }], panes: [{ id: "w0:p1", role: "main", cwd: "/r/sub" }] },
+    { name: "a", dir: "/p/a", worktrees: [{ dir: "/r" }], panes: [{ id: "w1:p1", role: "main", cwd: "/p" }, { id: "w1:p2", role: null, cwd: null }] },
+    { name: "b", dir: "/p/b", worktrees: [{ dir: "/other" }], panes: [{ id: "w2:p1", role: "main", cwd: "/r" }] },
+    { name: "c", dir: "/p/c", worktrees: [{ dir: "/r" }], panes: [{ id: "w0:p1", role: "main", cwd: "/r/sub" }] },
   ];
   assert.deepEqual(reviewers(projects, "/r"), [
     { id: "w0:p1", label: "c · main (w0:p1)", inside: true },
@@ -77,6 +82,7 @@ test("offers the agents inside the diff first, in a stable order", () => {
     { id: "w1:p2", label: "a · w1:p2", inside: false },
   ]);
   assert.deepEqual(reviewers([...projects].reverse(), "/r"), reviewers(projects, "/r"));
+  assert.deepEqual(reviewers(projects, "/p/b"), [{ id: "w2:p1", label: "b · main (w2:p1)", inside: false }]);
 });
 
 test("doesn't guess which agent the comments are for", () => {
@@ -102,4 +108,11 @@ test("finds comments whose line moved or left the diff", () => {
   const moved = comment("a.ts", 4, "was x()");
   const gone = comment("b.ts", 1, "left the diff");
   assert.deepEqual(displaced([placed, removed, moved, gone], files), [moved, gone]);
+});
+
+test("finds comments whose Markdown block changed or left", () => {
+  const blocks = [{ line: 3, code: "x()" }];
+  const placed = comment("a.md", 3, "fine");
+  const moved = comment("a.md", 5, "was on line 5");
+  assert.deepEqual(displacedFromBlocks([placed, moved], "a.md", blocks), [moved]);
 });
