@@ -75,3 +75,33 @@ test("shows what renderMarkdown shows, as safely", () => {
   assert.doesNotMatch(shown, /<b>|<i>|href="javascript:/);
   assert.match(html(markdownTree("5. x\n")), /<ol start="5">/);
 });
+
+test("shows a title and a name as such, with the other fields", () => {
+  const text = "---\ntitle: \"<A>: b\"\nname: n\nclosed: https://x/1\n---\n\nText\n";
+  const [front, body] = markdownTree(text);
+  assert.equal(
+    html([front]),
+    '<div class="front-matter"><h1>&lt;A&gt;: b</h1><p class="front-name">n</p><pre class="front-others">closed: https://x/1</pre></div>',
+  );
+  assert.deepEqual(front.at, { line: 1, code: "---\ntitle: \"<A>: b\"\nname: n\nclosed: https://x/1\n---" });
+  assert.equal(body.at?.line, 7);
+  assert.equal(html(markdownTree("---\nname: n\n---\n")), '<div class="front-matter"><p class="front-name">n</p></div>');
+});
+
+test("reads front matter as YAML", () => {
+  const front = (text: string) => html(markdownTree(text).slice(0, 1));
+  assert.equal(
+    front("---\ntitle: |\n  one\n  two\nclosed:\nrepositories:\n  - a\n---\n"),
+    '<div class="front-matter"><h1>one\ntwo</h1><pre class="front-others">closed:\nrepositories:\n  - a</pre></div>',
+  );
+  assert.equal(front('---\n"name": 1.10\n---\n'), '<div class="front-matter"><p class="front-name">1.10</p></div>');
+  assert.equal(front("---\r\ntitle: A\r\n---\r\n"), '<div class="front-matter"><h1>A</h1></div>');
+});
+
+test("leaves other front matter as code", () => {
+  const code = (body: string) => `<pre><code>${body}\n</code></pre>`;
+  assert.equal(html(markdownTree("---\nkey: v\n---\n")), code("key: v"));
+  assert.equal(html(markdownTree("---\ntitle: {en: A}\n---\n")), code("title: {en: A}"));
+  assert.equal(html(markdownTree("---\ntitle: Fix: a bug\n---\n")), code("title: Fix: a bug"));
+  assert.equal(html(markdownTree("---\n- a\n---\n")), code("- a"));
+});

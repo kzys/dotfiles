@@ -2,6 +2,7 @@
 // page.
 
 import MarkdownIt from "markdown-it";
+import { isMap, parseDocument } from "yaml";
 
 // Raw HTML in the text stays text, and markdown-it drops links to
 // javascript: and other unsafe URLs, so the HTML is safe to show. Images
@@ -41,19 +42,52 @@ export type MarkdownNode = {
   at: { line: number; code: string } | null;
 };
 
+/** Returns front matter, whose source with its lines of --- is at, with its
+ * title as a heading, its name under it and its other fields as code, or
+ * null if it isn't valid YAML or has no such text field. */
+function frontMatterNode(at: NonNullable<MarkdownNode["at"]>): MarkdownNode | null {
+  const leaf = (tag: string, html: string, cls?: string): MarkdownNode =>
+    ({ tag, attrs: cls ? { class: cls } : {}, html: md.utils.escapeHtml(html), nodes: [], at: null });
+  // The failsafe schema keeps a value like 1.10 the string it was written as.
+  const doc = parseDocument(at.code.split("\n").slice(1, -1).join("\n"), { schema: "failsafe" });
+  if (doc.errors.length || !isMap(doc.contents)) return null;
+  const text = (key: string) => {
+    const value = doc.get(key);
+    return typeof value === "string" ? value.trim() : "";
+  };
+  const title = text("title");
+  const name = text("name");
+  if (!title && !name) return null;
+  if (title) doc.delete("title");
+  if (name) doc.delete("name");
+  const others = doc.contents.items.length ? String(doc).trimEnd() : "";
+  return {
+    tag: "div",
+    attrs: { class: "front-matter" },
+    html: null,
+    nodes: [
+      ...(title ? [leaf("h1", title)] : []),
+      ...(name ? [leaf("p", name, "front-name")] : []),
+      ...(others ? [leaf("pre", others, "front-others")] : []),
+    ],
+    at,
+  };
+}
+
 // The blocks that take comments: those that hold text, and tables whole.
 const COMMENTABLE = new Set(["paragraph_open", "heading_open", "fence", "code_block", "table_open"]);
 
 /** Returns Markdown text as renderMarkdown shows it, as elements that say
  * which lines of text they come from, so a page can put comments on them.
- * The text of a tight list's item is a paragraph here too, and code has no
- * language class. */
+ * The text of a tight list's item is a paragraph here too, code has no
+ * language class, and a title or name in front matter shows as such. */
 export function markdownTree(text: string): MarkdownNode[] {
   // Lines as markdown-it counts them.
   const source = text.split(/\r\n?|\n/);
   const root: MarkdownNode = { tag: "div", attrs: {}, html: null, nodes: [], at: null };
   const open = [root];
-  for (const t of md.parse(fencedFrontMatter(text), {})) {
+  const fenced = fencedFrontMatter(text);
+  for (const t of md.parse(fenced, {})) {
     const parent = open[open.length - 1];
     if (t.nesting === -1) {
       open.pop();
@@ -74,7 +108,8 @@ export function markdownTree(text: string): MarkdownNode[] {
       if (t.nesting === 1) open.push(node);
     }
   }
-  return root.nodes;
+  const front = fenced !== text && frontMatterNode(root.nodes[0].at!);
+  return front ? [front, ...root.nodes.slice(1)] : root.nodes;
 }
 
 /** Returns the blocks of nodes, however deep, that can take a comment. */
