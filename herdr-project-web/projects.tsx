@@ -233,7 +233,7 @@ export function ProjectView({ dir, state, query, now }: { dir: string; state: St
           {projectSections(state.sections ?? [], project.dir).map((s) => (
             <WatchSection key={s.title} section={s} query={query} agents={state.agents ?? null} now={now} />
           ))}
-          {readme && <FileSection dir={dir} name={readme.name} at={readme.at} />}
+          {readme && <FileSection dir={dir} name={readme.name} at={readme.at} state={state} />}
         </>
       )}
     </div>

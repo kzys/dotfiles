@@ -558,8 +558,33 @@ code { font-family: var(--mono); font-size: var(--normal); }
 .markdown hr { border: 0; border-top: 1px solid var(--panel-edge); }
 .learn-topic .markdown + .markdown { margin-top: var(--space-2); }
 
+/* Markdown whose blocks take comments. Each block's number sits in the
+   gutter left of the text, however deep the block is nested. */
+.markdown.reviewed { position: relative; }
+.md-line {
+  position: absolute;
+  left: calc(-1 * var(--space-7));
+  width: calc(var(--space-7) - var(--space-1));
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--faint);
+  font: var(--small) var(--mono);
+  line-height: 20px;
+  text-align: right;
+  cursor: pointer;
+  opacity: 0;
+}
+.md-block:hover > .md-line, .md-block.commented > .md-line, .md-line:focus-visible { opacity: 1; }
+.md-line:hover { color: var(--accent); }
+.markdown.reviewed > .md-block:first-child > :nth-child(2) { margin-top: 0; }
+.markdown li > .md-block > p { margin: 0; }
+.md-block > .comment { max-width: none; margin: var(--space-2) 0; padding: var(--space-3); background: var(--well); }
+.file-page .review-bar { position: sticky; bottom: 0; margin: var(--space-4) calc(-1 * var(--space-7)) calc(-1 * var(--space-5)); background: var(--panel); }
+
 /* A project's file, on its own page. */
-.file-page { max-width: 52rem; padding: var(--space-5) var(--space-7); }
+/* Not clipped, so the review bar can stick to the window. */
+.file-page { max-width: 52rem; padding: var(--space-5) var(--space-7); overflow: visible; }
 .file-text { margin: 0; font: var(--normal) var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
 @media (max-width: 900px) {
   .learn-org { grid-template-columns: minmax(0, 1fr); }

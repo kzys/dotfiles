@@ -136,9 +136,9 @@ function Code({ line }: { line: DiffLine }) {
   );
 }
 
-/** The comments on a diff, kept in this browser until they are sent, even
+/** The comments on a diff or a file, kept in this browser until they are sent, even
  * as they are written, and the one being written. */
-type Review = {
+export type Review = {
   comments: Comment[];
   editing: Comment | null;
   edit: (at: Comment) => void;
@@ -149,9 +149,9 @@ type Review = {
   remove: (gone: Comment[]) => void;
 };
 
-/** Returns the review of the diff of dir. */
-function useReview(dir: string): Review {
-  const key = `review:${dir}`;
+/** Returns the review of what is at place, a worktree or a file. */
+export function useReview(place: string): Review {
+  const key = `review:${place}`;
   const [comments, setComments] = useState<Comment[]>(() => {
     try {
       return JSON.parse(localStorage.getItem(key) ?? "[]");
@@ -261,6 +261,27 @@ function CommentBox({ review, sender }: { review: Review; sender: Sender }) {
   );
 }
 
+/** Returns the comment on at, or the box writing it, if there is either. */
+export function CommentAt({ at, review, sender }: { at: Comment; review: Review; sender: Sender }) {
+  const key = commentKey(at);
+  if (review.editing && commentKey(review.editing) === key) return <CommentBox review={review} sender={sender} />;
+  const saved = review.comments.find((c) => commentKey(c) === key);
+  if (!saved) return null;
+  return (
+    <div class="comment">
+      <p class="comment-body">{saved.body}</p>
+      <div class="comment-actions">
+        <button class="copy" onClick={() => review.edit(at)}>
+          edit
+        </button>
+        <button class="copy" onClick={() => review.remove([saved])}>
+          delete
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** Returns the rows under a line with its comment or the box writing one. */
 function CommentRows({ ats, review, sender, span }: { ats: (Comment | null)[]; review: Review; sender: Sender; span: number }) {
   const keys = new Set<string>();
@@ -271,26 +292,11 @@ function CommentRows({ ats, review, sender, span }: { ats: (Comment | null)[]; r
         const key = commentKey(at);
         keys.add(key);
         const editing = review.editing && commentKey(review.editing) === key;
-        const saved = review.comments.find((c) => commentKey(c) === key);
-        if (!editing && !saved) return [];
+        if (!editing && !review.comments.some((c) => commentKey(c) === key)) return [];
         return [
           <tr key={key} class="comment-row">
             <td colSpan={span}>
-              {editing ? (
-                <CommentBox review={review} sender={sender} />
-              ) : (
-                <div class="comment">
-                  <p class="comment-body">{saved!.body}</p>
-                  <div class="comment-actions">
-                    <button class="copy" onClick={() => review.edit(at)}>
-                      edit
-                    </button>
-                    <button class="copy" onClick={() => review.remove([saved!])}>
-                      delete
-                    </button>
-                  </div>
-                </div>
-              )}
+              <CommentAt at={at} review={review} sender={sender} />
             </td>
           </tr>,
         ];
@@ -300,7 +306,7 @@ function CommentRows({ ats, review, sender, span }: { ats: (Comment | null)[]; r
 }
 
 /** Sends comments to the agent chosen, where they wait until it is free. */
-type Sender = {
+export type Sender = {
   agents: Reviewer[];
   target: Reviewer | null;
   pick: (id: string) => void;
@@ -312,9 +318,10 @@ type Sender = {
   send: (comments: Comment[]) => Promise<string | null>;
 };
 
-/** Returns what sends comments on wt, once it is read, to the agents working
- * in it, removing them from review once sent. */
-function useSender(review: Review, wt: HighlightedDiff | null, state: State | null): Sender {
+/** Returns what sends comments on wt, a worktree once it is read or a
+ * project, to the agents working in it, removing them from review once
+ * sent. */
+export function useSender(review: Review, wt: { dir: string; branch: string | null } | null, state: State | null): Sender {
   const agents = state?.controls && wt ? reviewers(state.projects, wt.dir) : [];
   const [picked, pick] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
@@ -340,7 +347,7 @@ function useSender(review: Review, wt: HighlightedDiff | null, state: State | nu
 
 /** Returns what the agent sent to is doing, kept current by state, from
  * the time it was sent to. */
-function SentNote({ sent, dismiss, state }: { sent: Reviewer; dismiss: () => void; state: State | null }) {
+export function SentNote({ sent, dismiss, state }: { sent: Reviewer; dismiss: () => void; state: State | null }) {
   const started = useRef(false);
   started.current ||= receiverStarted(state, sent.id);
   const [agent, text] = receiverStatus(state, sent.id, started.current);
@@ -371,12 +378,11 @@ function AgentPicker({ sender }: { sender: Sender }) {
 }
 
 /** Returns what sends every comment, and lists those whose lines changed,
- * to send as they are or drop. */
-function SendReview({ review, sender, files }: { review: Review; sender: Sender; files: FileDiff[] }) {
+ * moved, to send as they are or drop. */
+export function SendReview({ review, sender, moved }: { review: Review; sender: Sender; moved: Comment[] }) {
   const [error, setError] = useState<string | null>(null);
   const { target, agents } = sender;
   const count = review.comments.length;
-  const moved = displaced(review.comments, files);
   if (!count) return null;
   return (
     <div class="review-bar">
@@ -391,7 +397,7 @@ function SendReview({ review, sender, files }: { review: Review; sender: Sender;
       {moved.map((c) => (
         <div key={commentKey(c)} class="comment-moved">
           <span>
-            {c.path}:{c.line} isn't in the diff as shown: {c.body}
+            {c.path}:{c.line} isn't shown as it was: {c.body}
           </span>
           <button class="copy" onClick={() => review.remove([c])}>
             delete
@@ -710,7 +716,7 @@ export function WorktreeDiffView({ dir, query, state }: { dir: string; query: st
               </p>
             )}
             {!files.length && !wt.error && <p class="empty file-note">No changes.</p>}
-            <SendReview review={review} sender={sender} files={files} />
+            <SendReview review={review} sender={sender} moved={displaced(review.comments, files)} />
           </section>
           {shown.map((f) => {
             const original = fetched!.fileDiffs[files.indexOf(f)];

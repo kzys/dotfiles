@@ -139,6 +139,7 @@ function App() {
           <FileView
             dir={at.dir}
             name={at.name}
+            state={state}
             at={state?.projects.find((p) => p.dir === at.dir)?.files.find((f) => f.name === at.name)?.at ?? null}
           />
         ) : !state ? (
