@@ -8,7 +8,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { frontMatter } from "./frontmatter.ts";
-import { type Agent, AGENTS, newProject, quote } from "./launch.ts";
+import { type Agent, AGENTS, isProject, newProject, quote } from "./launch.ts";
 import { type CodexSession, codexContext, reportedRole, title, transcriptDir, transcripts } from "./sessions.ts";
 import type { Herdr, State } from "./state.ts";
 
@@ -106,7 +106,7 @@ export function choices(panes: PaneRecord[], projects: string, codex: CodexSessi
   const active = panes.filter((p) => AGENTS.includes(p.agent as Agent)).map((p) => p.cwd);
   const rows: Row[] = [["new", "", "", "+ new project"]];
   mkdirSync(projects, { recursive: true });
-  const dirs = readdirSync(projects).filter((name) => !name.startsWith(".") && isDir(join(projects, name))).map((name) => {
+  const dirs = readdirSync(projects).filter((name) => isProject(name) && isDir(join(projects, name))).map((name) => {
     const dir = join(projects, name);
     const text = readme(dir);
     const closed = Boolean(text && frontMatter(text, "closed"));

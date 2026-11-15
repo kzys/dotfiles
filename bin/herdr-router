@@ -1,10 +1,10 @@
 #!/bin/sh
 # herdr-router [args...] starts Claude as the router, which gives requests
-# to projects, passing it args. It works outside ~/project, so that it
-# isn't taken for one.
+# to projects, passing it args. It works in ~/project/_router: a name
+# starting with _ keeps it from being taken for a project.
 
 dotfiles=$(dirname "$(dirname "$(readlink -f "$0")")")
-dir=${XDG_STATE_HOME:-$HOME/.local/state}/herdr-router
+dir=$HOME/project/_router
 mkdir -p "$dir" && cd "$dir" || exit 1
 # In a herdr-core terminal, mark it as the router, for whatever looks for
 # one, and pin it to the top of the Herdr app's agent lists, until Claude

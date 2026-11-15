@@ -57,6 +57,7 @@ test("says when a project has no notes or title", () => {
   mkdirSync(join(root, "bare"));
   project(root, "untitled");
   mkdirSync(join(root, ".hidden"));
+  mkdirSync(join(root, "_router"));
   const rows = choices([], root, [], temp());
   assert.deepEqual(rows.slice(1).map((r) => r[3]), ["untitled  (no title)", "bare  (no notes)"]);
 });

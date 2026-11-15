@@ -33,6 +33,8 @@ test("finds the project holding a directory, through symlinks", () => {
   assert.equal(projectDir(join(root, "p/sub"), root), join(root, "p"));
   assert.equal(projectDir(root, root), null);
   assert.equal(projectDir(tmpdir(), root), null);
+  assert.equal(projectDir(join(root, "_router"), root), null);
+  assert.equal(projectDir(join(root, ".hidden/sub"), root), null);
 });
 
 test("starts new sessions outside a project in a new one", () => {

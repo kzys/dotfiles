@@ -34,12 +34,20 @@ const real = (path: string) => {
   }
 };
 
+/** Reports whether a directory named name, directly under the projects
+ * directory, is a project: those starting with . are hidden, and those
+ * starting with _ are kept for other uses, such as the router's. */
+export function isProject(name: string): boolean {
+  return !name.startsWith(".") && !name.startsWith("_");
+}
+
 /** Returns the project directory directly under projects that holds cwd,
  * or null if cwd isn't in one. Symlinks in either path don't matter. */
 export function projectDir(cwd: string, projects: string): string | null {
   const inside = relative(real(projects), real(cwd));
   if (!inside || inside.startsWith("..")) return null;
-  return join(projects, inside.split("/")[0]);
+  const name = inside.split("/")[0];
+  return isProject(name) ? join(projects, name) : null;
 }
 
 /** Returns where an agent started in cwd with argv runs, as the directory,
