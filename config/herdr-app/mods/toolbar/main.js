@@ -54,7 +54,7 @@ export default class Toolbar extends View {
 
   // What shows below the buttons while hovered.
   more(t) {
-    return div().text_size(11.5).text_color(t.dim).child("Nothing here yet");
+    return div().text_size(11.5).text_color(t.dim).child("Ctrl+Shift and a button's underlined letter does the same.");
   }
 
   render() {
