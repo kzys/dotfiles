@@ -69,6 +69,14 @@ merges into `~/.codex/config.toml`, preserving app settings. Run
 `./install_codex.py --config-only` to apply just preferences, and restart Codex
 to load them.
 
+## Herdr app
+
+`config/herdr-app` holds the Herdr app's `mine` layout, a copy of `main`
+with a toolbar at the top of the sidebar: Start sends what you type to the
+router, `herdr-router`, which gives it to an open project or starts a new
+one (see `ROUTER.md`); Projects and Inbox open `herdr-project-picker --app`,
+which opens rows in the app instead of Herdr.
+
 ## herdr-project-web
 
 One server, written in TypeScript, behind all of the above. `hp`, the picker,

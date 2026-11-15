@@ -1,0 +1,22 @@
+#!/bin/sh
+# herdr-router [args...] starts Claude as the router, which gives requests
+# to projects, passing it args. It works outside ~/project, so that it
+# isn't taken for one.
+
+dotfiles=$(dirname "$(dirname "$(readlink -f "$0")")")
+dir=${XDG_STATE_HOME:-$HOME/.local/state}/herdr-router
+mkdir -p "$dir" && cd "$dir" || exit 1
+# In a herdr-core terminal, mark it as the router, for whatever looks for
+# one, and pin it to the top of the Herdr app's agent lists, until Claude
+# exits and leaves the shell.
+if [ -n "${HC_TERMINAL_ID:-}" ]; then
+    hc label "$HC_TERMINAL_ID" role=router >/dev/null
+    herdr-app do terminal.pin --terminal "$HC_TERMINAL_ID" --pinned true >/dev/null 2>&1
+fi
+claude --append-system-prompt "$(sed "s|\$dotfiles|$dotfiles|g" "$dotfiles/ROUTER.md")" "$@"
+status=$?
+if [ -n "${HC_TERMINAL_ID:-}" ]; then
+    hc label "$HC_TERMINAL_ID" role= >/dev/null
+    herdr-app do terminal.pin --terminal "$HC_TERMINAL_ID" --pinned false >/dev/null 2>&1
+fi
+exit $status

@@ -1,6 +1,6 @@
 // The project picker: lists projects and their agents' sessions, or with
 // --inbox what waits on the user, from the server, and opens the row the
-// user picks. Typing filters the list. See picker.ts for the keys.
+// user picks, in the Herdr app with --app. Typing filters the list. See picker.ts for the keys.
 
 import { request } from "node:http";
 import { homedir } from "node:os";
@@ -87,10 +87,14 @@ function pick(rows: Row[]): Promise<[Row, string] | null> {
 
 async function main() {
   try {
-    const inbox = process.argv.includes("--inbox");
-    const rows: Row[] = JSON.parse(await ask("GET", `/picker${inbox ? "?inbox=1" : ""}`));
+    const query = new URLSearchParams();
+    if (process.argv.includes("--inbox")) query.set("inbox", "1");
+    // Open rows in the Herdr app rather than in Herdr.
+    const app = process.argv.includes("--app");
+    if (app) query.set("app", "1");
+    const rows: Row[] = JSON.parse(await ask("GET", `/picker${query.size ? `?${query}` : ""}`));
     const picked = await pick(rows);
-    if (picked) await ask("POST", "/picker/open", { row: picked[0], agent: picked[1] });
+    if (picked) await ask("POST", "/picker/open", { row: picked[0], agent: picked[1], app });
   } catch (e) {
     console.error(`herdr-project-picker: ${(e as Error).message}\nherdr-project --watch runs the server; see ~/.local/state/herdr-project/web.log.`);
     await waitForKey();

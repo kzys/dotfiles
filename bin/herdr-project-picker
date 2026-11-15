@@ -1,6 +1,7 @@
 #!/bin/sh
-# herdr-project-picker [--inbox] picks a project, a session or what waits
-# on the user, from the server, and opens it in Herdr.
+# herdr-project-picker [--inbox] [--app] picks a project, a session or
+# what waits on the user, from the server, and opens it in Herdr, or with
+# --app in the Herdr app.
 
 here=$(dirname "$(readlink -f "$0")")
 exec node --experimental-strip-types --disable-warning=ExperimentalWarning \
