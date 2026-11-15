@@ -28,6 +28,7 @@ import { type Checked, checkQueue } from "./queues.ts";
 import {
   codexTokens, lastPrompt, percent, resumedText, roleToReport, sessionCwd, sessionReport, statusLine, statusTokens, usageFile,
 } from "./report.ts";
+import { appOpener, appPanes } from "./herdr-app.ts";
 import { type OpenHerdr, background, choices, inboxChoices, open, paneRecords, plan, rowNotes, workspacesToName } from "./rows.ts";
 import { claudeSessionDirs, codexContext, codexSessionDirs, codexSessions, reportedRole } from "./sessions.ts";
 import * as slack from "./slack.ts";
@@ -647,7 +648,8 @@ async function socketRequest(req: IncomingMessage, res: ServerResponse, url: URL
   const path = url.pathname;
   // Now, not as last polled: going by old panes could resume a session
   // that already runs.
-  const panes = async () => paneRecords({ workspaces: [], panes: (await ask("pane.list")).panes });
+  // The Herdr app's, for a picker that opens rows there.
+  const panes = async (app = false) => app ? appPanes() : paneRecords({ workspaces: [], panes: (await ask("pane.list")).panes });
   if (req.method === "POST" && path === "/launch") {
     const body = await readBody(req);
     if (body === null) return void res.writeHead(413).end("arguments too long");
@@ -661,17 +663,18 @@ async function socketRequest(req: IncomingMessage, res: ServerResponse, url: URL
     if (url.searchParams.get("list") === "codex") json(res, 200, codexSessions());
     else json(res, 200, url.searchParams.get("agent") === "codex" ? codexSessionDirs(codexSessions()) : claudeSessionDirs());
   } else if (req.method === "GET" && path === "/picker") {
+    const app = url.searchParams.has("app");
     const rows = url.searchParams.has("inbox")
-      ? inboxChoices(await panes(), codexSessions(), JSON.parse(last))
-      : choices(await panes(), projectRoot, codexSessions());
+      ? inboxChoices(await panes(app), codexSessions(), JSON.parse(last))
+      : choices(await panes(app), projectRoot, codexSessions());
     json(res, 200, rows);
   } else if (req.method === "GET" && path === "/picker/notes") {
     const q = url.searchParams;
     res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" })
       .end(rowNotes(q.get("kind") ?? "", q.get("dir") ?? "", q.get("session") ?? ""));
   } else if (req.method === "POST" && path === "/picker/open") {
-    const { row, agent } = JSON.parse((await readBody(req)) ?? "{}");
-    await open(await plan(row, agent, await panes(), projectRoot, launcher, planDeps), openHerdr);
+    const { row, agent, app } = JSON.parse((await readBody(req)) ?? "{}");
+    await open(await plan(row, agent, await panes(app), projectRoot, launcher, planDeps), app ? appOpener() : openHerdr);
     res.writeHead(204).end();
   } else {
     res.writeHead(404).end();

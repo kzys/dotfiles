@@ -160,7 +160,9 @@ test("finds the project a pane works in", () => {
   assert.equal(projectDir(join(dir, "real/20261016-a/wt"), root), join(root, "20261016-a"));
   // Through the link, even where the worktree is gone.
   assert.equal(projectDir(join(root, "20261016-a/gone/deeper"), root), join(root, "20261016-a"));
-  assert.equal(projectDir(join(root, "..notes"), root), join(root, "..notes"));
+  // Inside root, though hidden, so not a project.
+  assert.equal(projectDir(join(root, "..notes"), root), null);
+  assert.equal(projectDir(join(root, "_router"), root), null);
   assert.equal(projectDir(root, root), null);
   assert.equal(projectDir(dir, root), null);
   assert.equal(projectDir("", root), null);

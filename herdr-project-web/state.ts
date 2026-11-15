@@ -6,6 +6,7 @@ import { homedir } from "node:os";
 import { join, relative } from "node:path";
 import { frontMatter } from "./frontmatter.ts";
 import { FULL_AT, type Item, projectItems, watchedItems } from "./inbox.ts";
+import { isProject } from "./launch.ts";
 import { isCheckout, lastSubject, worktreeDirs } from "./worktrees.ts";
 
 // A check of a pull request's latest commit.
@@ -150,11 +151,12 @@ function read(path: string): string | null {
 }
 
 /** Returns the project directories under root, newest name first, as
- * the ~/project convention dates them, skipping hidden ones. */
+ * the ~/project convention dates them, skipping those isProject doesn't
+ * take for one. */
 export function projectDirs(root: string): string[] {
   try {
     return readdirSync(root, { withFileTypes: true })
-      .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+      .filter((e) => e.isDirectory() && isProject(e.name))
       .map((e) => join(root, e.name))
       .sort()
       .reverse();

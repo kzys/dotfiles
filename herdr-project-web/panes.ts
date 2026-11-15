@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { realpathSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
 import { FULL_AT, type Item } from "./inbox.ts";
+import { isProject } from "./launch.ts";
 import { projectName } from "./owners.ts";
 import type { Herdr } from "./state.ts";
 import { loadState, saveState } from "./statefile.ts";
@@ -94,7 +95,8 @@ export function projectDir(cwd: string, root: string): string | null {
   if (!cwd) return null;
   const rel = relative(real(root), real(cwd));
   if (!rel || rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) return null;
-  return join(root, rel.split(sep)[0]);
+  const name = rel.split(sep)[0];
+  return isProject(name) ? join(root, name) : null;
 }
 
 /** Returns path with the symlinks in the part of it that exists
