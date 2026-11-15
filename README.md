@@ -77,6 +77,9 @@ router, `herdr-router`, which gives it to an open project or starts a new
 one (see `ROUTER.md`); Projects and Inbox open `herdr-project-picker --app`,
 which opens rows in the app instead of Herdr.
 
+The app doesn't notice edits made through those links, so after editing a
+mod here, switch layouts away and back (Ctrl+Shift+L) to reload it.
+
 ## herdr-project-web
 
 One server, written in TypeScript, behind all of the above. `hp`, the picker,
