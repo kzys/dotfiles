@@ -6,7 +6,8 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { promisify } from "node:util";
-import { type HookEvent, ancestors, hookDetail, hookPath, hookServer, listenOn, ownsPane } from "./hooks.ts";
+import { Hono } from "hono";
+import { type HookEvent, ancestors, hookDetail, hookServer, listenOn, ownsPane } from "./hooks.ts";
 
 const shim = join(import.meta.dirname, "../bin/agent-hook");
 
@@ -35,10 +36,15 @@ function send(socketPath: string, method: string, path: string, headers: object 
 
 const pane = { "X-Herdr-Pane": "w1:p1", "X-Agent-Pid": "1234" };
 
-test("reads a hook's agent and event from its path", () => {
-  assert.deepEqual(hookPath("/hooks/claude/SessionStart"), { agent: "claude", event: "SessionStart" });
-  assert.equal(hookPath("/hooks/nobody/SessionStart"), null);
-  assert.equal(hookPath("/hooks/claude"), null);
+test("reads a hook's agent and event from its path", async (t) => {
+  const { socketPath, latest, server } = await start();
+  t.after(() => server.close());
+  assert.equal((await send(socketPath, "POST", "/hooks/claude/SessionStart", pane, "{}"))[0], 204);
+  assert.equal(latest.get("w1:p1")?.event, "SessionStart");
+  for (const path of ["/hooks/nobody/SessionStart", "/hooks/claude", "/hooks/claude/Session-Start"]) {
+    assert.equal((await send(socketPath, "POST", path, pane, "{}"))[0], 404, path);
+  }
+  assert.equal((await send(socketPath, "GET", "/hooks/claude/SessionStart"))[0], 404);
 });
 
 test("background sessions don't own their pane", () => {
@@ -195,4 +201,14 @@ test("the shim succeeds with the server down, and outside Herdr", async () => {
     run.child.stdin!.end("{}");
     await run;
   }
+});
+
+test("a failing hook replies with nothing for the agent's context", async (t) => {
+  const socketPath = join(mkdtempSync(join(tmpdir(), "hk-")), "run/server.sock");
+  const app = new Hono();
+  app.onError((e, c) => c.text(e.message, 500));
+  const server = hookServer(new Map(), async () => ["claude"], async () => { throw new Error("ENOENT"); }, app);
+  t.after(() => server.close());
+  await listenOn(server, socketPath);
+  assert.deepEqual(await send(socketPath, "POST", "/hooks/claude/SessionStart", pane, "{}"), [500, ""]);
 });

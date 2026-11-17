@@ -4,19 +4,22 @@
 
 import { execFile } from "node:child_process";
 import { type FSWatcher, openSync, readFileSync, watch, writeFileSync, writeSync } from "node:fs";
-import { type IncomingMessage, type ServerResponse, createServer } from "node:http";
+import { createServer } from "node:http";
 import { homedir } from "node:os";
 import { dirname, extname, join, relative } from "node:path";
 import { promisify } from "node:util";
 import { build } from "esbuild";
+import { getRequestListener } from "@hono/node-server";
+import { Hono } from "hono";
+import { type SSEStreamingApi, streamSSE } from "hono/streaming";
 import {
-  type AgentActions, type AgentView, Outbox, agentPath, forgetAnswered, fromPage, handleAgent, permission, undelivered,
+  type AgentActions, type AgentView, Outbox, forgetAnswered, fromPage, permission, routeAgents, undelivered,
 } from "./agents.ts";
 import { HerdrEvents } from "./events.ts";
 import * as board from "./board.ts";
 import * as github from "./github.ts";
 import { HerdrError, request } from "./herdr.ts";
-import { type HookEvent, type HookHandler, hookServer, listenOn, readBody, speaker } from "./hooks.ts";
+import { type HookEvent, type HookHandler, hookServer, limit, listenOn, speaker } from "./hooks.ts";
 import { highlightDiff, highlightLines } from "./highlight.ts";
 import { frontMatter } from "./frontmatter.ts";
 import { agentCommand, instructions, launchDirectory, launchScript, parseAgent, projectDir } from "./launch.ts";
@@ -83,7 +86,7 @@ const assets: Record<string, [string, string | Uint8Array]> = {
 for (const f of bundle.outputFiles)
   assets[`/${relative(outdir, f.path)}`] = [types[extname(f.path)] ?? "application/octet-stream", f.contents];
 
-const clients = new Set<ServerResponse>();
+const clients = new Set<SSEStreamingApi>();
 let herdr: Herdr | null = null;
 // What the checks found, by title, once they have checked, shown in this
 // order.
@@ -334,7 +337,7 @@ function refresh() {
   }
   if (next === last) return;
   last = next;
-  for (const res of clients) res.write(`data: ${next}\n\n`);
+  for (const stream of clients) stream.writeSSE({ data: next }).catch(() => {});
 }
 const paneHerdr: PaneHerdr = {
   list: async () => (await ask("pane.list")).panes,
@@ -529,18 +532,14 @@ function listWorktrees(fresh: boolean): Promise<unknown[]> {
   return listing.projects;
 }
 
-function json(res: ServerResponse, status: number, body: unknown) {
-  res.writeHead(status, { "Content-Type": "application/json" }).end(JSON.stringify(body));
-}
-
 // Other names for this address come from DNS rebinding, which would let
 // any site read the page.
 const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
 
-/** Sets the base the request asks for, of a worktree the page lists, and
- * returns the status to answer with. */
-async function setBaseFrom(req: IncomingMessage): Promise<number> {
-  const { dir, branch, base } = JSON.parse((await readBody(req)) ?? "{}");
+/** Sets the base that body, a request's, asks for, of a worktree the page
+ * lists, and returns the status to answer with. */
+async function setBaseFrom(body: string | null): Promise<number> {
+  const { dir, branch, base } = JSON.parse(body ?? "{}");
   if (!projectWorktrees().some((p) => p.worktrees.includes(dir))) return 404;
   if (typeof branch !== "string" || !(base === null || typeof base === "string")) return 400;
   if (!(await setBase(dir, branch, base))) return 409;
@@ -606,11 +605,11 @@ function saveMoves(next: board.Moves) {
   }
 }
 
-/** Moves the open pull request req names to the column it asks for, one
- * of board.MOVABLE, or undoes its move for null, returning the HTTP
- * status. */
-async function setStageFrom(req: IncomingMessage): Promise<number> {
-  const { url, stage } = JSON.parse((await readBody(req)) ?? "{}");
+/** Moves the open pull request that body, a request's, names to the
+ * column it asks for, one of board.MOVABLE, or undoes its move for null,
+ * returning the HTTP status. */
+async function setStageFrom(body: string | null): Promise<number> {
+  const { url, stage } = JSON.parse(body ?? "{}");
   if (!(stage === null || board.MOVABLE.includes(stage))) return 400;
   if (!prPulls.some((p) => p.url === url && p.state === "OPEN")) return 404;
   const next = { ...moves };
@@ -632,74 +631,59 @@ const agentActions: AgentActions = {
   },
 };
 
-const server = createServer((req, res) => {
-  const url = new URL(req.url ?? "/", "http://localhost");
-  const path = url.pathname;
-  const agent = agentPath(path);
-  if (!hosts.has(req.headers.host ?? "")) {
-    res.writeHead(403).end();
-  } else if (path === "/api/base") {
-    if (req.method !== "POST" || !fromPage(req.headers, hosts)) res.writeHead(403).end();
-    else setBaseFrom(req).then((status) => res.writeHead(status).end(), (e) => json(res, 500, { error: e.message }));
-  } else if (path === "/api/stage") {
-    if (req.method !== "POST" || !orgs || !fromPage(req.headers, hosts)) res.writeHead(403).end();
-    else setStageFrom(req).then((status) => res.writeHead(status).end(), (e) => json(res, 500, { error: e.message }));
-  } else if (agent) {
-    // Only the watcher's server, which delivers them, and only the page.
-    if (!orgs || !fromPage(req.headers, hosts)) res.writeHead(403).end();
-    else handleAgent(req, res, agent, agentActions).catch((e) => json(res, 500, { error: e.message }));
-  } else if (path === "/api/state") {
-    res.writeHead(200, { "Content-Type": "application/json" }).end(last);
-  } else if (path === "/api/version") {
-    json(res, 200, { version, pid: process.pid });
-  } else if (path === "/api/events") {
-    res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" });
-    res.write(`event: version\ndata: ${JSON.stringify(version)}\n\n`);
-    res.write(`data: ${last}\n\n`);
-    clients.add(res);
-    req.on("close", () => clients.delete(res));
-  } else if (path === "/api/worktrees") {
-    listWorktrees(url.searchParams.has("fresh"))
-      .then((projects) => json(res, 200, projects))
-      .catch((e) => json(res, 500, { error: e.message }));
-  } else if (path === "/api/diff") {
-    // Only the worktrees the page lists, not any directory asked for.
-    const dir = url.searchParams.get("dir");
-    if (!projectWorktrees().some((p) => p.worktrees.includes(dir ?? ""))) json(res, 404, { error: "no such worktree" });
-    else
-      worktreeDiff(dir!, pullBases)
-        .then(highlightDiff)
-        .then((diff) => json(res, 200, diff))
-        .catch((e) => json(res, 500, { error: e.message }));
-  } else if (path === "/api/lines") {
-    // More context for a diff: only the worktrees the page lists, like it.
-    const q = url.searchParams;
-    const dir = q.get("dir");
-    const path = q.get("path") ?? "";
-    const listed = projectWorktrees().some((p) => p.worktrees.includes(dir ?? ""));
-    // Newer lines would pass for unchanged ones in the diff taken then.
-    if (listed && changedSince(dir!, path, Number(q.get("at")))) return void json(res, 409, { error: "the file changed" });
-    const lines = listed ? fileLines(dir!, path, Number(q.get("from")), Number(q.get("to"))) : null;
-    if (lines === null) json(res, 404, { error: "no such file" });
-    else highlightLines(q.get("path")!, lines).then((tokens) => json(res, 200, tokens));
-  } else if (path === "/api/file") {
-    // Only the files of the projects the page lists, not any file asked for.
-    const dir = url.searchParams.get("dir");
-    const file = openProjects(projectRoot, herdr).some(([d]) => d === dir)
-      ? readProjectFile(dir!, url.searchParams.get("name") ?? "")
-      : null;
-    if (file === null) json(res, 404, { error: "no such file" });
-    else json(res, 200, file);
-  } else if (path === "/api/learnings") {
-    // They are small and change rarely, so they are read each time.
-    json(res, 200, readLearnings(reposRoot));
-  } else if (assets[path]) {
-    const [type, body] = assets[path];
-    res.writeHead(200, { "Content-Type": type }).end(body);
-  } else {
-    res.writeHead(404).end();
+/** Returns the reply to a request that changed something, with status. */
+const done = (status: number) => new Response(null, { status });
+
+const page = new Hono();
+page.use(async (c, next) => (hosts.has(c.req.header("host") ?? "") ? next() : c.body(null, 403)));
+page.onError((e, c) => c.json({ error: e.message }, 500));
+page.post("/api/base", limit(), async (c) => done(fromPage(c.req.raw.headers, hosts) ? await setBaseFrom(await c.req.text()) : 403));
+page.post("/api/stage", limit(), async (c) => done(orgs && fromPage(c.req.raw.headers, hosts) ? await setStageFrom(await c.req.text()) : 403));
+// Only the watcher's server, which delivers them, and only the page.
+routeAgents(page, agentActions, (headers) => !!orgs && fromPage(headers, hosts));
+page.get("/api/state", (c) => c.body(last, 200, { "Content-Type": "application/json" }));
+page.get("/api/version", (c) => c.json({ version, pid: process.pid }));
+page.get("/api/events", (c) => streamSSE(c, async (stream) => {
+  const closed = new Promise<void>((resolve) => (stream.aborted ? resolve() : stream.onAbort(resolve)));
+  // Queued in order, and with the client added at once, so that no update
+  // comes before them or is missed.
+  for (const message of [{ event: "version", data: JSON.stringify(version) }, { data: last }]) {
+    stream.writeSSE(message).catch(() => {});
   }
+  clients.add(stream);
+  await closed;
+  clients.delete(stream);
+}));
+page.get("/api/worktrees", async (c) => c.json(await listWorktrees(c.req.query("fresh") !== undefined)));
+page.get("/api/diff", async (c) => {
+  // Only the worktrees the page lists, not any directory asked for.
+  const dir = c.req.query("dir") ?? "";
+  if (!projectWorktrees().some((p) => p.worktrees.includes(dir))) return c.json({ error: "no such worktree" }, 404);
+  return c.json(await highlightDiff(await worktreeDiff(dir, pullBases)));
 });
+page.get("/api/lines", async (c) => {
+  // More context for a diff: only the worktrees the page lists, like it.
+  const dir = c.req.query("dir") ?? "";
+  const path = c.req.query("path") ?? "";
+  const listed = projectWorktrees().some((p) => p.worktrees.includes(dir));
+  // Newer lines would pass for unchanged ones in the diff taken then.
+  if (listed && changedSince(dir, path, Number(c.req.query("at")))) return c.json({ error: "the file changed" }, 409);
+  const lines = listed ? fileLines(dir, path, Number(c.req.query("from")), Number(c.req.query("to"))) : null;
+  return lines === null ? c.json({ error: "no such file" }, 404) : c.json(await highlightLines(path, lines));
+});
+page.get("/api/file", (c) => {
+  // Only the files of the projects the page lists, not any file asked for.
+  const dir = c.req.query("dir");
+  const file = openProjects(projectRoot, herdr).some(([d]) => d === dir)
+    ? readProjectFile(dir!, c.req.query("name") ?? "")
+    : null;
+  return file === null ? c.json({ error: "no such file" }, 404) : c.json(file);
+});
+// They are small and change rarely, so they are read each time.
+page.get("/api/learnings", (c) => c.json(readLearnings(reposRoot)));
+for (const [path, [type, body]] of Object.entries(assets)) page.get(path, (c) => c.body(body, 200, { "Content-Type": type }));
+
+const server = createServer(getRequestListener(page.fetch));
 
 // Only this machine: the page shows private work.
 server.listen(port, "127.0.0.1", () => console.log(`herdr-project-web on http://127.0.0.1:${port}/`));
@@ -867,48 +851,40 @@ const onHook: HookHandler = async (pane, { agent, event }, data) => {
   return dir ? resumedText(instructions(dir, dotfiles, new Date())) : "";
 };
 
-/** Serves what herdr-project and the picker ask for on the socket. */
-async function socketRequest(req: IncomingMessage, res: ServerResponse, url: URL) {
-  const path = url.pathname;
-  // Now, not as last polled: going by old panes could resume a session
-  // that already runs.
-  // The Herdr app's, for a picker that opens rows there.
-  const panes = async (app = false) => app ? appPanes() : paneRecords({ workspaces: [], panes: (await ask("pane.list")).panes });
-  if (req.method === "POST" && path === "/launch") {
-    const body = await readBody(req);
-    if (body === null) return void res.writeHead(413).end("arguments too long");
-    const script = launch(new URLSearchParams(body));
-    res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" }).end(script);
-  } else if (req.method === "POST" && path === "/statusline") {
-    const line = statusReport(JSON.parse((await readBody(req)) ?? "{}"), await speaker(req));
-    res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" }).end(line);
-  } else if (req.method === "GET" && path === "/sessions") {
-    // Codex's, with what opening one needs, or the directories they ran in.
-    if (url.searchParams.get("list") === "codex") json(res, 200, codexSessions());
-    else json(res, 200, url.searchParams.get("agent") === "codex" ? codexSessionDirs(codexSessions()) : claudeSessionDirs());
-  } else if (req.method === "GET" && path === "/picker") {
-    const app = url.searchParams.has("app");
-    const rows = url.searchParams.has("inbox")
-      ? inboxChoices(await panes(app), codexSessions(), JSON.parse(last))
-      : choices(await panes(app), projectRoot, codexSessions());
-    json(res, 200, rows);
-  } else if (req.method === "GET" && path === "/picker/notes") {
-    const q = url.searchParams;
-    res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" })
-      .end(rowNotes(q.get("kind") ?? "", q.get("dir") ?? "", q.get("session") ?? ""));
-  } else if (req.method === "POST" && path === "/picker/open") {
-    const { row, agent, app } = JSON.parse((await readBody(req)) ?? "{}");
-    await open(await plan(row, agent, await panes(app), projectRoot, launcher, planDeps), app ? appOpener() : openHerdr);
-    res.writeHead(204).end();
-  } else {
-    res.writeHead(404).end();
-  }
-}
+// Now, not as last polled: going by old panes could resume a session
+// that already runs. The Herdr app's, for a picker that opens rows there.
+const panes = async (app = false) => app ? appPanes() : paneRecords({ workspaces: [], panes: (await ask("pane.list")).panes });
+
+// What herdr-project and the picker ask for on the socket.
+const socket = new Hono();
+socket.onError((e, c) => c.text(e.message, 500));
+socket.post("/launch", limit((c) => c.text("arguments too long", 413)), async (c) =>
+  c.text(launch(new URLSearchParams(await c.req.text())))
+);
+socket.post("/statusline", limit(), async (c) =>
+  c.text(statusReport(JSON.parse((await c.req.text()) || "{}"), await speaker(c.req.raw.headers)))
+);
+socket.get("/sessions", (c) =>
+  // Codex's, with what opening one needs, or the directories they ran in.
+  c.req.query("list") === "codex"
+    ? c.json(codexSessions())
+    : c.json(c.req.query("agent") === "codex" ? codexSessionDirs(codexSessions()) : claudeSessionDirs())
+);
+socket.get("/picker", async (c) => {
+  const app = c.req.query("app") !== undefined;
+  return c.json(c.req.query("inbox") !== undefined
+    ? inboxChoices(await panes(app), codexSessions(), JSON.parse(last))
+    : choices(await panes(app), projectRoot, codexSessions()));
+});
+socket.get("/picker/notes", (c) => c.text(rowNotes(c.req.query("kind") ?? "", c.req.query("dir") ?? "", c.req.query("session") ?? "")));
+socket.post("/picker/open", limit(), async (c) => {
+  const { row, agent, app } = JSON.parse((await c.req.text()) || "{}");
+  await open(await plan(row, agent, await panes(app), projectRoot, launcher, planDeps), app ? appOpener() : openHerdr);
+  return c.body(null, 204);
+});
 
 // Only the watcher's server: hooks reach one server, like the checks.
 if (orgs) {
-  const hookListener = hookServer(hookEvents, undefined, onHook, (req, res, url) => {
-    socketRequest(req, res, url).catch((e) => res.writeHead(500).end(String(e.message)));
-  });
+  const hookListener = hookServer(hookEvents, undefined, onHook, socket);
   await listenOn(hookListener, join(stateDir, "run/server.sock"));
 }

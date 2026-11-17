@@ -2,8 +2,9 @@
 // agent is idle, since text typed at a prompt could answer it. Prompts are
 // shown, not answered: keys sent to one can't be tied to what it asks.
 
-import type { IncomingMessage, ServerResponse } from "node:http";
-import { type HookEvent, readBody } from "./hooks.ts";
+import { Hono } from "hono";
+import { createMiddleware } from "hono/factory";
+import { type HookEvent, limit } from "./hooks.ts";
 import { loadState, saveState } from "./statefile.ts";
 
 // A message, for the session in its pane when it was written, if known: a
@@ -128,10 +129,10 @@ export function forgetAnswered(latest: Map<string, HookEvent>, before: Record<st
 /** Reports whether a request with these headers comes from the page
  * itself, at one of hosts. Browsers set Origin on every POST, so another
  * site can't pass as the page. */
-export function fromPage(headers: IncomingMessage["headers"], hosts: Set<string>): boolean {
-  const origin = headers.origin ?? "";
+export function fromPage(headers: Headers, hosts: Set<string>): boolean {
+  const origin = headers.get("origin") ?? "";
   return origin.startsWith("http://") && hosts.has(origin.slice("http://".length))
-    && headers["content-type"] === "application/json";
+    && headers.get("content-type") === "application/json";
 }
 
 export type AgentActions = {
@@ -145,51 +146,42 @@ export type AgentActions = {
   changed: () => void;
 };
 
-/** Returns the pane and action of a request's path under /api/agents,
- * with the id of a message if it names one, or null if it isn't one. */
-export function agentPath(path: string): { pane: string; action: string; id?: string } | null {
-  const m = /^\/api\/agents\/([^/]+)\/(messages|focus)(?:\/([^/]+))?$/.exec(path);
-  if (!m) return null;
-  try {
-    return { pane: decodeURIComponent(m[1]), action: m[2], ...(m[3] ? { id: decodeURIComponent(m[3]) } : {}) };
-  } catch {
-    return null;
-  }
-}
+/** Adds to app the requests to act on an agent, under /api/agents. Those
+ * that allowed refuses get 403. */
+export function routeAgents(app: Hono, actions: AgentActions, allowed: (headers: Headers) => boolean = () => true) {
+  const agents = new Hono();
+  agents.use(async (c, next) => (allowed(c.req.raw.headers) ? next() : c.body(null, 403)));
+  // Only the agents in panes that have one.
+  const known = createMiddleware(async (c, next) =>
+    actions.known(c.req.param("pane")!) ? next() : c.json({ error: "no such agent" }, 404)
+  );
 
-/** Handles a request to act on an agent, already known to come from the
- * page, as agentPath parsed it. */
-export async function handleAgent(
-  req: IncomingMessage,
-  res: ServerResponse,
-  { pane, action, id }: { pane: string; action: string; id?: string },
-  actions: AgentActions,
-) {
-  const reply = (status: number, error?: string) => {
-    if (error) res.writeHead(status, { "Content-Type": "application/json" }).end(JSON.stringify({ error }));
-    else res.writeHead(status).end();
-  };
-  const raw = await readBody(req);
-  if (raw === null) return reply(413, "too large");
-  let body: { text?: unknown };
-  try {
-    body = raw ? JSON.parse(raw) : {};
-  } catch {
-    return reply(400, "not JSON");
-  }
-  if (req.method === "DELETE" && action === "messages" && id) {
-    if (!actions.outbox.cancel(pane, id)) return reply(404, "already sent");
+  // Queues {text} for the agent in pane.
+  agents.post("/:pane/messages", limit((c) => c.json({ error: "too large" }, 413)), known, async (c) => {
+    const pane = c.req.param("pane");
+    let text: unknown;
+    try {
+      ({ text } = JSON.parse((await c.req.text()) || "{}"));
+    } catch {
+      return c.json({ error: "not JSON" }, 400);
+    }
+    if (typeof text !== "string" || !text.trim()) return c.json({ error: "no text" }, 400);
+    actions.outbox.add(pane, text.trim(), actions.session(pane));
     actions.changed();
-    return reply(204);
-  }
-  if (req.method !== "POST" || id) return reply(404, "no such action");
-  if (!actions.known(pane)) return reply(404, "no such agent");
-  if (action === "messages") {
-    if (typeof body.text !== "string" || !body.text.trim()) return reply(400, "no text");
-    actions.outbox.add(pane, body.text.trim(), actions.session(pane));
+    return c.body(null, 204);
+  });
+
+  // Cancels a queued message, even for a pane that is gone.
+  agents.delete("/:pane/messages/:id", (c) => {
+    if (!actions.outbox.cancel(c.req.param("pane"), c.req.param("id"))) return c.json({ error: "already sent" }, 404);
     actions.changed();
-    return reply(204);
-  }
-  await actions.focus(pane);
-  return reply(204);
+    return c.body(null, 204);
+  });
+
+  agents.post("/:pane/focus", known, async (c) => {
+    await actions.focus(c.req.param("pane"));
+    return c.body(null, 204);
+  });
+
+  app.route("/api/agents", agents);
 }
