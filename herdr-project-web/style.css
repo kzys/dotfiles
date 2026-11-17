@@ -590,3 +590,27 @@ code { font-family: var(--mono); font-size: var(--normal); }
 .waiting { color: var(--amber); }
 .waits { flex-basis: 100%; display: grid; gap: var(--space-2); font-size: var(--normal); color: var(--amber); }
 .wait code { color: var(--muted); overflow-wrap: anywhere; }
+
+/* The board of pull requests. */
+main.board { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-5); }
+@media (max-width: 900px) { main.board { grid-template-columns: minmax(0, 1fr); } }
+.board-column > ul { margin: 0; padding: 0; list-style: none; }
+.board-card {
+  margin-bottom: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  overflow-wrap: anywhere;
+}
+.board-review {
+  font: inherit;
+  font-size: var(--small);
+  padding: 1px var(--space-3);
+  color: var(--fg);
+  background: var(--well);
+  border: 1px solid var(--panel-edge);
+  cursor: pointer;
+}
+.board-review:hover { color: var(--accent); border-color: currentColor; }
+.board-review:disabled { opacity: 0.5; cursor: default; }

@@ -142,6 +142,8 @@ export type State = {
   // What each agent pane in Herdr is doing, like working or idle, by id,
   // or null if Herdr couldn't be asked.
   agents: Record<string, string> | null;
+  // The board of the user's pull requests, from the watcher's server.
+  board?: import("./board.ts").Card[];
 };
 
 function read(path: string): string | null {

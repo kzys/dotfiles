@@ -6,6 +6,7 @@ import { FileView } from "./files.tsx";
 import { halMessage } from "./hal.ts";
 import { LearningsView } from "./learnings.tsx";
 import { pageTitle, route, tab } from "./pages.ts";
+import { BoardView } from "./board.tsx";
 import { ProjectList, ProjectView, ProjectsColumn, pressing } from "./projects.tsx";
 import type { State } from "./state.ts";
 import { Links } from "./ui.tsx";
@@ -31,6 +32,7 @@ function Readout({ text }: { text: string }) {
 // The tabs of the console strip, each with its link.
 const TABS = [
   ["inbox", "#", "Inbox"],
+  ["pulls", "#pulls", "Pulls"],
   ["projects", "#projects", "Projects"],
   ["worktrees", "#diffs", "Worktrees"],
   ["learnings", "#learnings", "Learnings"],
@@ -144,6 +146,8 @@ function App() {
           />
         ) : !state ? (
           <p class="empty">Loading…</p>
+        ) : at.view === "pulls" ? (
+          <BoardView state={state} query={q} />
         ) : at.view === "projects" ? (
           <ProjectList state={state} query={q} />
         ) : (

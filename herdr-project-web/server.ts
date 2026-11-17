@@ -13,6 +13,7 @@ import {
   type AgentActions, type AgentView, Outbox, agentPath, forgetAnswered, fromPage, handleAgent, permission, undelivered,
 } from "./agents.ts";
 import { HerdrEvents } from "./events.ts";
+import * as board from "./board.ts";
 import * as github from "./github.ts";
 import { HerdrError, request } from "./herdr.ts";
 import { type HookEvent, type HookHandler, hookServer, listenOn, readBody, speaker } from "./hooks.ts";
@@ -22,7 +23,7 @@ import { agentCommand, instructions, launchDirectory, launchScript, parseAgent, 
 import { readLearnings } from "./learnings.ts";
 import { connectors } from "./headless.ts";
 import * as linear from "./linear.ts";
-import { type Owner, notesTexts } from "./owners.ts";
+import { type Owner, notesTexts, projectName } from "./owners.ts";
 import { type PaneHerdr, checkPanes } from "./panes.ts";
 import { type Checked, checkQueue } from "./queues.ts";
 import {
@@ -94,6 +95,13 @@ let prUrls: string[] = [];
 // What open pull requests merge into, as last found.
 let pullBases: PullBases = {};
 const prOwners: Record<string, Owner | null> = {};
+// The user's pull requests as last found, the names of their projects by
+// directory, and the URLs of those the user marked reviewed.
+let prPulls: github.Pull[] = [];
+let prNames: Record<string, string> = {};
+const reviewedPath = join(stateDir, "reviewed.json");
+const loadedReviewed = loadState(reviewedPath);
+let reviewed = new Set<string>(Array.isArray(loadedReviewed) ? loadedReviewed : []);
 // Each pane's last hook event.
 const hookEvents = new Map<string, HookEvent>();
 // The terminals of the Herdr app's spaces, which herdr-core runs, as
@@ -156,7 +164,8 @@ function pageState() {
   const state = readState(watched(), projectRoot, all, home, links);
   for (const project of state.projects)
     for (const pane of project.panes) pane.waits = (sessions[pane.id] && waits.get(sessions[pane.id])) || [];
-  return { ...state, ...(orgs ? { controls: agentViews(), undelivered: left } : {}) };
+  const cards = board.cards(prPulls, prOwners, (d) => prNames[d] ?? d, reviewed, new Date());
+  return { ...state, ...(orgs ? { controls: agentViews(), undelivered: left, board: cards } : {}) };
 }
 
 /** Sends agents that are free what waits for them. */
@@ -401,9 +410,13 @@ async function checkPullRequests() {
   let items = found.get(title)?.items ?? [];
   try {
     let owners: Record<string, Owner | null>;
-    ({ lines, rows, items, owners, urls: prUrls, bases: pullBases } = await github.poll(
+    ({ lines, rows, items, owners, urls: prUrls, bases: pullBases, pulls: prPulls } = await github.poll(
       prHerdr, projectRoot, join(stateDir, "pull-requests.json"), orgs!));
     Object.assign(prOwners, owners);
+    const dirs = Object.values(owners).flatMap((o) => (o ? [o.project] : []));
+    prNames = Object.fromEntries(dirs.map((d) => [d, projectName(d)]));
+    const kept = board.stillReviewed(reviewed, prUrls);
+    if (kept.length !== reviewed.size) saveReviewed(new Set(kept));
   } catch (e) {
     lines = [`Cannot check pull requests: ${String(e).split("\n")[0]}`];
   }
@@ -517,6 +530,30 @@ async function setBaseFrom(req: IncomingMessage): Promise<number> {
   return 204;
 }
 
+/** Keeps urls as the pull requests the user marked reviewed. */
+function saveReviewed(urls: Set<string>) {
+  reviewed = urls;
+  try {
+    saveState(reviewedPath, [...urls]);
+  } catch (e) {
+    console.error("herdr-project-web:", e);
+  }
+}
+
+/** Marks the open pull request req names reviewed or not, as it asks,
+ * returning the HTTP status. */
+async function setReviewedFrom(req: IncomingMessage): Promise<number> {
+  const { url, reviewed: on } = JSON.parse((await readBody(req)) ?? "{}");
+  if (typeof on !== "boolean") return 400;
+  if (!prPulls.some((p) => p.url === url && p.state === "OPEN")) return 404;
+  const next = new Set(reviewed);
+  if (on) next.add(url);
+  else next.delete(url);
+  saveReviewed(next);
+  refresh();
+  return 204;
+}
+
 const agentActions: AgentActions = {
   outbox,
   known: (pane) => Object.hasOwn(agentStates(everyPane()) ?? {}, pane),
@@ -537,6 +574,9 @@ const server = createServer((req, res) => {
   } else if (path === "/api/base") {
     if (req.method !== "POST" || !fromPage(req.headers, hosts)) res.writeHead(403).end();
     else setBaseFrom(req).then((status) => res.writeHead(status).end(), (e) => json(res, 500, { error: e.message }));
+  } else if (path === "/api/reviewed") {
+    if (req.method !== "POST" || !orgs || !fromPage(req.headers, hosts)) res.writeHead(403).end();
+    else setReviewedFrom(req).then((status) => res.writeHead(status).end(), (e) => json(res, 500, { error: e.message }));
   } else if (agent) {
     // Only the watcher's server, which delivers them, and only the page.
     if (!orgs || !fromPage(req.headers, hosts)) res.writeHead(403).end();
