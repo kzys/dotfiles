@@ -56,11 +56,15 @@ export function appPaneRecords(terminals: any[], sessions: Map<number, string>):
 
 /** Returns herdr-core's live terminals on this machine, each as hc get
  * describes it with the agent hc ls reports. A terminal that ends while
- * this reads it is left out. */
-export async function appTerminals(run: Json = json): Promise<any[]> {
+ * this reads it is left out, or, if all, raises instead, so that a
+ * terminal missing from the list surely isn't there. */
+export async function appTerminals(run: Json = json, all = false): Promise<any[]> {
   const listed: any[] = (await run("hc", ["ls", "--json"])).terminals;
   const terminals = await Promise.all(listed.map((t) =>
-    run("hc", ["get", t.address, "--json"]).then((got) => ({ ...got, agent: t.agent }), () => null)));
+    run("hc", ["get", t.address, "--json"]).then((got) => ({ ...got, agent: t.agent }), (e) => {
+      if (all) throw e;
+      return null;
+    })));
   return terminals.filter((t) => t);
 }
 
@@ -100,6 +104,28 @@ export function appAgentFree(terminal: any): boolean {
 export type AppCommand = (name: string, args: object) => Promise<any>;
 
 const appCommand: AppCommand = (name, args) => json("herdr-app", ["do", name, JSON.stringify(args)]);
+
+/** Returns the address of the router among terminals, as appTerminals
+ * reads them: the live terminal labeled role=router that still runs
+ * herdr-router or Claude, which herdr-router runs in front, or null. */
+export function routerAddress(terminals: any[]): string | null {
+  const runs = (a: string) => a === "claude" || a === "herdr-router" || a.endsWith("/herdr-router");
+  const t = terminals.find((t) => t?.state === "live" && t.labels?.role === "router" && t.foreground?.argv?.some(runs));
+  return t?.address ?? null;
+}
+
+/** Gives text to the router among terminals with send, or starts a
+ * router in a new space with text as its task, with command. terminals
+ * must be all of them, or a second router could start. */
+export async function toRouter(
+  text: string, terminals: any[], send: (address: string, text: string) => Promise<unknown>,
+  command: AppCommand = appCommand,
+): Promise<void> {
+  const address = routerAddress(terminals);
+  // herdr-router moves to its own folder.
+  if (address) await send(address, text);
+  else await command("space.new", { name: "ROUTER", folder: homedir(), argv: ["herdr-router"], task: text, machine: "" });
+}
 
 /** Returns how open opens rows in the Herdr app, with command running its
  * commands. The app starts a terminal with its program rather than typing

@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { appAgentFree, appHerdrPanes, appOpener, appPaneRecords, appPanes, claudeSessions } from "./herdr-app.ts";
+import { appAgentFree, appHerdrPanes, appOpener, appPaneRecords, appPanes, appTerminals, claudeSessions, routerAddress, toRouter } from "./herdr-app.ts";
 import { open } from "./rows.ts";
 
 const terminal = (o: object) => ({
@@ -59,6 +59,8 @@ test("leaves out terminals that end while it reads them", async () => {
     return terminal({ agent: undefined });
   };
   assert.deepEqual((await appPanes(run, new Map())).map((p) => [p.pane, p.agent]), [["t1", "claude"]]);
+  // Asked for all of them, it can't say which is missing.
+  await assert.rejects(appTerminals(run, true), { message: "gone" });
 });
 
 test("opens rows with the app's commands", async () => {
@@ -73,4 +75,24 @@ test("opens rows with the app's commands", async () => {
   ]);
   assert.equal(ran[2][0], "space.new");
   assert.deepEqual((ran[2][1] as any).argv, ["sh", "-c", "hp"]);
+});
+
+test("gives text to the router, or starts one", async () => {
+  const router = { address: "t2", state: "live", labels: { role: "router" }, foreground: { argv: ["claude", "--x"] } };
+  const terminals = [
+    { address: "t1", state: "live", labels: { role: "router" }, foreground: { argv: ["zsh"] } },
+    { ...router, state: "exited" },
+    router,
+  ];
+  assert.equal(routerAddress(terminals), "t2");
+  assert.equal(routerAddress([{ ...router, foreground: { argv: ["/home/me/bin/herdr-router"] } }]), "t2");
+  const calls: unknown[][] = [];
+  const send = async (...args: unknown[]) => void calls.push(["send", ...args]);
+  const command = async (...args: unknown[]) => void calls.push(["command", ...args]);
+  await toRouter("hello", terminals, send, command);
+  await toRouter("hello", terminals.slice(0, 2), send, command);
+  assert.deepEqual(calls, [
+    ["send", "t2", "hello"],
+    ["command", "space.new", { name: "ROUTER", folder: homedir(), argv: ["herdr-router"], task: "hello", machine: "" }],
+  ]);
 });

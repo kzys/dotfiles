@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import {
   type PollHerdr, agentPane, checkoutPanes, copilotReview, events, fetch, owner, poll, pullRequests, remember,
-  repoName, runs, screen, searchQuery, waitingItems, wakeMessage, worktrees, pullBases, type Pull,
+  repoName, requestCopilot, runs, screen, searchQuery, waitingItems, wakeMessage, worktrees, pullBases, type Pull,
 } from "./github.ts";
 import { notesTexts } from "./owners.ts";
 import type { HerdrPane } from "./panes.ts";
@@ -226,6 +226,17 @@ test("shows why gh failed", async () => {
   writeFileSync(gh, '#!/bin/sh\necho "HTTP 502: Bad Gateway" >&2\nexit 1\n');
   chmodSync(gh, 0o755);
   await assert.rejects(fetch(gh), { message: "HTTP 502: Bad Gateway" });
+});
+
+test("asks Copilot to review with gh", async () => {
+  const dir = tmp();
+  const gh = join(dir, "gh");
+  writeFileSync(gh, `#!/bin/sh\necho "$@" > ${join(dir, "args")}\n`);
+  chmodSync(gh, 0o755);
+  await requestCopilot("https://github.com/org/app/pull/1", gh);
+  assert.equal(readFileSync(join(dir, "args"), "utf8"), "pr edit https://github.com/org/app/pull/1 --add-reviewer @copilot\n");
+  writeFileSync(gh, '#!/bin/sh\necho "no Copilot here" >&2\nexit 1\n');
+  await assert.rejects(requestCopilot("https://github.com/org/app/pull/1", gh), { message: "no Copilot here" });
 });
 
 test("keeps what gh could read when the rest is forbidden", async () => {

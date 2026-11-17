@@ -1,7 +1,7 @@
 // The page's board of the user's pull requests.
 
 import { useState } from "preact/hooks";
-import { type Card, STAGES } from "./board.ts";
+import { type Card, STAGES, type Stage, moveTo } from "./board.ts";
 import { projectHref } from "./pages.ts";
 import type { State } from "./state.ts";
 import { matches } from "./ui.tsx";
@@ -12,19 +12,29 @@ const COPILOT: Record<Card["copilot"], string> = {
   passed: "Copilot passed",
 };
 
-/** Returns the button that marks card reviewed by the user, or unmarks
- * it. */
-function ReviewButton({ card }: { card: Card }) {
+/** Returns what the draft card says of Copilot's review. */
+function copilotNote(card: Card): string {
+  if (card.copilot !== "none" || !card.copilotAsk) return COPILOT[card.copilot];
+  return card.copilotAsk === "requested" ? "Copilot review requested" : `Copilot request failed: ${card.copilotAsk}`;
+}
+
+/** Returns the buttons that move card to the next column and, if the
+ * user moved it there, back, as far as moveTo lets the user. */
+function MoveButtons({ card }: { card: Card }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const toggle = async () => {
+  const next = moveTo(card.stage, 1);
+  // Only a move of the user's can be undone, and only while GitHub alone
+  // would put the card behind it.
+  const back = card.moved === card.stage && card.found !== card.stage ? moveTo(card.stage, -1) : undefined;
+  const move = async (stage: Stage | null) => {
     setBusy(true);
     setError("");
     try {
-      const res = await fetch("/api/reviewed", {
+      const res = await fetch("/api/stage", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: card.url, reviewed: !card.reviewed }),
+        body: JSON.stringify({ url: card.url, stage }),
       });
       if (!res.ok) setError(`failed (${res.status})`);
     } catch (e) {
@@ -35,9 +45,16 @@ function ReviewButton({ card }: { card: Card }) {
   };
   return (
     <>
-      <button type="button" class="board-review" disabled={busy} onClick={toggle}>
-        {card.reviewed ? "Unmark reviewed" : "Mark reviewed"}
-      </button>
+      {back !== undefined && (
+        <button type="button" class="board-review" disabled={busy} onClick={() => move(back)}>
+          Move back
+        </button>
+      )}
+      {next !== undefined && (
+        <button type="button" class="board-review" disabled={busy} onClick={() => move(next)}>
+          Move to next
+        </button>
+      )}
       {error && <span class="pr-failed">{error}</span>}
     </>
   );
@@ -63,8 +80,8 @@ function BoardCard({ card }: { card: Card }) {
         <div class="pr-meta">
           {card.draft && <span class="badge badge-wait">draft</span>}
           {failing && <span class="badge badge-bad">checks failing</span>}
-          {card.stage === "draft" && <span>{COPILOT[card.copilot]}</span>}
-          {card.stage !== "approved" && <ReviewButton card={card} />}
+          {card.stage === "draft" && <span>{copilotNote(card)}</span>}
+          <MoveButtons card={card} />
         </div>
       )}
     </li>
