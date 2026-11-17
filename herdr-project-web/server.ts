@@ -406,11 +406,34 @@ try {
   console.error("herdr-project-web:", e);
 }
 
-// Check the pull requests five minutes after each check ends, keeping the
-// last items, and the URLs the page links, when one fails.
+// Check the pull requests five minutes after each check ends, or sooner
+// when asked, keeping the last items, and the URLs the page links, when
+// one fails.
 const PR_INTERVAL = 300_000;
+// How soon to check when asked: GitHub's search takes a while to find a
+// new pull request.
+const PR_SOON = 15_000;
 let queuing = false;
+let prTimer: ReturnType<typeof setTimeout> | null = null;
+// When the next check is due, while one is waiting.
+let prDue = 0;
+let prSoon = false;
+
+/** Checks the pull requests in ms, showing when on the page. */
+function schedulePullRequests(ms: number) {
+  if (prTimer) clearTimeout(prTimer);
+  prDue = Date.now() + ms;
+  prTimer = setTimeout(watchPullRequests, ms);
+  const section = found.get("Pull requests")?.section;
+  if (section) {
+    section.next = new Date(prDue).toISOString();
+    refresh();
+  }
+}
+
 async function watchPullRequests() {
+  prTimer = null;
+  prSoon = false;
   try {
     await checkPullRequests();
   } catch (e) {
@@ -420,7 +443,15 @@ async function watchPullRequests() {
     queuing = true;
     for (const q of queues) watchQueue(...q);
   }
-  setTimeout(watchPullRequests, PR_INTERVAL);
+  schedulePullRequests(prSoon ? PR_SOON : PR_INTERVAL);
+}
+
+/** Checks the pull requests within PR_SOON rather than at the next check,
+ * or PR_SOON after the one running, which may have missed what changed.
+ * Asking again never puts a check off. */
+function checkPullRequestsSoon() {
+  prSoon = true;
+  if (prTimer && prDue > Date.now() + PR_SOON) schedulePullRequests(PR_SOON);
 }
 async function checkPullRequests() {
   const title = "Pull requests";
@@ -875,6 +906,11 @@ socket.get("/picker", async (c) => {
   return c.json(c.req.query("inbox") !== undefined
     ? inboxChoices(await panes(app), codexSessions(), JSON.parse(last))
     : choices(await panes(app), projectRoot, codexSessions()));
+});
+// From an agent that opened or changed a pull request, for the board.
+socket.post("/pulls/check", (c) => {
+  checkPullRequestsSoon();
+  return c.body(null, 202);
 });
 socket.get("/picker/notes", (c) => c.text(rowNotes(c.req.query("kind") ?? "", c.req.query("dir") ?? "", c.req.query("session") ?? "")));
 socket.post("/picker/open", limit(), async (c) => {
