@@ -53,12 +53,14 @@ export function projectDir(cwd: string, projects: string): string | null {
 /** Returns where an agent started in cwd with argv runs, as the directory,
  * or null for a new project under projects, and the directory it was
  * started from, which it should also work in, or null. Only a new
- * session, started with no arguments, outside a project gets one;
- * anything else, such as resuming a session, stays in cwd. It works in
+ * session, started with no arguments or with a first argument that isn't
+ * an option, its first message, outside a project gets one; one started
+ * with options, such as resuming a session, stays in cwd. An agent's
+ * subcommand, such as claude mcp, counts as a message too. It works in
  * cwd unless that is home or projects itself, where nothing in particular
  * is. */
 export function startIn(cwd: string, projects: string, home: string, argv: string[]): [string | null, string | null] {
-  if (argv.length || projectDir(cwd, projects)) return [cwd, null];
+  if (argv[0]?.startsWith("-") || projectDir(cwd, projects)) return [cwd, null];
   return [null, [real(home), real(projects)].includes(real(cwd)) ? null : cwd];
 }
 
