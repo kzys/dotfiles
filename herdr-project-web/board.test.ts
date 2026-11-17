@@ -13,7 +13,10 @@ function pull(number: number, over: Partial<Pull> = {}): Pull {
 
 test("puts a pull request in the column of the furthest stage it reached", () => {
   assert.equal(stage(pull(1, { draft: true })), "draft");
-  assert.equal(stage(pull(1, { copilot: "unresolved" })), "draft");
+  assert.equal(stage(pull(1, { checks: "SUCCESS", copilot: "unresolved" })), "draft");
+  assert.equal(stage(pull(1, { checks: "PENDING" })), "ci");
+  assert.equal(stage(pull(1, { checks: "FAILURE", copilot: "unresolved" })), "ci");
+  assert.equal(stage(pull(1, { checks: "FAILURE", copilot: "passed" })), "copilot");
   assert.equal(stage(pull(1, { copilot: "passed" })), "copilot");
   assert.equal(stage(pull(1, { review: "APPROVED" })), "approved");
   // A column the user moved it to counts only if it is further.
@@ -25,8 +28,8 @@ test("puts a pull request in the column of the furthest stage it reached", () =>
 
 test("moves cards only to the columns that are the user's", () => {
   assert.deepEqual(
-    (["draft", "copilot", "reviewed", "approved", "merged"] as const).map((s) => [moveTo(s, 1), moveTo(s, -1)]),
-    [["copilot", undefined], ["reviewed", null], [undefined, "copilot"], [undefined, undefined], [undefined, undefined]],
+    (["ci", "draft", "copilot", "reviewed", "approved", "merged"] as const).map((s) => [moveTo(s, 1), moveTo(s, -1)]),
+    [[undefined, undefined], ["copilot", undefined], ["reviewed", null], [undefined, "copilot"], [undefined, undefined], [undefined, undefined]],
   );
 });
 
@@ -65,10 +68,11 @@ test("asks Copilot once checks pass on a draft it hasn't reviewed", () => {
     pull(7, { checks: "SUCCESS", review: "APPROVED" }),
     pull(8, { checks: "SUCCESS", state: "MERGED" }),
     pull(9, { checks: "SUCCESS", draft: true }),
+    pull(10),
   ];
   // A failed request is tried again.
   const asks = { [prs[4].url]: "requested", [prs[8].url]: "HTTP 502" };
-  assert.deepEqual(toAskCopilot(prs, { [prs[5].url]: "copilot" }, asks).map((p) => p.number), [1, 9]);
+  assert.deepEqual(toAskCopilot(prs, { [prs[5].url]: "copilot" }, asks).map((p) => p.number), [1, 9, 10]);
 });
 
 test("keeps what came of each request to Copilot", async () => {

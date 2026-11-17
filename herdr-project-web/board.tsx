@@ -12,7 +12,7 @@ const COPILOT: Record<Card["copilot"], string> = {
   passed: "Copilot passed",
 };
 
-/** Returns what the draft card says of Copilot's review. */
+/** Returns what a card before Copilot's column says of its review. */
 function copilotNote(card: Card): string {
   if (card.copilot !== "none" || !card.copilotAsk) return COPILOT[card.copilot];
   return card.copilotAsk === "requested" ? "Copilot review requested" : `Copilot request failed: ${card.copilotAsk}`;
@@ -80,7 +80,7 @@ function BoardCard({ card }: { card: Card }) {
         <div class="pr-meta">
           {card.draft && <span class="badge badge-wait">draft</span>}
           {failing && <span class="badge badge-bad">checks failing</span>}
-          {card.stage === "draft" && <span>{copilotNote(card)}</span>}
+          {(card.stage === "ci" || card.stage === "draft") && <span>{copilotNote(card)}</span>}
           <MoveButtons card={card} />
         </div>
       )}

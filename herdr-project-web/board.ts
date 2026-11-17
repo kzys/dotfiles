@@ -4,12 +4,14 @@
 import type { CopilotReview, Pull } from "./github.ts";
 import type { Owner } from "./owners.ts";
 
-// The board's columns, in order.
+// The board's columns, in order, each titled by what its pull requests
+// wait for.
 export const STAGES = [
-  ["draft", "Draft"],
-  ["copilot", "Copilot review passed"],
-  ["reviewed", "Human review passed"],
-  ["approved", "All approved"],
+  ["ci", "Waiting for CI"],
+  ["draft", "Waiting for Copilot"],
+  ["copilot", "Waiting for review"],
+  ["reviewed", "Waiting for approval"],
+  ["approved", "Waiting for merge"],
   ["merged", "Merged"],
 ] as const;
 
@@ -49,10 +51,11 @@ export type Card = {
 
 /** Returns the column of pr: the furthest it has come, whether or not
  * it passed the stages before, or moved, the column the user moved it to,
- * if that is further. */
+ * if that is further. Without checks, it has none to wait for. */
 export function stage(pr: Pull, moved: Stage | null = null): Stage {
   const found: Stage =
-    pr.state === "MERGED" ? "merged" : pr.review === "APPROVED" ? "approved" : pr.copilot === "passed" ? "copilot" : "draft";
+    pr.state === "MERGED" ? "merged" : pr.review === "APPROVED" ? "approved" : pr.copilot === "passed" ? "copilot"
+    : pr.checks === "SUCCESS" || pr.checks === null ? "draft" : "ci";
   return moved && rank(moved) > rank(found) ? moved : found;
 }
 
@@ -109,13 +112,13 @@ export function stillMoved(moves: Moves, prs: Pull[]): Moves {
 export type CopilotAsks = Record<string, string>;
 
 /** Returns the pull requests in prs to ask Copilot to review: those open
- * in the draft column, given moves, whose checks all passed, that
- * Copilot hasn't reviewed and that asks doesn't say were requested. A
- * failed request is tried again. */
+ * in the draft column, given moves, whose checks all passed or that have
+ * none, that Copilot hasn't reviewed and that asks doesn't say were
+ * requested. A failed request is tried again. */
 export function toAskCopilot(prs: Pull[], moves: Moves, asks: CopilotAsks): Pull[] {
   return prs.filter((pr) =>
     pr.state === "OPEN" && stage(pr, moves[pr.url] ?? null) === "draft" && pr.copilot === "none" &&
-    pr.checks === "SUCCESS" && asks[pr.url] !== "requested");
+    asks[pr.url] !== "requested");
 }
 
 /** Asks Copilot through request to review each pull request in prs that
