@@ -78,6 +78,8 @@ export type Pull = {
   // When it was merged, in ISO 8601, or null.
   mergedAt: string | null;
   copilot: CopilotReview;
+  // How many reviews Copilot has left on it.
+  copilotReviews: number;
 };
 
 // How far Copilot's review of a pull request has come: not reviewed,
@@ -166,6 +168,16 @@ export async function fetch(command = "gh", orgs: string[] = [], days = 14): Pro
   }
 }
 
+/** Asks Copilot through command, gh, to review the pull request at url.
+ * Raises with gh's error if it fails. */
+export async function requestCopilot(url: string, command = "gh"): Promise<void> {
+  try {
+    await promisify(execFile)(command, ["pr", "edit", url, "--add-reviewer", "@copilot"], { timeout: 60_000 });
+  } catch (e: any) {
+    throw new Error(String(e.stderr ?? "").trim() || (e.killed ? "gh took too long" : `gh exited with ${e.code}`));
+  }
+}
+
 /** Returns the pull requests in data, a response from fetch, the open ones
  * first, each pull request once. */
 export function pullRequests(data: any): Pull[] {
@@ -197,6 +209,7 @@ export function pullRequests(data: any): Pull[] {
       review: node.reviewDecision ?? null,
       mergedAt: node.mergedAt ?? null,
       copilot: copilotReview(node),
+      copilotReviews: node.copilotReviews?.totalCount ?? 0,
     });
   }
   return prs;
