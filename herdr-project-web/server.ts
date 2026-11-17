@@ -417,7 +417,9 @@ let queuing = false;
 let prTimer: ReturnType<typeof setTimeout> | null = null;
 // When the next check is due, while one is waiting.
 let prDue = 0;
-let prSoon = false;
+// The latest time a check was asked for, which a check that started
+// before it may have missed.
+let prWanted = 0;
 
 /** Checks the pull requests in ms, showing when on the page. */
 function schedulePullRequests(ms: number) {
@@ -433,7 +435,7 @@ function schedulePullRequests(ms: number) {
 
 async function watchPullRequests() {
   prTimer = null;
-  prSoon = false;
+  const started = Date.now();
   try {
     await checkPullRequests();
   } catch (e) {
@@ -443,15 +445,16 @@ async function watchPullRequests() {
     queuing = true;
     for (const q of queues) watchQueue(...q);
   }
-  schedulePullRequests(prSoon ? PR_SOON : PR_INTERVAL);
+  schedulePullRequests(prWanted > started ? Math.max(prWanted - Date.now(), 0) : PR_INTERVAL);
 }
 
-/** Checks the pull requests within PR_SOON rather than at the next check,
- * or PR_SOON after the one running, which may have missed what changed.
- * Asking again never puts a check off. */
+/** Checks the pull requests PR_SOON from now rather than at the next
+ * check, and again then if a check due sooner, or running, starts before
+ * it. Asking again never puts a check off. */
 function checkPullRequestsSoon() {
-  prSoon = true;
-  if (prTimer && prDue > Date.now() + PR_SOON) schedulePullRequests(PR_SOON);
+  const by = Date.now() + PR_SOON;
+  prWanted = Math.max(prWanted, by);
+  if (prTimer && prDue > by) schedulePullRequests(PR_SOON);
 }
 async function checkPullRequests() {
   const title = "Pull requests";
