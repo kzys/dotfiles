@@ -48,6 +48,8 @@ test("starts new sessions outside a project in a new one", () => {
   assert.deepEqual(startIn(projects, projects, home, []), [null, null]);
   assert.deepEqual(startIn(join(projects, "p"), projects, home, []), [join(projects, "p"), null]);
   assert.deepEqual(startIn(work, projects, home, ["--resume", "s"]), [work, null]);
+  assert.deepEqual(startIn(home, projects, home, ["fix the login bug"]), [null, null]);
+  assert.deepEqual(startIn(work, projects, home, ["fix the login bug"]), [null, work]);
 });
 
 test("creates a project named for the date", () => {

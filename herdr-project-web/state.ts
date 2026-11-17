@@ -83,6 +83,8 @@ export type Pane = {
   status: string | null;
   // How full its context is, in percent, if it says.
   ctx: number | null;
+  // What its Bash tool still runs, longest-running first, if known.
+  waits?: import("./waits.ts").Wait[];
 };
 
 export type Project = {

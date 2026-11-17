@@ -37,16 +37,17 @@ export const matches = (query: string, ...texts: (string | null)[]) =>
   !query || texts.some((t) => t?.toLowerCase().includes(query));
 
 /** Returns what url says, as JSON, fetched again by refresh and
- * whenever the window regains focus, and when it was fetched. */
-export function useFetched<T>(url: string): [T | null, string | null, Date | null, () => void] {
+ * whenever the window regains focus, and when it was fetched. refresh
+ * fetches with the query fresh, if given, added to url. */
+export function useFetched<T>(url: string, fresh?: string): [T | null, string | null, Date | null, () => void] {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [at, setAt] = useState<Date | null>(null);
   const latest = useRef(0);
-  const refresh = async () => {
+  const load = async (asked: string) => {
     const n = ++latest.current;
     try {
-      const res = await fetch(url);
+      const res = await fetch(asked);
       const body = await res.json();
       if (n !== latest.current) return;
       if (!res.ok) throw new Error(body.error ?? res.statusText);
@@ -57,11 +58,13 @@ export function useFetched<T>(url: string): [T | null, string | null, Date | nul
       if (n === latest.current) setError((e as Error).message);
     }
   };
+  const again = () => load(url);
+  const refresh = () => load(fresh ? `${url}${url.includes("?") ? "&" : "?"}${fresh}` : url);
   useEffect(() => {
     setData(null);
-    refresh();
-    addEventListener("focus", refresh);
-    return () => removeEventListener("focus", refresh);
+    again();
+    addEventListener("focus", again);
+    return () => removeEventListener("focus", again);
   }, [url]);
   return [data, error, at, refresh];
 }
