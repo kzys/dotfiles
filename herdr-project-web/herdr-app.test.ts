@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { appOpener, appPaneRecords, appPanes, claudeSessions } from "./herdr-app.ts";
+import { appAgentFree, appHerdrPanes, appOpener, appPaneRecords, appPanes, claudeSessions } from "./herdr-app.ts";
 import { open } from "./rows.ts";
 
 const terminal = (o: object) => ({
@@ -31,6 +31,25 @@ test("reads the panes of the app's spaces", () => {
     { agent: "claude", workspace: "sp1", cwd: "/now", pane: "t1", session: "s1", role: "" },
     { agent: null, workspace: "sp1", cwd: "/start", pane: "t2", session: "", role: "" },
   ]);
+});
+
+test("reads the agents of the app's spaces as Herdr's panes", () => {
+  const sessions = new Map([[10, "s1"]]);
+  const labels = { "herdr.space": "sp1", "herdr.tab": "tb1" };
+  assert.deepEqual(appHerdrPanes([
+    terminal({ labels, status: { app: "claude-code", state: "idle" }, foreground: { pid: 10, cwd: "/p/a" } }),
+    terminal({ address: "t2", labels, status: null }),
+    terminal({ address: "t3", labels: {}, status: { app: "codex", state: "working" } }),
+  ], sessions), [
+    { pane_id: "t1", workspace_id: "sp1", tab_id: "tb1", cwd: "/p/a", agent: "claude", agent_status: "idle", agent_session: { value: "s1" } },
+    { pane_id: "t2", workspace_id: "sp1", tab_id: "tb1", cwd: "/now", agent: null, agent_status: undefined, agent_session: null },
+  ]);
+});
+
+test("tells when an app agent waits for its next message", () => {
+  assert.equal(appAgentFree({ status: { state: "done" } }), true);
+  assert.equal(appAgentFree({ status: { state: "working" } }), false);
+  assert.equal(appAgentFree({ status: null }), false);
 });
 
 test("leaves out terminals that end while it reads them", async () => {

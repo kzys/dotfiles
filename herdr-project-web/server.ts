@@ -28,7 +28,7 @@ import { type Checked, checkQueue } from "./queues.ts";
 import {
   codexTokens, lastPrompt, percent, resumedText, roleToReport, sessionCwd, sessionReport, statusLine, statusTokens, usageFile,
 } from "./report.ts";
-import { appOpener, appPanes } from "./herdr-app.ts";
+import { appAgentFree, appHerdrPanes, appOpener, appPanes, appTerminals, claudeSessions } from "./herdr-app.ts";
 import { type OpenHerdr, background, choices, inboxChoices, open, paneRecords, plan, rowNotes, workspacesToName } from "./rows.ts";
 import { claudeSessionDirs, codexContext, codexSessionDirs, codexSessions, reportedRole } from "./sessions.ts";
 import * as slack from "./slack.ts";
@@ -95,7 +95,13 @@ let pullBases: PullBases = {};
 const prOwners: Record<string, Owner | null> = {};
 // Each pane's last hook event.
 const hookEvents = new Map<string, HookEvent>();
-const outbox = new Outbox(join(stateDir, "outbox.json"), (pane, text) => paneHerdr.run(pane, text), readyForText);
+// The terminals of the Herdr app's spaces, which herdr-core runs, as
+// Herdr's panes.
+let appTerminalPanes: Herdr["panes"] = [];
+// Whether the Herdr app's terminals have been read yet.
+let appRead = false;
+const inApp = (pane: string) => appTerminalPanes.some((p) => p.pane_id === pane);
+const outbox = new Outbox(join(stateDir, "outbox.json"), (pane, text) => inApp(pane) ? hcSend(pane, text) : paneHerdr.run(pane, text), readyForText);
 // The checkouts under ~/repos each project's agents went into, by project.
 const linksPath = join(stateDir, "checkouts.json");
 const links = (loadState(linksPath) as Record<string, string[]> | null) ?? {};
@@ -104,7 +110,7 @@ let last = JSON.stringify(pageState());
 /** Returns what the page shows of each agent besides what Herdr says. */
 function agentViews(): Record<string, AgentView> {
   const views: Record<string, AgentView> = {};
-  for (const [pane, status] of Object.entries(agentStates(herdr) ?? {}))
+  for (const [pane, status] of Object.entries(agentStates(everyPane()) ?? {}))
     views[pane] = { queued: outbox.queued(pane), permission: permission(hookEvents.get(pane), status) };
   return views;
 }
@@ -113,21 +119,42 @@ function agentViews(): Record<string, AgentView> {
  * Herdr says right now, with no permission request open, or else null.
  * Text sent to anything else could answer a prompt, or run in a shell. */
 async function readyForText(pane: string): Promise<string | null> {
+  if (inApp(pane)) {
+    const now = JSON.parse((await promisify(execFile)("hc", ["get", pane, "--json"], { timeout: 10_000 })).stdout);
+    return appAgentFree(now) ? (claudeSessions().get(now.foreground?.pid) ?? "") : null;
+  }
   const { pane: now } = await ask("pane.get", { pane_id: pane });
   const free = Boolean(now.agent) && ["idle", "done"].includes(now.agent_status) && hookEvents.get(pane)?.event !== "PermissionRequest";
   return free ? (now.agent_session?.value ?? "") : null;
 }
 
+/** Types text into the Herdr app's terminal and presses Enter. */
+async function hcSend(terminal: string, text: string) {
+  // Text starting with "-" would be read as an option.
+  await promisify(execFile)("hc", ["send", terminal, "--", text], { timeout: 10_000 });
+}
+
+/** Returns Herdr's panes with the Herdr app's agents among them, or those
+ * alone while Herdr can't be asked, or null if neither is known. */
+function everyPane(): Herdr | null {
+  if (!herdr && !appTerminalPanes.length) return null;
+  return { workspaces: herdr?.workspaces ?? [], panes: [...(herdr?.panes ?? []), ...appTerminalPanes] };
+}
+
 /** Returns the state for the page. Only the watcher's server can act. */
 function pageState() {
-  const sessions = Object.fromEntries((herdr?.panes ?? []).filter((p) => p.agent).map((p) => [p.pane_id, p.agent_session?.value ?? ""]));
-  const left = herdr ? undelivered(outbox.all(), sessions) : [];
-  return { ...readState(watched(), projectRoot, herdr, home, links), ...(orgs ? { controls: agentViews(), undelivered: left } : {}) };
+  const all = everyPane();
+  const sessions = Object.fromEntries((all?.panes ?? []).filter((p) => p.agent).map((p) => [p.pane_id, p.agent_session?.value ?? ""]));
+  // Only messages for panes of what has been read can be told undelivered:
+  // Herdr's panes are named like w1:p2, the app's terminals like t3.
+  const readable = Object.fromEntries(Object.entries(outbox.all()).filter(([pane]) => pane.includes(":") ? herdr !== null : appRead));
+  const left = undelivered(readable, sessions);
+  return { ...readState(watched(), projectRoot, all, home, links), ...(orgs ? { controls: agentViews(), undelivered: left } : {}) };
 }
 
 /** Sends agents that are free what waits for them. */
 function deliver() {
-  if (orgs) outbox.deliver(agentStates(herdr) ?? {}).then((sent) => sent && refresh());
+  if (orgs) outbox.deliver(agentStates(everyPane()) ?? {}).then((sent) => sent && refresh());
 }
 
 /** Returns what the checks found, or null before any has. */
@@ -203,6 +230,27 @@ const events = new HerdrEvents(herdrSocket, pollHerdr);
 pollHerdr();
 // Panes' directories change without events, and Herdr may be away.
 setInterval(pollHerdr, 60_000);
+
+// Read the Herdr app's agents, keeping the last ones read when hc fails.
+let appPolling = false;
+async function pollApp() {
+  if (appPolling) return;
+  appPolling = true;
+  try {
+    const next = appHerdrPanes(await appTerminals(), claudeSessions());
+    const first = !appRead;
+    appRead = true;
+    if (!first && JSON.stringify(next) === JSON.stringify(appTerminalPanes)) return;
+    appTerminalPanes = next;
+    deliver();
+    refresh();
+  } catch {
+  } finally {
+    appPolling = false;
+  }
+}
+pollApp();
+setInterval(pollApp, 5_000);
 
 // The title Herdr has, or is being told.
 let titled = "";
@@ -400,9 +448,9 @@ async function setBaseFrom(req: IncomingMessage): Promise<number> {
 
 const agentActions: AgentActions = {
   outbox,
-  known: (pane) => Object.hasOwn(agentStates(herdr) ?? {}, pane),
-  session: (pane) => herdr?.panes.find((p) => p.pane_id === pane)?.agent_session?.value,
-  focus: (pane) => ask("pane.focus", { pane_id: pane }),
+  known: (pane) => Object.hasOwn(agentStates(everyPane()) ?? {}, pane),
+  session: (pane) => everyPane()?.panes.find((p) => p.pane_id === pane)?.agent_session?.value,
+  focus: (pane) => inApp(pane) ? promisify(execFile)("herdr-app", ["do", "agent.focus", "--terminal", pane]) : ask("pane.focus", { pane_id: pane }),
   changed: () => {
     deliver();
     refresh();
