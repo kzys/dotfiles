@@ -29,7 +29,7 @@ import { type Checked, checkQueue } from "./queues.ts";
 import {
   codexTokens, lastPrompt, percent, resumedText, roleToReport, sessionCwd, sessionReport, statusLine, statusTokens, usageFile,
 } from "./report.ts";
-import { appAgentFree, appHerdrPanes, appOpener, appPanes, appTerminals, claudeSessions, toRouter } from "./herdr-app.ts";
+import { appAgentFree, appHerdrPanes, appOpener, appPanes, appTerminals, claudeSessions, terminalSession, toRouter } from "./herdr-app.ts";
 import { type OpenHerdr, background, choices, inboxChoices, open, paneRecords, plan, rowNotes, workspacesToName } from "./rows.ts";
 import { claudeSessionDirs, codexContext, codexSessionDirs, codexSessions, reportedRole } from "./sessions.ts";
 import * as slack from "./slack.ts";
@@ -147,7 +147,7 @@ function agentViews(): Record<string, AgentView> {
 async function readyForText(pane: string): Promise<string | null> {
   if (inApp(pane)) {
     const now = JSON.parse((await promisify(execFile)("hc", ["get", pane, "--json"], { timeout: 10_000 })).stdout);
-    return appAgentFree(now) ? (claudeSessions().get(now.foreground?.pid) ?? "") : null;
+    return appAgentFree(now) ? (terminalSession(now, claudeSessions()) ?? "") : null;
   }
   const { pane: now } = await ask("pane.get", { pane_id: pane });
   const free = Boolean(now.agent) && ["idle", "done"].includes(now.agent_status) && hookEvents.get(pane)?.event !== "PermissionRequest";
@@ -573,8 +573,10 @@ async function routeCopilotComments() {
   if (prs.length) {
     // Through the outbox, which waits for the router to be free: typed in
     // meanwhile, it could answer a prompt or join the user's input.
-    const send = async (address: string, text: string) => {
-      outbox.add(address, text);
+    // For the router's session only, so that an agent that takes over its
+    // terminal meanwhile doesn't get it.
+    const send = async (router: any, text: string) => {
+      outbox.add(router.address, text, terminalSession(router, claudeSessions()));
       deliver();
     };
     try {
