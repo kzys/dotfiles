@@ -24,7 +24,10 @@ fragment pullRequests on SearchResultItemConnection {
       ... on PullRequest {
         number title url state isDraft headRefName baseRefName reviewDecision mergedAt
         copilotReviews: reviews(first: 1, author: "copilot-pull-request-reviewer[bot]") { totalCount }
-        reviewThreads(first: 100) { nodes { isResolved comments(first: 1) { nodes { author { login } } } } }
+        reviewThreads(first: 100) {
+          pageInfo { hasNextPage }
+          nodes { isResolved comments(first: 1) { nodes { author { login } } } }
+        }
         repository { nameWithOwner }
         headRepository { nameWithOwner }
         commits(last: 1) { nodes { commit { statusCheckRollup {
@@ -105,10 +108,13 @@ export function runs(contexts: any[]): Run[] {
 
 /** Returns how far Copilot's review of node, a pull request as the
  * search returns it, has come. A review on an older commit counts:
- * addressing Copilot's comments usually means pushing another. */
+ * addressing Copilot's comments usually means pushing another. Threads
+ * it can't read all of count as unresolved. */
 export function copilotReview(node: any): CopilotReview {
   if (!node?.copilotReviews?.totalCount) return "none";
-  const open = (node.reviewThreads?.nodes ?? []).some(
+  const threads = node.reviewThreads;
+  if (!Array.isArray(threads?.nodes) || threads.pageInfo?.hasNextPage !== false) return "unresolved";
+  const open = threads.nodes.some(
     (t: any) => !t?.isResolved && t?.comments?.nodes?.[0]?.author?.login === "copilot-pull-request-reviewer");
   return open ? "unresolved" : "passed";
 }

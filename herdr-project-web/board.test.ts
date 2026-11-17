@@ -38,6 +38,7 @@ test("shows open pull requests and those merged within a day", () => {
 });
 
 test("forgets reviews of pull requests no longer open", () => {
-  const [a, b, c] = ["https://github.com/org/app/pull/1", "https://github.com/org/app/pull/2", "https://github.com/org/app/pull/3"];
-  assert.deepEqual(stillReviewed([a, b, c], [c, a]), [a, c]);
+  const prs = [pull(1), pull(2, { state: "MERGED" }), pull(3, { state: "CLOSED" })];
+  const missing = "https://github.com/org/app/pull/9";
+  assert.deepEqual(stillReviewed([prs[0].url, prs[1].url, prs[2].url, missing], prs), [prs[0].url, missing]);
 });

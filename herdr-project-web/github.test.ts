@@ -49,13 +49,16 @@ test("reads pull requests", () => {
 test("reads how far Copilot's review has come", () => {
   const thread = (isResolved: boolean, login: string) => ({ isResolved, comments: { nodes: [{ author: { login } }] } });
   const node = (reviews: number, ...threads: object[]) => ({
-    copilotReviews: { totalCount: reviews }, reviewThreads: { nodes: threads },
+    copilotReviews: { totalCount: reviews }, reviewThreads: { pageInfo: { hasNextPage: false }, nodes: threads },
   });
   assert.equal(copilotReview({}), "none");
   assert.equal(copilotReview(node(0)), "none");
   assert.equal(copilotReview(node(1)), "passed");
   assert.equal(copilotReview(node(1, thread(true, "copilot-pull-request-reviewer"), thread(false, "someone"))), "passed");
   assert.equal(copilotReview(node(1, thread(false, "copilot-pull-request-reviewer"))), "unresolved");
+  // Threads it can't read all of may hide an unresolved one.
+  assert.equal(copilotReview({ copilotReviews: { totalCount: 1 } }), "unresolved");
+  assert.equal(copilotReview({ ...node(1), reviewThreads: { pageInfo: { hasNextPage: true }, nodes: [] } }), "unresolved");
   const [pr] = pullRequests(search({ ...prNode(1, "a"), mergedAt: "2026-11-15T13:00:00Z", ...node(1) }));
   assert.deepEqual([pr.mergedAt, pr.copilot], ["2026-11-15T13:00:00Z", "passed"]);
 });

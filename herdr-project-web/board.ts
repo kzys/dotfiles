@@ -71,10 +71,10 @@ export function cards(
   });
 }
 
-/** Returns the URLs in reviewed that are in open, the URLs of the pull
- * requests still known to be open, whether or not the last search found
- * them. */
-export function stillReviewed(reviewed: Iterable<string>, open: string[]): string[] {
-  const known = new Set(open);
-  return [...reviewed].filter((u) => known.has(u));
+/** Returns the URLs in reviewed except those prs has as closed or merged.
+ * A pull request the search doesn't find may still be open, so its mark
+ * stays, even if it closed unseen. */
+export function stillReviewed(reviewed: Iterable<string>, prs: Pull[]): string[] {
+  const done = new Set(prs.filter((p) => p.state !== "OPEN").map((p) => p.url));
+  return [...reviewed].filter((u) => !done.has(u));
 }

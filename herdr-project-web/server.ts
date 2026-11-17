@@ -415,7 +415,7 @@ async function checkPullRequests() {
     Object.assign(prOwners, owners);
     const dirs = Object.values(owners).flatMap((o) => (o ? [o.project] : []));
     prNames = Object.fromEntries(dirs.map((d) => [d, projectName(d)]));
-    const kept = board.stillReviewed(reviewed, prUrls);
+    const kept = board.stillReviewed(reviewed, prPulls);
     if (kept.length !== reviewed.size) saveReviewed(new Set(kept));
   } catch (e) {
     lines = [`Cannot check pull requests: ${String(e).split("\n")[0]}`];
