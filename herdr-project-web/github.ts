@@ -22,7 +22,12 @@ query($q: String!, $open: String!) {
 fragment pullRequests on SearchResultItemConnection {
     nodes {
       ... on PullRequest {
-        number title url state isDraft headRefName baseRefName reviewDecision
+        number title url state isDraft headRefName baseRefName reviewDecision mergedAt
+        copilotReviews: reviews(first: 1, author: "copilot-pull-request-reviewer[bot]") { totalCount }
+        reviewThreads(first: 100) {
+          pageInfo { hasNextPage }
+          nodes { isResolved comments(first: 1) { nodes { author { login } } } }
+        }
         repository { nameWithOwner }
         headRepository { nameWithOwner }
         commits(last: 1) { nodes { commit { statusCheckRollup {
@@ -70,7 +75,15 @@ export type Pull = {
   failed: string[];
   runs: Run[];
   review: string | null;
+  // When it was merged, in ISO 8601, or null.
+  mergedAt: string | null;
+  copilot: CopilotReview;
 };
+
+// How far Copilot's review of a pull request has come: not reviewed,
+// reviewed with threads of its still unresolved, or reviewed with all
+// of them resolved.
+export type CopilotReview = "none" | "unresolved" | "passed";
 
 // What changed about a pull request: the message, and whether the agent
 // working on it should act on it.
@@ -93,6 +106,19 @@ export function runs(contexts: any[]): Run[] {
     .sort((a, b) => byString(a.name, b.name));
 }
 
+/** Returns how far Copilot's review of node, a pull request as the
+ * search returns it, has come. A review on an older commit counts:
+ * addressing Copilot's comments usually means pushing another. Threads
+ * it can't read all of count as unresolved. */
+export function copilotReview(node: any): CopilotReview {
+  if (!node?.copilotReviews?.totalCount) return "none";
+  const threads = node.reviewThreads;
+  if (!Array.isArray(threads?.nodes) || threads.pageInfo?.hasNextPage !== false) return "unresolved";
+  const open = threads.nodes.some(
+    (t: any) => !t?.isResolved && t?.comments?.nodes?.[0]?.author?.login === "copilot-pull-request-reviewer");
+  return open ? "unresolved" : "passed";
+}
+
 /** Returns the GitHub search for the user's pull requests updated since
  * the date since, or only the open ones if onlyOpen, most recently
  * updated first, in any of orgs, or anywhere without orgs. */
@@ -103,12 +129,25 @@ export function searchQuery(since: Date, orgs: string[] = [], onlyOpen = false):
   ].join(" ");
 }
 
+/** Returns the response in stdout, what gh printed, if every error in
+ * it is about access, as for an organization the token isn't authorized
+ * for: GitHub leaves out what it can't show and returns the rest.
+ * Returns null otherwise. */
+export function partial(stdout: string): any {
+  try {
+    const data = JSON.parse(stdout);
+    return data?.data && data.errors?.every((e: any) => e?.type === "FORBIDDEN") ? data : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Returns two searches for the user's pull requests updated in the last
  * days days in any of orgs, or anywhere without orgs, each most recently
  * updated first, as GitHub's GraphQL API returns them: open, the open
  * ones, and search, all of them, including merged and closed ones, which
- * may push the open ones out. Raises if command, gh, fails, with its
- * error rather than the query. */
+ * may push the open ones out, without those the token can't see. Raises
+ * if command, gh, fails otherwise, with its error rather than the query. */
 export async function fetch(command = "gh", orgs: string[] = [], days = 14): Promise<any> {
   const since = new Date(Date.now() - days * 86400_000);
   try {
@@ -121,6 +160,8 @@ export async function fetch(command = "gh", orgs: string[] = [], days = 14): Pro
     return JSON.parse(stdout);
   } catch (e: any) {
     if (e instanceof SyntaxError) throw e;
+    const data = partial(String(e.stdout ?? ""));
+    if (data) return data;
     throw new Error(String(e.stderr ?? "").trim() || (e.killed ? "gh took too long" : `gh exited with ${e.code}`));
   }
 }
@@ -154,6 +195,8 @@ export function pullRequests(data: any): Pull[] {
       failed,
       runs: runs(contexts),
       review: node.reviewDecision ?? null,
+      mergedAt: node.mergedAt ?? null,
+      copilot: copilotReview(node),
     });
   }
   return prs;
@@ -394,9 +437,11 @@ export type PollHerdr = {
  * fetchPrs finds them: tells the user and their agents through herdr
  * about changes since the state in path, saves the new state there, and
  * returns the lines of table, the projects of the pull requests by url,
- * the inbox items of waitingItems, the rows of listed and the URLs of
+ * the inbox items of waitingItems, the rows of listed, the URLs of
  * the pull requests the state keeps as open, including those the search
- * no longer finds. The projects are under root. */
+ * no longer finds, and every pull request found. The projects are under
+ * root. While Herdr can't list its panes, it tells nothing and keeps the
+ * state as it was, to tell the changes once Herdr is back. */
 export async function poll(
   herdr: PollHerdr,
   root: string,
@@ -405,11 +450,15 @@ export async function poll(
   fetchPrs: (orgs: string[]) => Promise<any> = (o) => fetch("gh", o),
 ): Promise<{
   lines: string[]; owners: Record<string, Owner | null>; items: Item[]; rows: Row[]; urls: string[]; bases: Record<string, string>;
+  pulls: Pull[];
 }> {
   const loaded = loadState(path);
   const old = loaded && typeof loaded === "object" ? (loaded as Seen) : null;
   const prs = pullRequests(await fetchPrs(orgs));
-  const [trees, texts, panes] = [await worktrees(root), notesTexts(root), await herdr.panes()];
+  const [trees, texts] = [await worktrees(root), notesTexts(root)];
+  // Without Herdr, changes can't be told, so they are kept for later.
+  const herdrPanes = await herdr.panes().catch(() => null);
+  const panes = herdrPanes ?? [];
   const owners = Object.fromEntries(prs.map((pr) => [pr.url, owner(pr, trees, texts)]));
   // An agent in a checkout on the branch, wherever it is, surely works on
   // the pull request; one in its project only may.
@@ -418,7 +467,7 @@ export async function poll(
     ...Object.fromEntries(Object.entries(owners).map(([url, f]) => [url, f && agentPane(panes, f)])),
     ...checkouts,
   };
-  for (const [pr, message, wake] of events(old, prs)) {
+  for (const [pr, message, wake] of herdrPanes ? events(old, prs) : []) {
     const found = owners[pr.url];
     const where = found ? ` (${basename(found.project)})` : "";
     await herdr.notify(`${label(pr)} ${message}`, `${pr.title}${where}`, wake ? "request" : "done").catch(() => {});
@@ -427,9 +476,9 @@ export async function poll(
       await herdr.run(pane.pane_id, wakeMessage(pr, message)).catch(() => {});
   }
   const seen = remember(old, prs);
-  saveState(path, seen);
+  if (herdrPanes) saveState(path, seen);
   const rows = listed(prs, owners, byUrl, checkouts);
-  return { lines: table(rows), owners, items: waitingItems(prs, owners), rows, urls: Object.keys(seen), bases: pullBases(prs) };
+  return { lines: table(rows), owners, items: waitingItems(prs, owners), rows, urls: Object.keys(seen), bases: pullBases(prs), pulls: prs };
 }
 
 /** Returns the text of the watcher's pane for the section titled title,

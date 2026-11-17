@@ -17,15 +17,15 @@ test("routes to the page of a project", () => {
 });
 
 test("routes each view of the page", () => {
-  const hashes = ["", "projects", "diffs", `diffs/${encodeURIComponent("/p/x/wt/")}`, "diffs/%E0", "diffs/", "learnings", "nope"];
+  const hashes = ["", "projects", "diffs", `diffs/${encodeURIComponent("/p/x/wt/")}`, "diffs/%E0", "diffs/", "learnings", "pulls", "nope"];
   assert.deepEqual(hashes.map(route), [
     { view: "inbox" }, { view: "projects" }, { view: "worktrees" }, { view: "diff", dir: "/p/x/wt/" },
-    { view: "diff", dir: "%E0" }, { view: "diff", dir: "" }, { view: "learnings" }, { view: "inbox" },
+    { view: "diff", dir: "%E0" }, { view: "diff", dir: "" }, { view: "learnings" }, { view: "pulls" }, { view: "inbox" },
   ]);
   assert.deepEqual(hashes.map((h) => pageTitle(route(h))), [
-    "Inbox", "Projects", "Worktrees", "wt · Diff", "%E0 · Diff", "Worktree · Diff", "Learnings", "Inbox",
+    "Inbox", "Projects", "Worktrees", "wt · Diff", "%E0 · Diff", "Worktree · Diff", "Learnings", "Pull requests", "Inbox",
   ]);
   assert.deepEqual(hashes.map((h) => tab(route(h))), [
-    "inbox", "projects", "worktrees", "worktrees", "worktrees", "worktrees", "learnings", "inbox",
+    "inbox", "projects", "worktrees", "worktrees", "worktrees", "worktrees", "learnings", "pulls", "inbox",
   ]);
 });

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import {
-  type PollHerdr, agentPane, checkoutPanes, events, fetch, owner, poll, pullRequests, remember,
+  type PollHerdr, agentPane, checkoutPanes, copilotReview, events, fetch, owner, poll, pullRequests, remember,
   repoName, runs, screen, searchQuery, waitingItems, wakeMessage, worktrees, pullBases, type Pull,
 } from "./github.ts";
 import { notesTexts } from "./owners.ts";
@@ -44,6 +44,23 @@ test("reads pull requests", () => {
   assert.equal(prs[0].repo, "org/app");
   assert.equal(prs[0].branch, "a");
   assert.deepEqual(prs[0].runs.map((r) => [r.name, r.state]), [["lint", "failed"], ["ok", "passed"], ["test", "failed"]]);
+});
+
+test("reads how far Copilot's review has come", () => {
+  const thread = (isResolved: boolean, login: string) => ({ isResolved, comments: { nodes: [{ author: { login } }] } });
+  const node = (reviews: number, ...threads: object[]) => ({
+    copilotReviews: { totalCount: reviews }, reviewThreads: { pageInfo: { hasNextPage: false }, nodes: threads },
+  });
+  assert.equal(copilotReview({}), "none");
+  assert.equal(copilotReview(node(0)), "none");
+  assert.equal(copilotReview(node(1)), "passed");
+  assert.equal(copilotReview(node(1, thread(true, "copilot-pull-request-reviewer"), thread(false, "someone"))), "passed");
+  assert.equal(copilotReview(node(1, thread(false, "copilot-pull-request-reviewer"))), "unresolved");
+  // Threads it can't read all of may hide an unresolved one.
+  assert.equal(copilotReview({ copilotReviews: { totalCount: 1 } }), "unresolved");
+  assert.equal(copilotReview({ ...node(1), reviewThreads: { pageInfo: { hasNextPage: true }, nodes: [] } }), "unresolved");
+  const [pr] = pullRequests(search({ ...prNode(1, "a"), mergedAt: "2026-11-15T13:00:00Z", ...node(1) }));
+  assert.deepEqual([pr.mergedAt, pr.copilot], ["2026-11-15T13:00:00Z", "passed"]);
 });
 
 test("reads how each check went", () => {
@@ -211,6 +228,20 @@ test("shows why gh failed", async () => {
   await assert.rejects(fetch(gh), { message: "HTTP 502: Bad Gateway" });
 });
 
+test("keeps what gh could read when the rest is forbidden", async () => {
+  const dir = tmp();
+  const write = (name: string, errors: object[]) => {
+    const out = JSON.stringify({ data: { open: { nodes: [null] }, search: { nodes: [null, prNode(1, "a")] } }, errors });
+    writeFileSync(join(dir, `${name}.json`), out);
+    writeFileSync(join(dir, name), `#!/bin/sh\ncat ${join(dir, `${name}.json`)}\necho "gh: SAML enforcement" >&2\nexit 1\n`);
+    chmodSync(join(dir, name), 0o755);
+    return join(dir, name);
+  };
+  const prs = pullRequests(await fetch(write("forbidden", [{ type: "FORBIDDEN" }, { type: "FORBIDDEN" }])));
+  assert.deepEqual(prs.map((p) => p.number), [1]);
+  await assert.rejects(fetch(write("other", [{ type: "FORBIDDEN" }, { type: "INTERNAL" }])), { message: "gh: SAML enforcement" });
+});
+
 // Returns Herdr with panes, keeping what it is told to do in calls.
 function fakeHerdr(panes: () => HerdrPane[], calls: unknown[][]): PollHerdr {
   return {
@@ -260,6 +291,29 @@ test("polls pull requests", async () => {
   responses.push(search(prNode(1, "me/one", { checks: "FAILURE", failed: ["test"] })));
   assert.deepEqual((await poll(herdr, join(root, "project"), state, [], fetchPrs)).urls,
                    ["https://github.com/org/old/pull/9", pr.url]);
+});
+
+test("keeps changes for later while Herdr is down", async () => {
+  const root = tmp();
+  mkdirSync(join(root, "project"), { recursive: true });
+  const responses = [search(prNode(1, "a", { checks: "PENDING" })), search(prNode(1, "a", { checks: "SUCCESS" })),
+                     search(prNode(1, "a", { checks: "SUCCESS" }))];
+  const calls: unknown[][] = [];
+  let up = true;
+  const herdr = fakeHerdr(() => {
+    if (!up) throw new Error("connect ECONNREFUSED");
+    return [];
+  }, calls);
+  const state = join(root, "state/pull-requests.json");
+  const fetchPrs = async () => responses.shift();
+  await poll(herdr, join(root, "project"), state, [], fetchPrs);
+  up = false;
+  const { rows } = await poll(herdr, join(root, "project"), state, [], fetchPrs);
+  assert.deepEqual(rows.map((r) => r.checks), ["SUCCESS"]);
+  assert.deepEqual(calls, []);
+  up = true;
+  await poll(herdr, join(root, "project"), state, [], fetchPrs);
+  assert.deepEqual(calls, [["notify", "app#1 checks passed", "PR 1", "done"]]);
 });
 
 test("wakes the agent in the checkout over one in the project", async () => {
