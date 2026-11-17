@@ -1,11 +1,10 @@
 import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
-import { type IncomingMessage, type Server, createServer } from "node:http";
-import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { type AgentActions, Outbox, agentPath, forgetAnswered, fromPage, handleAgent, permission, undelivered } from "./agents.ts";
+import { Hono } from "hono";
+import { type AgentActions, Outbox, forgetAnswered, fromPage, permission, routeAgents, undelivered } from "./agents.ts";
 import type { HookEvent } from "./hooks.ts";
 
 const file = () => join(mkdtempSync(join(tmpdir(), "outbox-")), "outbox.json");
@@ -122,65 +121,58 @@ test("forgets a permission request once it is answered", () => {
 test("only the page itself passes as the page", () => {
   const hosts = new Set(["127.0.0.1:9000"]);
   const json = "application/json";
-  assert.equal(fromPage({ origin: "http://127.0.0.1:9000", "content-type": json }, hosts), true);
-  assert.equal(fromPage({ origin: "http://evil.example", "content-type": json }, hosts), false);
-  assert.equal(fromPage({ origin: "http://127.0.0.1:9000", "content-type": "text/plain" }, hosts), false);
-  assert.equal(fromPage({ "content-type": json }, hosts), false);
+  assert.equal(fromPage(new Headers({ origin: "http://127.0.0.1:9000", "content-type": json }), hosts), true);
+  assert.equal(fromPage(new Headers({ origin: "http://evil.example", "content-type": json }), hosts), false);
+  assert.equal(fromPage(new Headers({ origin: "http://127.0.0.1:9000", "content-type": "text/plain" }), hosts), false);
+  assert.equal(fromPage(new Headers({ "content-type": json }), hosts), false);
 });
 
-test("reads the pane and action from a path", () => {
-  assert.deepEqual(agentPath("/api/agents/w1%3Ap1/messages"), { pane: "w1:p1", action: "messages" });
-  assert.deepEqual(agentPath("/api/agents/w1%3Ap1/messages/7"), { pane: "w1:p1", action: "messages", id: "7" });
-  assert.equal(agentPath("/api/agents/w1%3Ap1/nope"), null);
-  assert.equal(agentPath("/api/agents/%E0%A4%A/focus"), null);
-});
-
-/** Serves handleAgent with actions, returning a function that sends a
- * request and returns its status. */
-async function serve(t: { after: (f: () => void) => void }, actions: AgentActions) {
-  const server: Server = createServer((req: IncomingMessage, res) => {
-    handleAgent(req, res, agentPath(req.url!)!, actions);
-  });
-  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
-  t.after(() => {
-    server.closeAllConnections();
-    server.close();
-  });
-  const { port } = server.address() as AddressInfo;
+/** Routes agents' actions with actions, returning a function that sends
+ * a request for path under /api/agents/ and returns its status. */
+function serve(actions: AgentActions, allowed?: () => boolean) {
+  const app = new Hono();
+  routeAgents(app, actions, allowed);
   return async (method: string, path: string, body?: object) =>
-    (await fetch(`http://127.0.0.1:${port}/api/agents/w1%3Ap1/${path}`, {
-      method, body: body && JSON.stringify(body), headers: { Connection: "close" },
-    })).status;
+    (await app.request(`/api/agents/${path}`, { method, body: body && JSON.stringify(body) })).status;
 }
 
-test("queues and cancels messages for known agents", async (t) => {
+test("queues and cancels messages for known agents", async () => {
   const outbox = new Outbox(file(), none, yes);
   let changes = 0;
-  const send = await serve(t, {
+  const send = serve({
     outbox, known: (p) => p === "w1:p1", session: () => "s1", focus: none, changed: () => changes++,
   });
-  assert.equal(await send("POST", "messages", { text: "  " }), 400);
-  assert.equal(await send("POST", "messages", { text: " hi " }), 204);
+  assert.equal(await send("POST", "w1%3Ap1/messages", { text: "  " }), 400);
+  assert.equal(await send("POST", "w1%3Ap1/messages", { text: " hi " }), 204);
   const [{ id, text }] = outbox.queued("w1:p1");
   assert.equal(text, "hi");
   assert.equal(outbox.queued("w1:p1")[0].session, "s1");
-  assert.equal(await send("DELETE", `messages/${id}`), 204);
-  assert.equal(await send("DELETE", `messages/${id}`), 404);
+  assert.equal(await send("DELETE", `w1%3Ap1/messages/${id}`), 204);
+  assert.equal(await send("DELETE", `w1%3Ap1/messages/${id}`), 404);
   assert.equal(changes, 2);
 });
 
-test("refuses agents it doesn't know", async (t) => {
-  const send = await serve(t, {
-    outbox: new Outbox(file(), none, yes), known: () => false, session: () => undefined, focus: none, changed: () => {},
-  });
-  assert.equal(await send("POST", "messages", { text: "hi" }), 404);
+test("routes only an agent's actions, and only those allowed", async () => {
+  const actions = { outbox: new Outbox(file(), none, yes), known: (p: string) => p === "w1:p1", session: () => undefined, focus: none, changed: () => {} };
+  const send = serve(actions);
+  assert.equal(await send("POST", "w1%3Ap1/nope"), 404);
+  assert.equal(await send("GET", "w1%3Ap1/focus"), 404);
+  assert.equal(await send("POST", "%E0%A4%A/focus"), 404);
+  assert.equal(await serve(actions, () => false)("POST", "w1%3Ap1/focus"), 403);
 });
 
-test("focuses a known agent's pane", async (t) => {
+test("refuses agents it doesn't know", async () => {
+  const send = serve({
+    outbox: new Outbox(file(), none, yes), known: () => false, session: () => undefined, focus: none, changed: () => {},
+  });
+  assert.equal(await send("POST", "w1%3Ap1/messages", { text: "hi" }), 404);
+});
+
+test("focuses a known agent's pane", async () => {
   const focused: string[] = [];
-  const send = await serve(t, {
+  const send = serve({
     outbox: new Outbox(file(), none, yes), known: () => true, session: () => undefined, focus: async (p) => void focused.push(p), changed: () => {},
   });
-  assert.equal(await send("POST", "focus"), 204);
+  assert.equal(await send("POST", "w1%3Ap1/focus"), 204);
   assert.deepEqual(focused, ["w1:p1"]);
 });

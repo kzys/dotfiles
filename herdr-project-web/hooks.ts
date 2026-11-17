@@ -4,13 +4,21 @@
 
 import { execFile } from "node:child_process";
 import { chmodSync, mkdirSync, rmSync } from "node:fs";
-import { type IncomingMessage, type Server, type ServerResponse, createServer } from "node:http";
+import { type Server, createServer } from "node:http";
 import { dirname } from "node:path";
 import { promisify } from "node:util";
+import { getRequestListener } from "@hono/node-server";
+import { type Context, Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 
 const AGENTS = new Set(["claude", "codex", "opencode"]);
-// Far more than a hook's event needs, to bound what's kept in memory.
+// Far more than any request needs, to bound what's kept in memory.
 const MAX_BODY = 1 << 20;
+
+/** Returns middleware that refuses a request whose body is too large to
+ * keep, with what tooLarge returns. */
+export const limit = (tooLarge = (c: Context): Response => c.body(null, 413)) =>
+  bodyLimit({ maxSize: MAX_BODY, onError: tooLarge });
 
 // What a permission request asks for is kept to show the user, this long
 // at most.
@@ -26,13 +34,6 @@ export function hookDetail(data: { tool_name?: unknown; tool_input?: unknown }):
   if (typeof data?.tool_name !== "string" || QUESTIONS.has(data.tool_name)) return null;
   const detail = `${data.tool_name}: ${JSON.stringify(data.tool_input ?? {})}`;
   return detail.length > MAX_DETAIL ? `${detail.slice(0, MAX_DETAIL)}…` : detail;
-}
-
-/** Returns the agent and event of a hook's request path, or null if it
- * isn't one. */
-export function hookPath(path: string): { agent: string; event: string } | null {
-  const m = /^\/hooks\/([a-z]+)\/([A-Za-z]+)$/.exec(path);
-  return m && AGENTS.has(m[1]) ? { agent: m[1], event: m[2] } : null;
 }
 
 /** Reports whether a process with these ancestors' command lines, or
@@ -60,25 +61,13 @@ export async function ancestors(pid: number): Promise<string[] | null> {
   return commands;
 }
 
-/** Reads the body of req, or returns null if it's too large. */
-export async function readBody(req: IncomingMessage): Promise<string | null> {
-  const chunks: Buffer[] = [];
-  let size = 0;
-  for await (const chunk of req) {
-    size += chunk.length;
-    if (size > MAX_BODY) return null;
-    chunks.push(chunk);
-  }
-  return Buffer.concat(chunks).toString();
-}
-
 /** Returns the Herdr pane a request speaks for, from X-Herdr-Pane, with
  * the posting process in X-Agent-Pid, and whether the process really runs
  * in it, or null if it names no pane. */
-export async function speaker(req: IncomingMessage, lineage = ancestors): Promise<{ pane: string; own: boolean } | null> {
-  const pane = req.headers["x-herdr-pane"];
-  const pid = Number(req.headers["x-agent-pid"]);
-  if (typeof pane !== "string" || !pane) return null;
+export async function speaker(headers: Headers, lineage = ancestors): Promise<{ pane: string; own: boolean } | null> {
+  const pane = headers.get("x-herdr-pane");
+  const pid = Number(headers.get("x-agent-pid"));
+  if (!pane) return null;
   return { pane, own: pid > 1 && ownsPane(await lineage(pid)) };
 }
 
@@ -90,27 +79,26 @@ export type HookHandler = (pane: string | null, hook: { agent: string; event: st
  * the pane as speaker reads it, ignores subagents, and replies with what
  * handle returns, for the agent's context; GET /hooks lists latest.
  * lineage returns a process's ancestors' command lines. Other requests go
- * to other, given the request's URL. */
+ * to app's own routes. */
 export function hookServer(
   latest: Map<string, HookEvent>,
   lineage = ancestors,
   handle: HookHandler = async () => "",
-  other = (_req: IncomingMessage, res: ServerResponse, _url: URL) => void res.writeHead(404).end(),
+  app = new Hono(),
 ): Server {
-  async function post(req: IncomingMessage, res: ServerResponse, hook: { agent: string; event: string }) {
+  async function post(c: Context, hook: { agent: string; event: string }) {
     const at = Date.now();
-    const body = await readBody(req);
-    if (body === null) return res.writeHead(413).end();
     let data: { agent_id?: unknown; session_id?: unknown; tool_name?: unknown; tool_input?: unknown };
     try {
+      const body = await c.req.text();
       data = body ? JSON.parse(body) : {};
     } catch {
-      return res.writeHead(400).end();
+      return c.body(null, 400);
     }
     // Nor does a Codex started by another's thread own the pane.
-    const thread = req.headers["x-codex-thread"];
-    if (data?.agent_id || (hook.agent === "codex" && thread && thread !== data?.session_id)) return res.writeHead(204).end();
-    const who = await speaker(req, lineage);
+    const thread = c.req.header("x-codex-thread");
+    if (data?.agent_id || (hook.agent === "codex" && thread && thread !== data?.session_id)) return c.body(null, 204);
+    const who = await speaker(c.req.raw.headers, lineage);
     const pane = who?.own ? who.pane : null;
     if (pane) {
       const session = typeof data?.session_id === "string" ? data.session_id : null;
@@ -121,21 +109,16 @@ export function hookServer(
       if (at >= (last?.at ?? 0) && !repeats) latest.set(pane, { ...hook, session, detail: hookDetail(data), at });
     }
     const reply = await handle(pane, hook, data);
-    if (reply) return res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" }).end(reply);
-    res.writeHead(204).end();
+    return reply ? c.text(reply) : c.body(null, 204);
   }
-  return createServer((req, res) => {
-    const url = new URL(req.url ?? "/", "http://localhost");
-    const path = url.pathname;
-    const hook = hookPath(path);
-    if (req.method === "POST" && hook) {
-      post(req, res, hook).catch(() => res.writeHead(500).end());
-    } else if (req.method === "GET" && path === "/hooks") {
-      res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify(Object.fromEntries(latest)));
-    } else {
-      other(req, res, url);
-    }
-  });
+  for (const agent of AGENTS) {
+    // An error's text would reach the agent's context.
+    app.post(`/hooks/${agent}/:event{[A-Za-z]+}`, limit(), (c) =>
+      post(c, { agent, event: c.req.param("event") }).catch(() => c.body(null, 500))
+    );
+  }
+  app.get("/hooks", (c) => c.json(Object.fromEntries(latest)));
+  return createServer(getRequestListener(app.fetch));
 }
 
 /** Listens on the socket at path, replacing one left by an earlier run,
