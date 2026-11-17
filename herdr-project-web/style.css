@@ -592,7 +592,7 @@ code { font-family: var(--mono); font-size: var(--normal); }
 .wait code { color: var(--muted); overflow-wrap: anywhere; }
 
 /* The board of pull requests. */
-main.board { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-5); }
+main.board { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--space-5); }
 @media (max-width: 900px) { main.board { grid-template-columns: minmax(0, 1fr); } }
 .board-column > ul { margin: 0; padding: 0; list-style: none; }
 .board-card {

@@ -119,6 +119,15 @@ other branches.
 For a branch stacked on another, name the parent when creating it, as in
 `git worktree add -b <branch> <path> <parent>`, so that its diff starts there.
 
+After opening a pull request or pushing to one, and whenever you see
+its checks finish, tell herdr-project-web so that its board shows it
+within seconds rather than at its next check. If it isn't running, this fails silently, and
+that's fine:
+
+```
+curl -s -X POST --unix-socket "${XDG_STATE_HOME:-$HOME/.local/state}/herdr-project/run/server.sock" http://localhost/pulls/check
+```
+
 ## Herdr
 
 Your role is `main` unless you report another. If it is, report it once
