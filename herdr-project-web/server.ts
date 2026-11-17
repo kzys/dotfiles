@@ -37,6 +37,7 @@ import {
   type Herdr, type Watched, agentStates, checkoutOf, linkCheckout, openProjects, projectDirs, projectLabels, readProjectFile, readState,
 } from "./state.ts";
 import { type Found, title, watchWorkspace, watchedFrom } from "./watched.ts";
+import { type Wait, readProcesses, runningSubagents, sessionFolder, waitsByPid } from "./waits.ts";
 import { type PullBases, changedSince, checkoutDirs, fileLines, setBase, summarize, worktreeDiff, worktreeDirs } from "./worktrees.ts";
 
 const here = import.meta.dirname;
@@ -141,6 +142,9 @@ function everyPane(): Herdr | null {
   return { workspaces: herdr?.workspaces ?? [], panes: [...(herdr?.panes ?? []), ...appTerminalPanes] };
 }
 
+// What each Claude session's Bash tool still runs, by session ID.
+let waits = new Map<string, Wait[]>();
+
 /** Returns the state for the page. Only the watcher's server can act. */
 function pageState() {
   const all = everyPane();
@@ -149,7 +153,10 @@ function pageState() {
   // Herdr's panes are named like w1:p2, the app's terminals like t3.
   const readable = Object.fromEntries(Object.entries(outbox.all()).filter(([pane]) => pane.includes(":") ? herdr !== null : appRead));
   const left = undelivered(readable, sessions);
-  return { ...readState(watched(), projectRoot, all, home, links), ...(orgs ? { controls: agentViews(), undelivered: left } : {}) };
+  const state = readState(watched(), projectRoot, all, home, links);
+  for (const project of state.projects)
+    for (const pane of project.panes) pane.waits = (sessions[pane.id] && waits.get(sessions[pane.id])) || [];
+  return { ...state, ...(orgs ? { controls: agentViews(), undelivered: left } : {}) };
 }
 
 /** Sends agents that are free what waits for them. */
@@ -251,6 +258,35 @@ async function pollApp() {
 }
 pollApp();
 setInterval(pollApp, 5_000);
+
+// Where Claude Code keeps each session's files, once found.
+const sessionFolders = new Map<string, string>();
+
+// Read what agents wait on, keeping the last read when ps fails: their
+// Bash tool's commands, then the subagents of the sessions still running.
+async function pollWaits() {
+  try {
+    const sessions = claudeSessions();
+    const processes = await readProcesses();
+    const shells = waitsByPid(processes);
+    const age = new Map(processes.map((p) => [p.pid, p.seconds]));
+    const next = new Map<string, Wait[]>();
+    const projects = join(home, ".claude/projects");
+    for (const [pid, session] of sessions) {
+      let folder = sessionFolders.get(session) ?? null;
+      if (!folder && (folder = sessionFolder(projects, session))) sessionFolders.set(session, folder);
+      const now = Date.now();
+      // ps counts whole seconds, so a second more.
+      const since = now - ((age.get(pid) ?? 0) + 1) * 1000;
+      const w = [...(shells.get(pid) ?? []), ...(folder && age.has(pid) ? runningSubagents(folder, now, since) : [])];
+      if (w.length) next.set(session, w);
+    }
+    waits = next;
+    refresh();
+  } catch {}
+}
+pollWaits();
+setInterval(pollWaits, 10_000);
 
 // The title Herdr has, or is being told.
 let titled = "";

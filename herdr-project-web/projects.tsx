@@ -90,6 +90,15 @@ function PaneRow({ panes, agents }: { panes: Pane[]; agents: Record<string, Agen
             <span class={`pr-agent agent-${state}`}>{p.role ?? p.id}</span>
             {p.ctx !== null && <span class={p.ctx >= FULL_AT ? "ctx ctx-full" : "ctx"}>{p.ctx}%</span>}
             {agents[p.id] && <AgentControls pane={p} view={agents[p.id]} />}
+            {waiting([p]).length > 0 && (
+              <span class="waits">
+                {p.waits!.map((w, n) => (
+                  <span key={n} class="wait">
+                    waiting {since(w.seconds)}: <code>{w.command}</code>
+                  </span>
+                ))}
+              </span>
+            )}
           </span>
         );
       })}
@@ -167,9 +176,29 @@ function projectTexts(p: Project): (string | null)[] {
   return [p.name, p.title, ...p.workspaces, ...wts, ...p.files.map((f) => f.name)];
 }
 
-/** Returns how many agents panes has, and how many are in each state. */
+/** Returns the agents among panes that wait on what their Bash tool or
+ * subagents run: idle, with one still running. */
+function waiting(panes: Pane[]): Pane[] {
+  return panes.filter((p) => p.waits?.length && statusState(p.status) === "idle");
+}
+
+/** Returns a duration in seconds as its largest unit, like 12m. */
+function since(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+  return seconds < 86_400 ? `${Math.floor(seconds / 3600)}h` : `${Math.floor(seconds / 86_400)}d`;
+}
+
+/** Returns what the waiting agents among panes wait on, one line each. */
+function waitLines(panes: Pane[]): string[] {
+  return waiting(panes).flatMap((p) => (p.waits ?? []).map((w) => `${p.role ?? p.id}: ${w.command} (${since(w.seconds)})`));
+}
+
+/** Returns how many agents panes has, how many are in each state, and
+ * how many wait on a command, which hovering lists. */
 function AgentCounts({ panes }: { panes: Pane[] }) {
   if (!panes.length) return null;
+  const waits = waitLines(panes);
   return (
     <span class="agent-counts">
       {panes.length === 1 ? "1 agent" : `${panes.length} agents`}
@@ -178,6 +207,11 @@ function AgentCounts({ panes }: { panes: Pane[] }) {
           {n} {state}
         </span>
       ))}
+      {waits.length > 0 && (
+        <span class="waiting" title={waits.join("\n")}>
+          {waiting(panes).length} waiting
+        </span>
+      )}
     </span>
   );
 }
