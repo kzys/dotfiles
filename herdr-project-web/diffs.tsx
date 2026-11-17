@@ -82,7 +82,8 @@ function WorktreeRow({ wt }: { wt: Summary }) {
 /** Returns the open projects' worktrees, matching query, with how each
  * differs from where its branch started. */
 export function WorktreeList({ query }: { query: string }) {
-  const [projects, error, at, refresh] = useFetched<ProjectWorktrees[]>("/api/worktrees");
+  // Focus shows a recent listing again; Refresh asks git.
+  const [projects, error, at, refresh] = useFetched<ProjectWorktrees[]>("/api/worktrees", "fresh");
   const shown = (projects ?? [])
     .map((p) =>
       matches(query, p.name, p.title)
