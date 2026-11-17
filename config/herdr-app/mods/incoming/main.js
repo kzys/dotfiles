@@ -7,9 +7,12 @@ import { v_flex, h_flex, TextareaState, Textarea } from "gpui-base";
 import { run, props, closeOverlay, theme, terminals, hc, home, notify } from "herdr";
 
 /** Returns the address of the router among terms, the live terminal
- * labeled role=router that Claude still runs in, or null. */
+ * labeled role=router that still runs herdr-router or Claude, or null.
+ * herdr-router runs Claude as its child, so it is what the terminal runs
+ * in front. */
 export function router(terms) {
-  const t = terms.find((t) => t.state === "live" && t.labels?.role === "router" && t.foreground?.argv?.[0] === "claude");
+  const runs = (a) => a === "claude" || a === "herdr-router" || a.endsWith("/herdr-router");
+  const t = terms.find((t) => t.state === "live" && t.labels?.role === "router" && t.foreground?.argv?.some(runs));
   return t ? t.address : null;
 }
 
