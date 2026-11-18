@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { fileHref, pageTitle, projectHref, route, tab } from "./pages.ts";
+import { fileHref, isPagePath, locationKey, movedTo, pageTitle, projectHref, route, tab } from "./pages.ts";
 
 test("routes to the page of a project's file", () => {
   const dir = "/p/20261026-a b";
@@ -28,4 +28,15 @@ test("routes each view of the page", () => {
   assert.deepEqual(hashes.map((h) => tab(route(h))), [
     "inbox", "projects", "worktrees", "worktrees", "worktrees", "worktrees", "learnings", "pulls", "inbox",
   ]);
+});
+
+test("reads views from the path or the hash", () => {
+  assert.deepEqual(route(locationKey("/pulls", "")), { view: "pulls" });
+  assert.deepEqual(route(locationKey("/", "#projects")), { view: "projects" });
+  assert.deepEqual(route(locationKey("/pulls", "#projects")), { view: "projects" });
+  assert.deepEqual(route(locationKey("/", "")), { view: "inbox" });
+  assert.equal(movedTo("#pulls"), "/pulls");
+  assert.equal(movedTo("#projects"), null);
+  assert.equal(movedTo(""), null);
+  assert.ok(isPagePath("/") && isPagePath("/pulls") && !isPagePath("/api/state"));
 });
