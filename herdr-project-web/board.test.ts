@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { askCopilot, canAskCopilot, cards, copilotComments, nextCopilotSeen, routerMessage, moveTo, stage, stillMoved } from "./board.ts";
+import { askCopilot, canAskCopilot, cards, moveTo, stage, stillMoved } from "./board.ts";
 import type { Pull } from "./github.ts";
 
 function pull(number: number, over: Partial<Pull> = {}): Pull {
@@ -79,27 +79,4 @@ test("keeps what came of each request to Copilot", async () => {
   asks = await askCopilot(prs[1].url, asks, request);
   assert.deepEqual(asks, { [prs[0].url]: "requested", [prs[1].url]: "could not request Copilot" });
   assert.equal(cards(prs, {}, (d) => d, {}, new Date(), asks)[1].copilotAsk, "could not request Copilot");
-});
-
-test("routes each review of Copilot's that leaves threads open", () => {
-  const prs = [
-    pull(1, { copilot: "unresolved", copilotReviews: 1 }),
-    pull(2, { copilot: "unresolved", copilotReviews: 1 }),
-    pull(3, { copilot: "passed", copilotReviews: 1 }),
-    pull(4, { copilot: "unresolved", copilotReviews: 1, state: "MERGED" }),
-  ];
-  const seen = { [prs[1].url]: 1, "https://github.com/org/app/pull/9": 2 };
-  const routed = copilotComments(prs, seen);
-  assert.deepEqual(routed.map((p) => p.number), [1]);
-  const next = nextCopilotSeen(seen, prs, [prs[0].url, prs[1].url, prs[2].url]);
-  assert.deepEqual(next, { [prs[0].url]: 1, [prs[1].url]: 1, [prs[2].url]: 1 });
-  assert.deepEqual(copilotComments(prs, next), []);
-  // Another review is routed, even while the first one's threads are open.
-  assert.deepEqual(copilotComments([pull(2, { copilot: "unresolved", copilotReviews: 2 })], next).map((p) => p.number), [2]);
-  assert.equal(
-    routerMessage([prs[0], prs[1]], { [prs[0].url]: { project: "/p/a", dir: null, role: null } }),
-    `Copilot left review comments on ${prs[0].url} (project /p/a), ${prs[1].url}. ` +
-      "Give each to the agent working on it, to address the comments, push the fixes, and reply to each, " +
-      "leaving the threads unresolved.",
-  );
 });

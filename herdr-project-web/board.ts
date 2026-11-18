@@ -136,34 +136,3 @@ export async function askCopilot(
     return { ...asks, [url]: String((e as Error)?.message ?? e).split("\n")[0] };
   }
 }
-
-// How many reviews Copilot had left on each open pull request, by url,
-// as last given to the router.
-export type CopilotSeen = Record<string, number>;
-
-/** Returns the open pull requests in prs with Copilot's threads open and
- * a review of its since seen, even while threads of an older one are
- * still open. */
-export function copilotComments(prs: Pull[], seen: CopilotSeen): Pull[] {
-  return prs.filter((pr) => pr.state === "OPEN" && pr.copilot === "unresolved" && pr.copilotReviews > (seen[pr.url] ?? 0));
-}
-
-/** Returns seen updated with the open pull requests in prs, keeping only
- * those whose URLs are in open, those still known to be open. */
-export function nextCopilotSeen(seen: CopilotSeen, prs: Pull[], open: string[]): CopilotSeen {
-  const known = new Set(open);
-  const next: CopilotSeen = Object.fromEntries(Object.entries(seen).filter(([url]) => known.has(url)));
-  for (const pr of prs) if (pr.state === "OPEN") next[pr.url] = pr.copilotReviews;
-  return next;
-}
-
-/** Returns what to ask the router about prs, whose Copilot threads are
- * open, on one line, naming the project of each from owners if known. */
-export function routerMessage(prs: Pull[], owners: Record<string, Owner | null>): string {
-  const named = prs.map((pr) => {
-    const dir = owners[pr.url]?.project;
-    return dir ? `${pr.url} (project ${dir})` : pr.url;
-  });
-  return `Copilot left review comments on ${named.join(", ")}. Give each to the agent working on it, ` +
-    "to address the comments, push the fixes, and reply to each, leaving the threads unresolved.";
-}
