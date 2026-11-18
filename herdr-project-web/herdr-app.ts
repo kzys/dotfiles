@@ -2,8 +2,8 @@
 // its panes and agents with hc, and opening the picker's rows with
 // herdr-app commands.
 
-import { execFile } from "node:child_process";
-import { readFileSync, readdirSync } from "node:fs";
+import { execFile, execFileSync } from "node:child_process";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -36,16 +36,42 @@ export function claudeSessions(directory = join(homedir(), ".claude/sessions")):
   return found;
 }
 
+/** Returns the parent process ID of each process in text, as ps -A -o
+ * pid=,ppid= prints them. */
+export function psParents(text: string): Map<number, number> {
+  const parents = new Map<number, number>();
+  for (const m of text.matchAll(/^\s*(\d+)\s+(\d+)\s*$/gm)) parents.set(Number(m[1]), Number(m[2]));
+  return parents;
+}
+
+// Every process's parent as ps last listed them, where there is no /proc,
+// and when, as one listing answers many questions at once.
+let listed: { at: number; parents: Map<number, number> } | null = null;
+const LISTED_MS = 1000;
+
 /** Returns the parent process ID of process pid, or null if it can't be
- * read, as once it has ended. */
+ * read, as once it has ended: from /proc, or where there is none, as on
+ * macOS, from ps, listed at most once a second. */
 export function procParent(pid: number): number | null {
-  try {
-    // The name, in parentheses, may hold spaces; the parent comes after it.
-    const ppid = Number(readFileSync(`/proc/${pid}/stat`, "utf8").split(") ")[1]?.split(" ")[1]);
-    return Number.isInteger(ppid) ? ppid : null;
-  } catch {
-    return null;
+  if (existsSync("/proc/self/stat")) {
+    try {
+      // The name, in parentheses, may hold spaces; the parent comes after it.
+      const ppid = Number(readFileSync(`/proc/${pid}/stat`, "utf8").split(") ")[1]?.split(" ")[1]);
+      return Number.isInteger(ppid) ? ppid : null;
+    } catch {
+      return null;
+    }
   }
+  if (!listed || Date.now() - listed.at >= LISTED_MS) {
+    let parents = new Map<number, number>();
+    try {
+      parents = psParents(execFileSync("ps", ["-A", "-o", "pid=,ppid="], { encoding: "utf8", timeout: 5000, maxBuffer: 16 << 20 }));
+    } catch {
+      // A failed listing is kept too, so that a hung ps stalls only once.
+    }
+    listed = { at: Date.now(), parents };
+  }
+  return listed.parents.get(pid) ?? null;
 }
 
 /** Returns the ID of the Claude session in terminal, as hc get describes
