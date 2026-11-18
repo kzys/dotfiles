@@ -33,7 +33,7 @@ import { type Checked, checkQueue } from "./queues.ts";
 import {
   codexTokens, lastPrompt, percent, resumedText, roleToReport, sessionCwd, sessionReport, statusLine, statusTokens, usageFile,
 } from "./report.ts";
-import { appAgentFree, appHerdrPanes, appOpener, appPanes, appTerminals, claudeSessions, terminalSession, toRouter } from "./herdr-app.ts";
+import { appAgentFree, appHerdrPanes, appOpener, appPanes, appTerminals, claudeSessions, terminalSession } from "./herdr-app.ts";
 import { type OpenHerdr, background, choices, inboxChoices, open, paneRecords, plan, rowNotes, workspacesToName } from "./rows.ts";
 import { claudeSessionDirs, codexContext, codexSessionDirs, codexSessions, reportedRole } from "./sessions.ts";
 import * as slack from "./slack.ts";
@@ -117,14 +117,6 @@ const copilotPath = join(stateDir, "copilot.json");
 const loadedAsks = loadState(copilotPath);
 let copilotAsks: board.CopilotAsks =
   loadedAsks && typeof loadedAsks === "object" && !Array.isArray(loadedAsks) ? (loadedAsks as board.CopilotAsks) : {};
-// The state of Copilot's review of each open pull request, as last given
-// to the router.
-const copilotSeenPath = join(stateDir, "copilot-seen.json");
-const loadedSeen = loadState(copilotSeenPath);
-// Without it, the reviews already there are taken as given, rather than
-// sending the router every open pull request's.
-let copilotSeen: board.CopilotSeen | null =
-  loadedSeen && typeof loadedSeen === "object" && !Array.isArray(loadedSeen) ? (loadedSeen as board.CopilotSeen) : null;
 // Each pane's last hook event.
 const hookEvents = new Map<string, HookEvent>();
 // The terminals of the Herdr app's spaces, which herdr-core runs, as
@@ -472,8 +464,9 @@ async function checkPullRequests() {
     prNames = Object.fromEntries(dirs.map((d) => [d, projectName(d)]));
     const kept = board.stillMoved(moves, prPulls);
     if (Object.keys(kept).length !== Object.keys(moves).length) saveMoves(kept);
-    await askCopilot();
-    await routeCopilotComments();
+    const open = new Set(prUrls);
+    const asks = Object.fromEntries(Object.entries(copilotAsks).filter(([url]) => open.has(url)));
+    if (Object.keys(asks).length !== Object.keys(copilotAsks).length) saveAsks(asks);
   } catch (e) {
     lines = [`Cannot check pull requests: ${String(e).split("\n")[0]}`];
   }
@@ -583,48 +576,24 @@ async function setBaseFrom(body: string | null): Promise<number> {
   return 204;
 }
 
-/** Asks Copilot to review the pull requests ready for it, as
- * board.toAskCopilot picks them, keeping what came of it for those still
- * open. */
-async function askCopilot() {
-  const open = new Set(prUrls);
-  const kept = Object.fromEntries(Object.entries(copilotAsks).filter(([url]) => open.has(url)));
-  const next = await board.askCopilot(prPulls, moves, kept, (url) => github.requestCopilot(url));
-  if (JSON.stringify(next) === JSON.stringify(copilotAsks)) return;
+/** Asks Copilot to review the open pull request that body, a request's,
+ * names, keeping what came of it, and returns the HTTP status. */
+async function askCopilotFrom(body: string | null): Promise<number> {
+  const { url } = JSON.parse(body ?? "{}");
+  if (!prPulls.some((p) => p.url === url && p.state === "OPEN")) return 404;
+  const asked = await board.askCopilot(url, {}, (u) => github.requestCopilot(u));
+  // Merged after the request, which can take a while, so as not to lose
+  // what came of another asked meanwhile.
+  saveAsks({ ...copilotAsks, ...asked });
+  refresh();
+  return copilotAsks[url] === "requested" ? 204 : 502;
+}
+
+/** Keeps next as what came of asking Copilot to review pull requests. */
+function saveAsks(next: board.CopilotAsks) {
   copilotAsks = next;
   try {
     saveState(copilotPath, next);
-  } catch (e) {
-    console.error("herdr-project-web:", e);
-  }
-}
-
-/** Gives the router the pull requests whose Copilot threads have opened
- * since it was last told, to have their agents address them. If the
- * router can't be reached, they are given again after the next check. */
-async function routeCopilotComments() {
-  const prs = copilotSeen ? board.copilotComments(prPulls, copilotSeen) : [];
-  if (prs.length) {
-    // Through the outbox, which waits for the router to be free: typed in
-    // meanwhile, it could answer a prompt or join the user's input.
-    // For the router's session only, so that an agent that takes over its
-    // terminal meanwhile doesn't get it.
-    const send = async (router: any, text: string) => {
-      outbox.add(router.address, text, terminalSession(router, claudeSessions()));
-      deliver();
-    };
-    try {
-      await toRouter(board.routerMessage(prs, prOwners), await appTerminals(undefined, true), send);
-    } catch (e) {
-      console.error("herdr-project-web: cannot reach the router:", e);
-      return;
-    }
-  }
-  const next = board.nextCopilotSeen(copilotSeen ?? {}, prPulls, prUrls);
-  if (JSON.stringify(next) === JSON.stringify(copilotSeen)) return;
-  copilotSeen = next;
-  try {
-    saveState(copilotSeenPath, next);
   } catch (e) {
     console.error("herdr-project-web:", e);
   }
@@ -674,6 +643,7 @@ page.use(async (c, next) => (hosts.has(c.req.header("host") ?? "") ? next() : c.
 page.onError((e, c) => c.json({ error: e.message }, 500));
 page.post("/api/base", limit(), async (c) => done(fromPage(c.req.raw.headers, hosts) ? await setBaseFrom(await c.req.text()) : 403));
 page.post("/api/stage", limit(), async (c) => done(orgs && fromPage(c.req.raw.headers, hosts) ? await setStageFrom(await c.req.text()) : 403));
+page.post("/api/copilot", limit(), async (c) => done(orgs && fromPage(c.req.raw.headers, hosts) ? await askCopilotFrom(await c.req.text()) : 403));
 // Only the watcher's server, which delivers them, and only the page.
 routeAgents(page, agentActions, (headers) => !!orgs && fromPage(headers, hosts));
 page.get("/api/state", (c) => c.body(last, 200, { "Content-Type": "application/json" }));

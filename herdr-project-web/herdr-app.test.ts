@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { appAgentFree, appHerdrPanes, appOpener, appPaneRecords, appPanes, appTerminals, claudeSessions, procParent, psParents, routerTerminal, terminalSession, toRouter } from "./herdr-app.ts";
+import { appAgentFree, appHerdrPanes, appOpener, appPaneRecords, appPanes, appTerminals, claudeSessions, procParent, psParents, terminalSession } from "./herdr-app.ts";
 import { open } from "./rows.ts";
 
 const terminal = (o: object) => ({
@@ -75,30 +75,6 @@ test("opens rows with the app's commands", async () => {
   ]);
   assert.equal(ran[2][0], "space.new");
   assert.deepEqual((ran[2][1] as any).argv, ["sh", "-c", "hp"]);
-});
-
-test("gives text to the router, or starts one", async () => {
-  const router = {
-    address: "t2", state: "live", labels: { role: "router", "herdr.space": "sp1" }, foreground: { argv: ["claude", "--x"] },
-  };
-  const terminals = [
-    { address: "t1", state: "live", labels: { role: "router" }, foreground: { argv: ["zsh"] } },
-    { ...router, state: "exited" },
-    router,
-  ];
-  assert.equal(routerTerminal(terminals), router);
-  assert.equal(routerTerminal([{ ...router, foreground: { argv: ["/home/me/bin/herdr-router"] } }])?.address, "t2");
-  const calls: unknown[][] = [];
-  const send = async (r: any, text: string) => void calls.push(["send", r.address, text]);
-  const command = async (...args: unknown[]) => void calls.push(["command", ...args]);
-  await toRouter("hello", terminals, send, command);
-  await toRouter("hello", terminals.slice(0, 2), send, command);
-  // A router outside the app's spaces can't be told when it is free.
-  await assert.rejects(toRouter("hello", [{ ...router, labels: { role: "router" } }], send, command), /in no space/);
-  assert.deepEqual(calls, [
-    ["send", "t2", "hello"],
-    ["command", "space.new", { name: "ROUTER", folder: homedir(), argv: ["herdr-router"], task: "hello", machine: "" }],
-  ]);
 });
 
 test("finds the Claude session in front, or run by what is in front", () => {

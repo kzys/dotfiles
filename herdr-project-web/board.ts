@@ -20,6 +20,12 @@ export type Stage = (typeof STAGES)[number][0];
 // The columns the user moves cards to: the others are GitHub's to say.
 export const MOVABLE: readonly Stage[] = ["copilot", "reviewed"];
 
+// The columns whose pull requests wait for the user.
+export const MINE: readonly Stage[] = ["copilot", "approved"];
+
+// More cards than this in a column of MINE are too many to leave waiting.
+export const MINE_MAX = 5;
+
 // The column the user moved each open pull request to, by url.
 export type Moves = Record<string, Stage>;
 
@@ -111,60 +117,22 @@ export function stillMoved(moves: Moves, prs: Pull[]): Moves {
 // "requested", or why the request failed.
 export type CopilotAsks = Record<string, string>;
 
-/** Returns the pull requests in prs to ask Copilot to review: those open
- * in the draft column, given moves, whose checks all passed or that have
- * none, that Copilot hasn't reviewed and that asks doesn't say were
- * requested. A failed request is tried again. */
-export function toAskCopilot(prs: Pull[], moves: Moves, asks: CopilotAsks): Pull[] {
-  return prs.filter((pr) =>
-    pr.state === "OPEN" && stage(pr, moves[pr.url] ?? null) === "draft" && pr.copilot === "none" &&
-    asks[pr.url] !== "requested");
+/** Returns whether the user can ask Copilot to review card: once its
+ * checks pass and until Copilot's review lets it on, so also while its
+ * threads are open, to ask again once they are addressed. */
+export function canAskCopilot(card: Card): boolean {
+  return card.stage === "draft";
 }
 
-/** Asks Copilot through request to review each pull request in prs that
- * toAskCopilot returns, and returns asks with what came of each. */
+/** Asks Copilot through request to review the pull request at url, and
+ * returns asks with what came of it: "requested", or why it failed. */
 export async function askCopilot(
-  prs: Pull[], moves: Moves, asks: CopilotAsks, request: (url: string) => Promise<unknown>,
+  url: string, asks: CopilotAsks, request: (url: string) => Promise<unknown>,
 ): Promise<CopilotAsks> {
-  const out = { ...asks };
-  for (const pr of toAskCopilot(prs, moves, asks)) {
-    try {
-      await request(pr.url);
-      out[pr.url] = "requested";
-    } catch (e) {
-      out[pr.url] = String((e as Error)?.message ?? e).split("\n")[0];
-    }
+  try {
+    await request(url);
+    return { ...asks, [url]: "requested" };
+  } catch (e) {
+    return { ...asks, [url]: String((e as Error)?.message ?? e).split("\n")[0] };
   }
-  return out;
-}
-
-// How many reviews Copilot had left on each open pull request, by url,
-// as last given to the router.
-export type CopilotSeen = Record<string, number>;
-
-/** Returns the open pull requests in prs with Copilot's threads open and
- * a review of its since seen, even while threads of an older one are
- * still open. */
-export function copilotComments(prs: Pull[], seen: CopilotSeen): Pull[] {
-  return prs.filter((pr) => pr.state === "OPEN" && pr.copilot === "unresolved" && pr.copilotReviews > (seen[pr.url] ?? 0));
-}
-
-/** Returns seen updated with the open pull requests in prs, keeping only
- * those whose URLs are in open, those still known to be open. */
-export function nextCopilotSeen(seen: CopilotSeen, prs: Pull[], open: string[]): CopilotSeen {
-  const known = new Set(open);
-  const next: CopilotSeen = Object.fromEntries(Object.entries(seen).filter(([url]) => known.has(url)));
-  for (const pr of prs) if (pr.state === "OPEN") next[pr.url] = pr.copilotReviews;
-  return next;
-}
-
-/** Returns what to ask the router about prs, whose Copilot threads are
- * open, on one line, naming the project of each from owners if known. */
-export function routerMessage(prs: Pull[], owners: Record<string, Owner | null>): string {
-  const named = prs.map((pr) => {
-    const dir = owners[pr.url]?.project;
-    return dir ? `${pr.url} (project ${dir})` : pr.url;
-  });
-  return `Copilot left review comments on ${named.join(", ")}. Give each to the agent working on it, ` +
-    "to address the comments, push the fixes, and reply to each, leaving the threads unresolved.";
 }

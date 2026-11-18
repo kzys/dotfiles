@@ -163,30 +163,6 @@ export type AppCommand = (name: string, args: object) => Promise<any>;
 
 const appCommand: AppCommand = (name, args) => json("herdr-app", ["do", name, JSON.stringify(args)]);
 
-/** Returns the router among terminals, as appTerminals reads them: the
- * live terminal labeled role=router that still runs herdr-router or
- * Claude, which herdr-router runs in front, or null. */
-export function routerTerminal(terminals: any[]): any | null {
-  const runs = (a: string) => a === "claude" || a === "herdr-router" || a.endsWith("/herdr-router");
-  return terminals.find((t) => t?.state === "live" && t.labels?.role === "router" && t.foreground?.argv?.some(runs)) ?? null;
-}
-
-/** Gives text to the router among terminals with send, or starts a
- * router in a new space with text as its task, with command. terminals
- * must be all of them, or a second router could start. Raises for a
- * router outside the app's spaces, whose state the app doesn't report,
- * so that nothing could tell when it is free for text. */
-export async function toRouter(
-  text: string, terminals: any[], send: (router: any, text: string) => Promise<unknown>,
-  command: AppCommand = appCommand,
-): Promise<void> {
-  const router = routerTerminal(terminals);
-  if (router && !router.labels?.["herdr.space"]) throw new Error(`the router, ${router.address}, is in no space of the app`);
-  // herdr-router moves to its own folder.
-  if (router) await send(router, text);
-  else await command("space.new", { name: "ROUTER", folder: homedir(), argv: ["herdr-router"], task: text, machine: "" });
-}
-
 /** Returns how open opens rows in the Herdr app, with command running its
  * commands. The app starts a terminal with its program rather than typing
  * one into a shell, so a new tab or space is only made once run says what
