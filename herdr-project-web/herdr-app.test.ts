@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { appAgentFree, appHerdrPanes, appOpener, appPaneRecords, appPanes, appTerminals, claudeSessions, procParent, routerTerminal, terminalSession, toRouter } from "./herdr-app.ts";
+import { appAgentFree, appHerdrPanes, appOpener, appPaneRecords, appPanes, appTerminals, claudeSessions, procParent, psParents, routerTerminal, terminalSession, toRouter } from "./herdr-app.ts";
 import { open } from "./rows.ts";
 
 const terminal = (o: object) => ({
@@ -110,6 +110,10 @@ test("finds the Claude session in front, or run by what is in front", () => {
   assert.equal(terminalSession({ foreground: { pid: 200, argv: ["/bin/sh", "herdr-router"] } }, sessions, parent), "s2");
   assert.equal(terminalSession({ foreground: { pid: 300 } }, sessions, parent), undefined);
   assert.equal(terminalSession({ foreground: { pid: null } }, sessions, parent), undefined);
+});
+
+test("reads ps's parents", () => {
+  assert.deepEqual([...psParents("    1     0\n  412     1\n\n")], [[1, 0], [412, 1]]);
 });
 
 test("reads a process's parent", () => {

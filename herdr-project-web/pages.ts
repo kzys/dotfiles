@@ -1,4 +1,23 @@
-// The page's views, by its location after the #.
+// The page's views, by its location: its path, as /pulls, or after its #.
+
+// The paths the page is served at besides /, each a view.
+export const PAGE_PATHS = ["/pulls"];
+
+/** Reports whether the page is served at pathname. */
+export const isPagePath = (pathname: string) => pathname === "/" || PAGE_PATHS.includes(pathname);
+
+/** Returns the location route reads from the page's pathname and hash:
+ * the hash without its #, if any, else the path without its first /. */
+export function locationKey(pathname: string, hash: string): string {
+  return hash.replace(/^#/, "") || pathname.slice(1);
+}
+
+/** Returns where the view of hash, from a link made before it moved to a
+ * path, is now, or null if it hasn't moved. */
+export function movedTo(hash: string): string | null {
+  const path = `/${hash.replace(/^#/, "")}`;
+  return PAGE_PATHS.includes(path) ? path : null;
+}
 
 export type Route =
   | { view: "inbox" }
@@ -19,8 +38,8 @@ export function decodeHash(s: string): string {
   }
 }
 
-/** Returns the view at hash, the page's location after its #. Any hash
- * the page doesn't know shows the inbox. */
+/** Returns the view at hash, the page's location as locationKey reads it.
+ * Any location the page doesn't know shows the inbox. */
 export function route(hash: string): Route {
   if (hash === "projects") return { view: "projects" };
   if (hash.startsWith("projects/")) return { view: "project", dir: decodeHash(hash.slice("projects/".length)) };

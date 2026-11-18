@@ -5,7 +5,7 @@ import { WorktreeDiffView, WorktreeList } from "./diffs.tsx";
 import { FileView } from "./files.tsx";
 import { halMessage } from "./hal.ts";
 import { LearningsView } from "./learnings.tsx";
-import { pageTitle, route, tab } from "./pages.ts";
+import { isPagePath, locationKey, movedTo, pageTitle, route, tab } from "./pages.ts";
 import { BoardView } from "./board.tsx";
 import { ProjectList, ProjectView, ProjectsColumn, pressing } from "./projects.tsx";
 import type { State } from "./state.ts";
@@ -31,26 +31,59 @@ function Readout({ text }: { text: string }) {
 
 // The tabs of the console strip, each with its link.
 const TABS = [
-  ["inbox", "#", "Inbox"],
-  ["pulls", "#pulls", "Pulls"],
-  ["projects", "#projects", "Projects"],
-  ["worktrees", "#diffs", "Worktrees"],
-  ["learnings", "#learnings", "Learnings"],
+  ["inbox", "/", "Inbox"],
+  ["pulls", "/pulls", "Pulls"],
+  ["projects", "/#projects", "Projects"],
+  ["worktrees", "/#diffs", "Worktrees"],
+  ["learnings", "/#learnings", "Learnings"],
 ] as const;
 
-/** Returns the page's location after its #, kept current. */
-function useHash(): string {
-  const [hash, setHash] = useState(location.hash.slice(1));
+/** Returns where a click on a link of the page's own goes, if the page
+ * shows it without loading again, or null. A link to a # is to one at /,
+ * wherever the page is. */
+function ownLink(e: MouseEvent): URL | null {
+  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return null;
+  const a = (e.target as Element | null)?.closest?.("a");
+  const href = a?.getAttribute("href");
+  if (!a || !href || a.target || a.hasAttribute("download")) return null;
+  const url = new URL(href.startsWith("#") ? `/${href}` : href, location.href);
+  return url.origin === location.origin && isPagePath(url.pathname) ? url : null;
+}
+
+/** Returns the page's location as locationKey reads it, kept current,
+ * following the page's own links without loading it again. A location
+ * from a link made before a view moved to a path, however the page got
+ * there, is replaced with the path. */
+function useLocation(): string {
+  const read = () => {
+    const moved = location.pathname === "/" ? movedTo(location.hash) : null;
+    if (moved) history.replaceState(null, "", moved);
+    return locationKey(location.pathname, location.hash);
+  };
+  const [key, setKey] = useState(read);
   useEffect(() => {
-    const changed = () => setHash(location.hash.slice(1));
+    const changed = () => setKey(read());
+    const click = (e: MouseEvent) => {
+      const url = ownLink(e);
+      if (!url) return;
+      e.preventDefault();
+      if (url.href !== location.href) history.pushState(null, "", url);
+      changed();
+    };
     addEventListener("hashchange", changed);
-    return () => removeEventListener("hashchange", changed);
+    addEventListener("popstate", changed);
+    addEventListener("click", click);
+    return () => {
+      removeEventListener("hashchange", changed);
+      removeEventListener("popstate", changed);
+      removeEventListener("click", click);
+    };
   }, []);
-  return hash;
+  return key;
 }
 
 function App() {
-  const at = route(useHash());
+  const at = route(useLocation());
   const title = pageTitle(at);
   const [state, setState] = useState<State | null>(null);
   const [connected, setConnected] = useState(false);
