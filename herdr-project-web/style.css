@@ -594,6 +594,9 @@ code { font-family: var(--mono); font-size: var(--normal); }
 /* The board of pull requests. */
 main.board { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--space-5); }
 @media (max-width: 900px) { main.board { grid-template-columns: minmax(0, 1fr); } }
+/* Columns waiting for the user, red when too many wait. */
+.board-column > h2.board-mine { font-weight: 700; }
+.board-column > h2.board-many { color: var(--red); }
 .board-column > ul { margin: 0; padding: 0; list-style: none; }
 .board-card {
   margin-bottom: var(--space-3);

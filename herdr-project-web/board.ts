@@ -20,6 +20,12 @@ export type Stage = (typeof STAGES)[number][0];
 // The columns the user moves cards to: the others are GitHub's to say.
 export const MOVABLE: readonly Stage[] = ["copilot", "reviewed"];
 
+// The columns whose pull requests wait for the user.
+export const MINE: readonly Stage[] = ["copilot", "approved"];
+
+// More cards than this in a column of MINE are too many to leave waiting.
+export const MINE_MAX = 5;
+
 // The column the user moved each open pull request to, by url.
 export type Moves = Record<string, Stage>;
 

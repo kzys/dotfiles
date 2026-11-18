@@ -1,7 +1,7 @@
 // The page's board of the user's pull requests.
 
 import { useState } from "preact/hooks";
-import { type Card, STAGES, type Stage, canAskCopilot, moveTo } from "./board.ts";
+import { type Card, MINE, MINE_MAX, STAGES, type Stage, canAskCopilot, moveTo } from "./board.ts";
 import { projectHref } from "./pages.ts";
 import type { State } from "./state.ts";
 import { matches } from "./ui.tsx";
@@ -131,9 +131,10 @@ export function BoardView({ state, query }: { state: State; query: string }) {
     <main class="board">
       {STAGES.map(([stage, title]) => {
         const here = cards.filter((c) => c.stage === stage);
+        const mine = MINE.includes(stage);
         return (
           <section key={stage} class="column board-column">
-            <h2>
+            <h2 class={mine ? (here.length > MINE_MAX ? "board-mine board-many" : "board-mine") : undefined}>
               {title} <span class="count">{here.length || ""}</span>
             </h2>
             {here.length ? (
