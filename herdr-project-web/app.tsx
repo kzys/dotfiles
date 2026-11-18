@@ -51,15 +51,16 @@ function ownLink(e: MouseEvent): URL | null {
 }
 
 /** Returns the page's location as locationKey reads it, kept current,
- * following the page's own links without loading it again. A link made
- * before a view moved to a path goes to the path. */
+ * following the page's own links without loading it again. A location
+ * from a link made before a view moved to a path, however the page got
+ * there, is replaced with the path. */
 function useLocation(): string {
-  const read = () => locationKey(location.pathname, location.hash);
-  const [key, setKey] = useState(() => {
+  const read = () => {
     const moved = location.pathname === "/" ? movedTo(location.hash) : null;
     if (moved) history.replaceState(null, "", moved);
-    return read();
-  });
+    return locationKey(location.pathname, location.hash);
+  };
+  const [key, setKey] = useState(read);
   useEffect(() => {
     const changed = () => setKey(read());
     const click = (e: MouseEvent) => {
