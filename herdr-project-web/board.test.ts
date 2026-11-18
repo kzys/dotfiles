@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { askCopilot, cards, copilotComments, nextCopilotSeen, routerMessage, moveTo, stage, stillMoved, toAskCopilot } from "./board.ts";
+import { askCopilot, canAskCopilot, cards, copilotComments, nextCopilotSeen, routerMessage, moveTo, stage, stillMoved } from "./board.ts";
 import type { Pull } from "./github.ts";
 
 function pull(number: number, over: Partial<Pull> = {}): Pull {
@@ -57,36 +57,27 @@ test("forgets moves of pull requests no longer open", () => {
   assert.deepEqual(stillMoved(moves, prs), { [prs[0].url]: "copilot", [missing]: "reviewed" });
 });
 
-test("asks Copilot once checks pass on a draft it hasn't reviewed", () => {
+test("lets the user ask Copilot once checks pass and until its review lets a card on", () => {
   const prs = [
-    pull(1, { checks: "SUCCESS" }),
-    pull(2, { checks: "PENDING" }),
-    pull(3, { checks: "FAILURE" }),
-    pull(4, { checks: "SUCCESS", copilot: "unresolved" }),
-    pull(5, { checks: "SUCCESS" }),
-    pull(6, { checks: "SUCCESS" }),
-    pull(7, { checks: "SUCCESS", review: "APPROVED" }),
-    pull(8, { checks: "SUCCESS", state: "MERGED" }),
-    pull(9, { checks: "SUCCESS", draft: true }),
-    pull(10),
+    pull(1, { checks: "PENDING" }),
+    pull(2, { checks: "SUCCESS", copilot: "unresolved" }),
+    pull(3, { copilot: "passed" }),
+    pull(4, { review: "APPROVED" }),
+    pull(5, { state: "MERGED" }),
+    pull(6),
   ];
-  // A failed request is tried again.
-  const asks = { [prs[4].url]: "requested", [prs[8].url]: "HTTP 502" };
-  assert.deepEqual(toAskCopilot(prs, { [prs[5].url]: "copilot" }, asks).map((p) => p.number), [1, 9, 10]);
+  const all = cards(prs, {}, (d) => d, { [prs[5].url]: "copilot" }, new Date(), {});
+  assert.deepEqual(all.filter(canAskCopilot).map((c) => c.label), ["app#2"]);
 });
 
 test("keeps what came of each request to Copilot", async () => {
-  const prs = [pull(1, { checks: "SUCCESS" }), pull(2, { checks: "SUCCESS" }), pull(3, { checks: "SUCCESS" })];
-  const asked: string[] = [];
+  const prs = [pull(1), pull(2)];
   const request = async (url: string) => {
-    asked.push(url);
     if (url === prs[1].url) throw new Error("could not request Copilot\nmore");
   };
-  const asks = await askCopilot(prs, {}, { [prs[2].url]: "requested" }, request);
-  assert.deepEqual(asked, [prs[0].url, prs[1].url]);
-  assert.deepEqual(asks, {
-    [prs[2].url]: "requested", [prs[0].url]: "requested", [prs[1].url]: "could not request Copilot",
-  });
+  let asks = await askCopilot(prs[0].url, {}, request);
+  asks = await askCopilot(prs[1].url, asks, request);
+  assert.deepEqual(asks, { [prs[0].url]: "requested", [prs[1].url]: "could not request Copilot" });
   assert.equal(cards(prs, {}, (d) => d, {}, new Date(), asks)[1].copilotAsk, "could not request Copilot");
 });
 

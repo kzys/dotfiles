@@ -1,7 +1,7 @@
 // The page's board of the user's pull requests.
 
 import { useState } from "preact/hooks";
-import { type Card, STAGES, type Stage, moveTo } from "./board.ts";
+import { type Card, STAGES, type Stage, canAskCopilot, moveTo } from "./board.ts";
 import { projectHref } from "./pages.ts";
 import type { State } from "./state.ts";
 import { matches } from "./ui.tsx";
@@ -60,6 +60,37 @@ function MoveButtons({ card }: { card: Card }) {
   );
 }
 
+/** Returns the button that asks Copilot to review card, if the user can. */
+function CopilotButton({ card }: { card: Card }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  if (!canAskCopilot(card)) return null;
+  const ask = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/copilot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: card.url }),
+      });
+      if (!res.ok) setError(`failed (${res.status})`);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <button type="button" class="board-review" disabled={busy} onClick={ask}>
+        {busy ? "Asking Copilot…" : "Ask Copilot"}
+      </button>
+      {error && <span class="pr-failed">{error}</span>}
+    </>
+  );
+}
+
 function BoardCard({ card }: { card: Card }) {
   const failing = card.checks === "FAILURE" || card.checks === "ERROR";
   const open = card.stage !== "merged";
@@ -81,6 +112,7 @@ function BoardCard({ card }: { card: Card }) {
           {card.draft && <span class="badge badge-wait">draft</span>}
           {failing && <span class="badge badge-bad">checks failing</span>}
           {(card.stage === "ci" || card.stage === "draft") && <span>{copilotNote(card)}</span>}
+          <CopilotButton card={card} />
           <MoveButtons card={card} />
         </div>
       )}

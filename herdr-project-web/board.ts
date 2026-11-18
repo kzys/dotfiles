@@ -111,31 +111,24 @@ export function stillMoved(moves: Moves, prs: Pull[]): Moves {
 // "requested", or why the request failed.
 export type CopilotAsks = Record<string, string>;
 
-/** Returns the pull requests in prs to ask Copilot to review: those open
- * in the draft column, given moves, whose checks all passed or that have
- * none, that Copilot hasn't reviewed and that asks doesn't say were
- * requested. A failed request is tried again. */
-export function toAskCopilot(prs: Pull[], moves: Moves, asks: CopilotAsks): Pull[] {
-  return prs.filter((pr) =>
-    pr.state === "OPEN" && stage(pr, moves[pr.url] ?? null) === "draft" && pr.copilot === "none" &&
-    asks[pr.url] !== "requested");
+/** Returns whether the user can ask Copilot to review card: once its
+ * checks pass and until Copilot's review lets it on, so also while its
+ * threads are open, to ask again once they are addressed. */
+export function canAskCopilot(card: Card): boolean {
+  return card.stage === "draft";
 }
 
-/** Asks Copilot through request to review each pull request in prs that
- * toAskCopilot returns, and returns asks with what came of each. */
+/** Asks Copilot through request to review the pull request at url, and
+ * returns asks with what came of it: "requested", or why it failed. */
 export async function askCopilot(
-  prs: Pull[], moves: Moves, asks: CopilotAsks, request: (url: string) => Promise<unknown>,
+  url: string, asks: CopilotAsks, request: (url: string) => Promise<unknown>,
 ): Promise<CopilotAsks> {
-  const out = { ...asks };
-  for (const pr of toAskCopilot(prs, moves, asks)) {
-    try {
-      await request(pr.url);
-      out[pr.url] = "requested";
-    } catch (e) {
-      out[pr.url] = String((e as Error)?.message ?? e).split("\n")[0];
-    }
+  try {
+    await request(url);
+    return { ...asks, [url]: "requested" };
+  } catch (e) {
+    return { ...asks, [url]: String((e as Error)?.message ?? e).split("\n")[0] };
   }
-  return out;
 }
 
 // How many reviews Copilot had left on each open pull request, by url,

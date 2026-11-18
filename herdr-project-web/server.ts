@@ -464,7 +464,9 @@ async function checkPullRequests() {
     prNames = Object.fromEntries(dirs.map((d) => [d, projectName(d)]));
     const kept = board.stillMoved(moves, prPulls);
     if (Object.keys(kept).length !== Object.keys(moves).length) saveMoves(kept);
-    await askCopilot();
+    const open = new Set(prUrls);
+    const asks = Object.fromEntries(Object.entries(copilotAsks).filter(([url]) => open.has(url)));
+    if (Object.keys(asks).length !== Object.keys(copilotAsks).length) saveAsks(asks);
   } catch (e) {
     lines = [`Cannot check pull requests: ${String(e).split("\n")[0]}`];
   }
@@ -574,14 +576,21 @@ async function setBaseFrom(body: string | null): Promise<number> {
   return 204;
 }
 
-/** Asks Copilot to review the pull requests ready for it, as
- * board.toAskCopilot picks them, keeping what came of it for those still
- * open. */
-async function askCopilot() {
-  const open = new Set(prUrls);
-  const kept = Object.fromEntries(Object.entries(copilotAsks).filter(([url]) => open.has(url)));
-  const next = await board.askCopilot(prPulls, moves, kept, (url) => github.requestCopilot(url));
-  if (JSON.stringify(next) === JSON.stringify(copilotAsks)) return;
+/** Asks Copilot to review the open pull request that body, a request's,
+ * names, keeping what came of it, and returns the HTTP status. */
+async function askCopilotFrom(body: string | null): Promise<number> {
+  const { url } = JSON.parse(body ?? "{}");
+  if (!prPulls.some((p) => p.url === url && p.state === "OPEN")) return 404;
+  const asked = await board.askCopilot(url, {}, (u) => github.requestCopilot(u));
+  // Merged after the request, which can take a while, so as not to lose
+  // what came of another asked meanwhile.
+  saveAsks({ ...copilotAsks, ...asked });
+  refresh();
+  return copilotAsks[url] === "requested" ? 204 : 502;
+}
+
+/** Keeps next as what came of asking Copilot to review pull requests. */
+function saveAsks(next: board.CopilotAsks) {
   copilotAsks = next;
   try {
     saveState(copilotPath, next);
@@ -634,6 +643,7 @@ page.use(async (c, next) => (hosts.has(c.req.header("host") ?? "") ? next() : c.
 page.onError((e, c) => c.json({ error: e.message }, 500));
 page.post("/api/base", limit(), async (c) => done(fromPage(c.req.raw.headers, hosts) ? await setBaseFrom(await c.req.text()) : 403));
 page.post("/api/stage", limit(), async (c) => done(orgs && fromPage(c.req.raw.headers, hosts) ? await setStageFrom(await c.req.text()) : 403));
+page.post("/api/copilot", limit(), async (c) => done(orgs && fromPage(c.req.raw.headers, hosts) ? await askCopilotFrom(await c.req.text()) : 403));
 // Only the watcher's server, which delivers them, and only the page.
 routeAgents(page, agentActions, (headers) => !!orgs && fromPage(headers, hosts));
 page.get("/api/state", (c) => c.body(last, 200, { "Content-Type": "application/json" }));
