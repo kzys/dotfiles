@@ -8,24 +8,21 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
 
-export type Process = { pid: number; ppid: number; seconds: number; command: string };
+// A process, with when it started in milliseconds since the epoch.
+export type Process = { pid: number; ppid: number; started: number; command: string };
 
-// A command and how long it has run.
-export type Wait = { command: string; seconds: number };
+// A command and when it started, in milliseconds since the epoch, which
+// stays the same while it runs, unlike how long it has run.
+export type Wait = { command: string; since: number };
 
-/** Returns the seconds in an elapsed time as ps prints it, like
- * 02-22:28:56 or 13:39. */
-export function elapsed(text: string): number {
-  const [days, rest] = text.includes("-") ? text.split("-") : ["0", text];
-  return rest.split(":").map(Number).reduce((total, n) => total * 60 + n, 0) + Number(days) * 86_400;
-}
-
-/** Returns the processes in text, as ps -ww -axo pid=,ppid=,etime=,command=
- * prints them. */
+/** Returns the processes in text, as LC_ALL=C ps -ww -axo
+ * pid=,ppid=,lstart=,command= prints them, with their start times, like
+ * Tue Nov 17 12:02:36 2026, in this machine's time zone. */
 export function parsePs(text: string): Process[] {
   return text.split("\n").flatMap((line) => {
-    const m = /^\s*(\d+)\s+(\d+)\s+(\S+)\s+(.*)$/.exec(line);
-    return m ? [{ pid: Number(m[1]), ppid: Number(m[2]), seconds: elapsed(m[3]), command: m[4] }] : [];
+    const m = /^\s*(\d+)\s+(\d+)\s+(\w{3} \w{3} +\d+ [\d:]+ \d{4})\s+(.*)$/.exec(line);
+    const started = m ? Date.parse(m[3].replace(/ +/g, " ")) : NaN;
+    return m && !Number.isNaN(started) ? [{ pid: Number(m[1]), ppid: Number(m[2]), started, command: m[4] }] : [];
   });
 }
 
@@ -46,19 +43,19 @@ export function waitsByPid(processes: Process[]): Map<number, Wait[]> {
   const found = new Map<number, Wait[]>();
   for (const p of processes) {
     const command = claude.has(p.ppid) ? toolCommand(p.command) : null;
-    if (command) found.set(p.ppid, [...(found.get(p.ppid) ?? []), { command, seconds: p.seconds }]);
+    if (command) found.set(p.ppid, [...(found.get(p.ppid) ?? []), { command, since: p.started }]);
   }
-  for (const waits of found.values()) waits.sort((a, b) => b.seconds - a.seconds);
+  for (const waits of found.values()) waits.sort((a, b) => a.since - b.since);
   return found;
 }
 
 /** Returns the subagents still running in the Claude session whose files
  * are in folder, as Claude Code keeps them under ~/.claude/projects, each
- * with how long it has run at now, in milliseconds since the epoch,
- * longest-running first. Claude Code marks a subagent's metadata finished
- * when it ends, but not always when it is stopped or its session dies, so
- * only those started since, when the session's process started, count. */
-export function runningSubagents(folder: string, now: number, since: number): Wait[] {
+ * with when it started, longest-running first. Claude Code marks a
+ * subagent's metadata finished when it ends, but not always when it is
+ * stopped or its session dies, so only those started since, when the
+ * session's process started, in milliseconds since the epoch, count. */
+export function runningSubagents(folder: string, since: number): Wait[] {
   const dir = join(folder, "subagents");
   let names: string[] = [];
   try {
@@ -70,12 +67,11 @@ export function runningSubagents(folder: string, now: number, since: number): Wa
       const meta = JSON.parse(readFileSync(path, "utf8"));
       const at = statSync(path).mtimeMs;
       if (meta.finished || meta.stoppedByUser || at < since) return [];
-      const seconds = Math.max(0, Math.floor((now - at) / 1000));
-      return [{ command: `${meta.agentType ?? "subagent"}: ${meta.description ?? ""}`, seconds }];
+      return [{ command: `${meta.agentType ?? "subagent"}: ${meta.description ?? ""}`, since: Math.floor(at) }];
     } catch {
       return [];
     }
-  }).sort((a, b) => b.seconds - a.seconds);
+  }).sort((a, b) => a.since - b.since);
 }
 
 /** Returns the folder under projects, ~/.claude/projects, where Claude
@@ -95,6 +91,8 @@ export function sessionFolder(projects: string, session: string): string | null 
 
 /** Returns this machine's processes. */
 export async function readProcesses(): Promise<Process[]> {
-  const { stdout } = await promisify(execFile)("ps", ["-ww", "-axo", "pid=,ppid=,etime=,command="], { timeout: 10_000, maxBuffer: 16 << 20 });
+  const { stdout } = await promisify(execFile)("ps", ["-ww", "-axo", "pid=,ppid=,lstart=,command="], {
+    env: { ...process.env, LC_ALL: "C" }, timeout: 10_000, maxBuffer: 16 << 20,
+  });
   return parsePs(stdout);
 }

@@ -301,16 +301,14 @@ async function pollWaits() {
     const sessions = claudeSessions();
     const processes = await readProcesses();
     const shells = waitsByPid(processes);
-    const age = new Map(processes.map((p) => [p.pid, p.seconds]));
+    const started = new Map(processes.map((p) => [p.pid, p.started]));
     const next = new Map<string, Wait[]>();
     const projects = join(home, ".claude/projects");
     for (const [pid, session] of sessions) {
       let folder = sessionFolders.get(session) ?? null;
       if (!folder && (folder = sessionFolder(projects, session))) sessionFolders.set(session, folder);
-      const now = Date.now();
-      // ps counts whole seconds, so a second more.
-      const since = now - ((age.get(pid) ?? 0) + 1) * 1000;
-      const w = [...(shells.get(pid) ?? []), ...(folder && age.has(pid) ? runningSubagents(folder, now, since) : [])];
+      const since = started.get(pid);
+      const w = [...(shells.get(pid) ?? []), ...(folder && since !== undefined ? runningSubagents(folder, since) : [])];
       if (w.length) next.set(session, w);
     }
     waits = next;

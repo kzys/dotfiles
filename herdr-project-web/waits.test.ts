@@ -3,22 +3,16 @@ import { mkdirSync, mkdtempSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { elapsed, parsePs, runningSubagents, sessionFolder, toolCommand, waitsByPid } from "./waits.ts";
+import { parsePs, runningSubagents, sessionFolder, toolCommand, waitsByPid } from "./waits.ts";
 
 const shell = (command: string) =>
   `/bin/bash -c source /Users/u/.claude/shell-snapshots/snapshot-bash-1.sh 2>/dev/null || true && eval '${command}' < /dev/null && pwd -P >| /tmp/claude-1-cwd`;
 
-test("reads elapsed times", () => {
-  assert.equal(elapsed("00:05"), 5);
-  assert.equal(elapsed("13:39"), 13 * 60 + 39);
-  assert.equal(elapsed("02:51:59"), 2 * 3600 + 51 * 60 + 59);
-  assert.equal(elapsed("02-22:28:56"), 2 * 86_400 + 22 * 3600 + 28 * 60 + 56);
-});
-
 test("reads ps", () => {
-  assert.deepEqual(parsePs("  10     1   01:02 claude --add-dir /d\n\n 11 10 00:03 sleep 60\n"), [
-    { pid: 10, ppid: 1, seconds: 62, command: "claude --add-dir /d" },
-    { pid: 11, ppid: 10, seconds: 3, command: "sleep 60" },
+  const at = (text: string) => Date.parse(text);
+  assert.deepEqual(parsePs("  10     1 Tue Nov 17 12:02:36 2026     claude --add-dir /d\n\n 11 10 Sat Nov  7 09:05:00 2026 sleep 60\nnot ps\n"), [
+    { pid: 10, ppid: 1, started: at("Tue Nov 17 12:02:36 2026"), command: "claude --add-dir /d" },
+    { pid: 11, ppid: 10, started: at("Sat Nov 7 09:05:00 2026"), command: "sleep 60" },
   ]);
 });
 
@@ -31,15 +25,15 @@ test("reads the command of a Bash tool shell", () => {
 
 test("finds what each Claude runs in its shells", () => {
   const waits = waitsByPid([
-    { pid: 10, ppid: 1, seconds: 900, command: "claude --resume s" },
-    { pid: 11, ppid: 10, seconds: 60, command: shell("sleep 60") },
-    { pid: 12, ppid: 10, seconds: 600, command: shell("gh pr checks 1 --watch") },
-    { pid: 13, ppid: 12, seconds: 600, command: "gh pr checks 1 --watch" },
-    { pid: 14, ppid: 10, seconds: 900, command: "/Applications/Whiteboard.app/Contents/MacOS/Whiteboard mcp" },
-    { pid: 20, ppid: 1, seconds: 900, command: "zsh" },
-    { pid: 21, ppid: 20, seconds: 60, command: shell("sleep 60") },
+    { pid: 10, ppid: 1, started: 900, command: "claude --resume s" },
+    { pid: 11, ppid: 10, started: 60, command: shell("sleep 60") },
+    { pid: 12, ppid: 10, started: 600, command: shell("gh pr checks 1 --watch") },
+    { pid: 13, ppid: 12, started: 600, command: "gh pr checks 1 --watch" },
+    { pid: 14, ppid: 10, started: 900, command: "/Applications/Whiteboard.app/Contents/MacOS/Whiteboard mcp" },
+    { pid: 20, ppid: 1, started: 900, command: "zsh" },
+    { pid: 21, ppid: 20, started: 60, command: shell("sleep 60") },
   ]);
-  assert.deepEqual([...waits], [[10, [{ command: "gh pr checks 1 --watch", seconds: 600 }, { command: "sleep 60", seconds: 60 }]]]);
+  assert.deepEqual([...waits], [[10, [{ command: "sleep 60", since: 60 }, { command: "gh pr checks 1 --watch", since: 600 }]]]);
 });
 
 test("finds the subagents a session still runs", () => {
@@ -59,6 +53,6 @@ test("finds the subagents a session still runs", () => {
   writeFileSync(join(folder, "subagents", "agent-c.meta.json"), "not json");
   assert.equal(sessionFolder(projects, "s1"), folder);
   assert.equal(sessionFolder(projects, "s2"), null);
-  assert.deepEqual(runningSubagents(folder, now, now - 600_000), [{ command: "reviewer: Review the diff", seconds: 120 }]);
-  assert.deepEqual(runningSubagents(join(projects, "missing"), now, 0), []);
+  assert.deepEqual(runningSubagents(folder, now - 600_000), [{ command: "reviewer: Review the diff", since: now - 120_000 }]);
+  assert.deepEqual(runningSubagents(join(projects, "missing"), 0), []);
 });
