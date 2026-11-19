@@ -169,10 +169,20 @@ function ProjectCard({ project, agents }: { project: Project; agents: Record<str
   );
 }
 
+/** Returns the name of dir, a project's directory. */
+const dirName = (dir: string) => dir.split("/").filter(Boolean).pop() ?? dir;
+
+/** Returns the name of dir, the project's directory, where it isn't name,
+ * the project's own name. */
+function DirName({ dir, name }: { dir: string; name: string }) {
+  const base = dirName(dir);
+  return base === name ? null : <span class="dir-name">{base}</span>;
+}
+
 /** Returns what the filter looks for in project p itself. */
 function projectTexts(p: Project): (string | null)[] {
   const wts = p.worktrees.flatMap((w) => [w.dir.split("/").pop()!, w.subject]);
-  return [p.name, p.title, ...p.workspaces, ...wts, ...p.files.map((f) => f.name)];
+  return [p.name, dirName(p.dir), p.title, ...p.workspaces, ...wts, ...p.files.map((f) => f.name)];
 }
 
 /** Returns the agents among panes that wait on what their Bash tool or
@@ -235,6 +245,7 @@ export function ProjectList({ state, query }: { state: State; query: string }) {
                 <a class="wt-name" href={projectHref(p.dir)}>
                   {p.name}
                 </a>
+                <DirName dir={p.dir} name={p.name} />
                 <span class="title">{p.title}</span>
                 <AgentCounts panes={p.panes} />
                 {p.tabs > 0 && <span class="agent-counts">{p.tabs === 1 ? "1 tab" : `${p.tabs} tabs`}</span>}
@@ -258,6 +269,7 @@ export function ProjectView({ dir, state, query, now }: { dir: string; state: St
     <div class="diffs">
       <h2>
         <a href="#projects">Projects</a> / {project?.name ?? dir.split("/").pop()}
+        {project && <DirName dir={dir} name={project.name} />}
       </h2>
       {!state ? (
         <p class="empty">Loading…</p>
