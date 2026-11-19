@@ -7,7 +7,7 @@ import { basename, dirname } from "node:path";
 import * as headless from "./headless.ts";
 import type { Item } from "./inbox.ts";
 import { type NotesText, type Owner, cut, escapeRegExp, ownedItem, pad, projectName, projectOf } from "./owners.ts";
-import { day } from "./slack.ts";
+import { day } from "./day.ts";
 import { loadState, saveState } from "./statefile.ts";
 
 // The claude.ai connector the headless session needs.

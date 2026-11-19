@@ -1,7 +1,12 @@
 // The user's pull requests as GitHub reports them, read from its search,
 // and the names it gives them and their repositories.
 
-import type { Run } from "../state.ts";
+// A check of a pull request's latest commit.
+export type Run = {
+  name: string;
+  state: "passed" | "failed" | "running" | "skipped" | "cancelled";
+  url: string | null;
+};
 
 // Check run conclusions and status states that count as failures.
 export const FAILED = new Set(["FAILURE", "ERROR", "TIMED_OUT", "STARTUP_FAILURE", "ACTION_REQUIRED"]);

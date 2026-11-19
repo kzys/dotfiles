@@ -9,13 +9,7 @@ import type { Herdr } from "./herdr/backend.ts";
 import { FULL_AT, type Item, projectItems, watchedItems } from "./inbox.ts";
 import { isProject } from "./launch.ts";
 import { isCheckout, lastSubject, worktreeDirs } from "./worktrees.ts";
-
-// A check of a pull request's latest commit.
-export type Run = {
-  name: string;
-  state: "passed" | "failed" | "running" | "skipped" | "cancelled";
-  url: string | null;
-};
+import type { Run } from "./github/pullrequest.ts";
 
 // An open pull request as the watcher lists it.
 export type PullRequest = {
