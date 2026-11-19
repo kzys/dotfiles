@@ -4,7 +4,7 @@
 
 import { basename } from "node:path";
 import type { Item } from "../inbox.ts";
-import { type NotesText, type Owner, notesTexts, ownedItem, pad, projectName } from "../owners.ts";
+import { type NotesText, type Owner, notesTexts, ownedItem, pad, projectNameIn } from "../owners.ts";
 import type { HerdrPane } from "../panes.ts";
 import type { PullRequest } from "../state.ts";
 import type { Found } from "../watched.ts";
@@ -20,7 +20,8 @@ const MARKS: Record<string, string> = { SUCCESS: "✓", FAILURE: "✗", ERROR: "
 export type Row = Pull & PullRequest;
 
 /** Returns the open pull requests in prs, those with projects first, with
- * their label, the name of their project from owners (by url) or null,
+ * their label, the name of their project from owners (by url), as names
+ * has it, or null,
  * whether an agent pane works on them, from panes (by url), and the id
  * of the pane in their checkout, from checkouts (by url), or null. Only
  * that pane surely works on them; others may be any agent in their
@@ -28,6 +29,7 @@ export type Row = Pull & PullRequest;
 export function listed(
   prs: Pull[],
   owners: Record<string, Owner | null>,
+  names: Record<string, string>,
   panes: Record<string, HerdrPane | null>,
   checkouts: Record<string, HerdrPane> = {},
 ): Row[] {
@@ -38,7 +40,7 @@ export function listed(
       return {
         ...pr,
         label: label(pr),
-        project: found ? projectName(found.project) : null,
+        project: found ? (names[found.project] ?? null) : null,
         projectDir: found?.project ?? null,
         agent: !!panes[pr.url],
         pane: checkouts[pr.url]?.pane_id ?? null,
@@ -99,13 +101,13 @@ export type Snapshot = {
 export type Tell = { title: string; body: string; sound: "request" | "done"; wake: { pane: string; text: string } | null };
 
 // What a check of the pull requests found: the lines of table, the
-// projects of the pull requests by url, the inbox items of waitingItems,
-// the rows of listed, the URLs of the pull requests the state keeps as
-// open, including those the search no longer finds, their bases, every
-// pull request found, what to tell, and the state to save, or null to
-// keep the one before.
+// projects of the pull requests by url, the names of those projects by
+// directory, the inbox items of waitingItems, the rows of listed, the URLs
+// of the pull requests the state keeps as open, including those the
+// search no longer finds, their bases, every pull request found, what to
+// tell, and the state to save, or null to keep the one before.
 export type PullCheck = {
-  lines: string[]; owners: Record<string, Owner | null>; items: Item[]; rows: Row[]; urls: string[];
+  lines: string[]; owners: Record<string, Owner | null>; names: Record<string, string>; items: Item[]; rows: Row[]; urls: string[];
   bases: Record<string, string>; pulls: Pull[]; tells: Tell[]; seen: Seen | null;
 };
 
@@ -132,6 +134,7 @@ export async function gather(
  * changes once Herdr is back. */
 export function look({ prs, trees, texts, panes, checkouts, seen: old }: Snapshot): PullCheck {
   const owners = Object.fromEntries(prs.map((pr) => [pr.url, owner(pr, trees, texts)]));
+  const names = Object.fromEntries(Object.values(owners).flatMap((o) => (o ? [[o.project, projectNameIn(o.project, texts)]] : [])));
   const byUrl: Record<string, HerdrPane | null> = {
     ...Object.fromEntries(Object.entries(owners).map(([url, f]) => [url, f && agentPane(panes ?? [], f)])),
     ...checkouts,
@@ -148,9 +151,9 @@ export function look({ prs, trees, texts, panes, checkouts, seen: old }: Snapsho
     };
   });
   const seen = remember(old, prs);
-  const rows = listed(prs, owners, byUrl, checkouts);
+  const rows = listed(prs, owners, names, byUrl, checkouts);
   return {
-    lines: table(rows), owners, items: waitingItems(prs, owners), rows, urls: Object.keys(seen), bases: pullBases(prs),
+    lines: table(rows), owners, names, items: waitingItems(prs, owners), rows, urls: Object.keys(seen), bases: pullBases(prs),
     pulls: prs, tells, seen: panes ? seen : null,
   };
 }

@@ -28,7 +28,7 @@ import { agentCommand, instructions, launchDirectory, launchScript, parseAgent, 
 import { readLearnings } from "./learnings.ts";
 import { connectors } from "./headless.ts";
 import * as linear from "./linear.ts";
-import { notesTexts, projectName } from "./owners.ts";
+import { notesTexts } from "./owners.ts";
 import { NESTED_PATHS, PAGE_PATHS } from "./pages.ts";
 import { type PaneHerdr, checkPanes } from "./panes.ts";
 import { type Checked, checkQueue } from "./queues.ts";
@@ -218,7 +218,7 @@ function watched(): Watched | null {
  * what the user did with them. Merged ones go a while after merging. */
 function cards(): board.Card[] {
   if (!lastPoll) return [];
-  const names = Object.fromEntries(Object.values(lastPoll.owners).flatMap((o) => (o ? [[o.project, projectName(o.project)]] : [])));
+  const { names } = lastPoll;
   return board.cards(lastPoll.pulls, lastPoll.owners, (d) => names[d] ?? d, moves, new Date(), copilotAsks);
 }
 
@@ -369,7 +369,7 @@ const pullChecks = new Schedule(async () => {
   showPullCheck(at, error);
 }, { every: PR_INTERVAL, start: !!orgs, onError: logError });
 /** Reports whether url is of an open pull request, as last found. */
-const isOpen = (url: unknown) => lastPoll?.pulls.some((p) => p.url === url && p.state === "OPEN") ?? false;
+const isOpen = (url: unknown) => board.isOpen(lastPoll?.pulls ?? [], url);
 let queuing = false;
 
 /** Shows a check of the pull requests that ran at at and failed with
@@ -485,9 +485,7 @@ async function setStageFrom(body: string | null): Promise<number> {
   const { url, stage } = JSON.parse(body ?? "{}");
   if (!(stage === null || board.MOVABLE.includes(stage))) return 400;
   if (!isOpen(url)) return 404;
-  moves = { ...moves };
-  if (stage) moves[url] = stage;
-  else delete moves[url];
+  moves = board.withMove(moves, url, stage);
   if (save(movesPath, moves)) refresh();
   return 204;
 }

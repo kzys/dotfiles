@@ -117,6 +117,18 @@ export function stillMoved(moves: Moves, prs: Pull[]): Moves {
 // "requested", or why the request failed.
 export type CopilotAsks = Record<string, string>;
 
+/** Returns whether prs has the pull request at url, of a request, open. */
+export function isOpen(prs: Pull[], url: unknown): boolean {
+  return prs.some((p) => p.url === url && p.state === "OPEN");
+}
+
+/** Returns moves with the pull request at url in column stage, or back in
+ * the column GitHub puts it in for null. */
+export function withMove(moves: Moves, url: string, stage: Stage | null): Moves {
+  const { [url]: _, ...rest } = moves;
+  return stage ? { ...rest, [url]: stage } : rest;
+}
+
 /** Returns asks without those of pull requests not in open, the URLs of
  * the open ones. */
 export function stillAsked(asks: CopilotAsks, open: string[]): CopilotAsks {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { askCopilot, canAskCopilot, cards, moveTo, stage, stillAsked, stillMoved } from "./board.ts";
+import { askCopilot, canAskCopilot, cards, isOpen, moveTo, stage, stillAsked, stillMoved, withMove } from "./board.ts";
 import type { PullRequest as Pull } from "./github/pullrequest.ts";
 
 function pull(number: number, over: Partial<Pull> = {}): Pull {
@@ -83,4 +83,14 @@ test("keeps what came of each request to Copilot", async () => {
 
 test("forgets requests to Copilot for pull requests no longer open", () => {
   assert.deepEqual(stillAsked({ a: "requested", b: "failed" }, ["b", "c"]), { b: "failed" });
+});
+
+test("moves a card to a column, or back for null", () => {
+  assert.deepEqual(withMove({ a: "copilot", b: "reviewed" }, "a", "reviewed"), { b: "reviewed", a: "reviewed" });
+  assert.deepEqual(withMove({ a: "copilot", b: "reviewed" }, "a", null), { b: "reviewed" });
+});
+
+test("tells whether a request names an open pull request", () => {
+  const prs = [{ url: "a", state: "OPEN" }, { url: "b", state: "MERGED" }] as Pull[];
+  assert.deepEqual([isOpen(prs, "a"), isOpen(prs, "b"), isOpen(prs, "c"), isOpen(prs, 1)], [true, false, false, false]);
 });
