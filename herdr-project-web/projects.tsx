@@ -183,7 +183,7 @@ function DirName({ dir, name }: { dir: string; name: string }) {
 /** Returns what the filter looks for in project p itself. */
 function projectTexts(p: Project): (string | null)[] {
   const wts = p.worktrees.flatMap((w) => [w.dir.split("/").pop()!, w.subject]);
-  return [p.name, dirName(p.dir), p.title, ...p.workspaces, ...wts, ...p.files.map((f) => f.name)];
+  return [p.name, dirName(p.dir), p.title, ...p.workspaces, ...wts, ...p.files.map((f) => f.name), ...p.panes.map((a) => a.title ?? null)];
 }
 
 /** Returns the agents among panes that wait on what their Bash tool or
@@ -229,10 +229,35 @@ function AgentCounts({ panes }: { panes: Pane[] }) {
   );
 }
 
-/** Returns the page listing the projects in state matching query, each
- * with its agents and how many Herdr tabs it has. */
+/** Returns a line for each agent among panes that has a title: its role,
+ * or its pane, and what its terminal's title says it works on. */
+function AgentTitles({ panes }: { panes: Pane[] }) {
+  const titled = panes.filter((p) => p.title);
+  if (!titled.length) return null;
+  return (
+    <ul class="agent-titles">
+      {titled.map((p) => (
+        <li key={p.id}>
+          <span class={`pr-agent agent-${statusState(p.status)}`}>{p.role ?? p.id}</span>
+          <span class="pane-title">{p.title}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Returns when any file directly in project p last changed, as its
+ * agents' notes do while they work, in milliseconds since the epoch, or
+ * 0 without files. */
+const lastActive = (p: Project) => Math.max(0, ...p.files.map((f) => f.at));
+
+/** Returns the page listing the projects in state matching query, most
+ * recently active first, each with its agents, what each works on, and
+ * how many Herdr tabs it has. */
 export function ProjectList({ state, query }: { state: State; query: string }) {
-  const projects = state.projects.filter((p) => matches(query, ...projectTexts(p)));
+  const projects = state.projects
+    .filter((p) => matches(query, ...projectTexts(p)))
+    .sort((a, b) => lastActive(b) - lastActive(a));
   return (
     <div class="diffs">
       <h2>
@@ -250,6 +275,7 @@ export function ProjectList({ state, query }: { state: State; query: string }) {
                 <span class="title">{p.title}</span>
                 <AgentCounts panes={p.panes} />
                 {p.tabs > 0 && <span class="agent-counts">{p.tabs === 1 ? "1 tab" : `${p.tabs} tabs`}</span>}
+                <AgentTitles panes={p.panes} />
               </li>
             ))}
           </ul>
