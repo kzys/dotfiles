@@ -2,10 +2,9 @@
 // them.
 
 import { useMemo, useState } from "preact/hooks";
-import { diffHref } from "./diffs.tsx";
 import { FileSection } from "./files.tsx";
 import { FULL_AT, type Item, uniqueKeys } from "./inbox.ts";
-import { fileHref, projectHref } from "./pages.ts";
+import { diffHref, fileHref, projectHref } from "./pages.ts";
 import { agentCounts, projectSections, statusState } from "./pulls.ts";
 import type { AgentView } from "./agents.ts";
 import type { Pane, Project, State } from "./state.ts";
@@ -113,7 +112,7 @@ function FileLinks({ project }: { project: Project }) {
   return (
     <nav class="wt-links" aria-label="Files">
       {project.worktrees.map((w) => (
-        <a key={w.dir} href={diffHref(w.dir)}>
+        <a key={w.dir} href={diffHref(project.dir, w.dir)}>
           <span class="wt-link-name">{w.dir.split("/").pop()}/</span>
           <span class="wt-subject">{w.subject}</span>
         </a>

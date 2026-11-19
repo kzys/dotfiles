@@ -23,8 +23,8 @@ export type Route =
   | { view: "inbox" }
   | { view: "projects" }
   | { view: "project"; dir: string }
-  | { view: "worktrees" }
-  | { view: "diff"; dir: string }
+  // project is the project it was opened from, if known.
+  | { view: "diff"; dir: string; project: string | null }
   | { view: "file"; dir: string; name: string }
   | { view: "learnings" }
   | { view: "pulls" };
@@ -42,9 +42,16 @@ export function decodeHash(s: string): string {
  * Any location the page doesn't know shows the inbox. */
 export function route(hash: string): Route {
   if (hash === "projects") return { view: "projects" };
-  if (hash.startsWith("projects/")) return { view: "project", dir: decodeHash(hash.slice("projects/".length)) };
-  if (hash === "diffs") return { view: "worktrees" };
-  if (hash.startsWith("diffs/")) return { view: "diff", dir: decodeHash(hash.slice("diffs/".length)) };
+  if (hash.startsWith("projects/")) {
+    // Directories are encoded, so a / only separates.
+    const rest = hash.slice("projects/".length);
+    const at = rest.indexOf("/diffs/");
+    if (at < 0) return { view: "project", dir: decodeHash(rest) };
+    return { view: "diff", dir: decodeHash(rest.slice(at + "/diffs/".length)), project: decodeHash(rest.slice(0, at)) };
+  }
+  // The list of every worktree is gone; its links go to the projects.
+  if (hash === "diffs") return { view: "projects" };
+  if (hash.startsWith("diffs/")) return { view: "diff", dir: decodeHash(hash.slice("diffs/".length)), project: null };
   if (hash.startsWith("files/")) {
     const [dir = "", name = ""] = hash.slice("files/".length).split("/");
     return { view: "file", dir: decodeHash(dir), name: decodeHash(name) };
@@ -55,12 +62,17 @@ export function route(hash: string): Route {
 }
 
 /** Returns the tab of the page's console strip that r is under. */
-export function tab(r: Route): "inbox" | "pulls" | "projects" | "worktrees" | "learnings" {
-  return r.view === "diff" ? "worktrees" : r.view === "file" || r.view === "project" ? "projects" : r.view;
+export function tab(r: Route): "inbox" | "pulls" | "projects" | "learnings" {
+  return r.view === "diff" || r.view === "file" || r.view === "project" ? "projects" : r.view;
 }
 
 /** Returns the link to the page of the project in dir. */
 export const projectHref = (dir: string) => `#projects/${encodeURIComponent(dir)}`;
+
+/** Returns the link to the diff of the worktree in dir, a worktree of
+ * the project in project. */
+export const diffHref = (project: string, dir: string) =>
+  `#projects/${encodeURIComponent(project)}/diffs/${encodeURIComponent(dir)}`;
 
 /** Returns the link to the page of the file called name in the project
  * in dir. */
@@ -72,8 +84,6 @@ export function pageTitle(r: Route): string {
   switch (r.view) {
     case "project":
       return `${r.dir.split("/").filter(Boolean).pop() ?? "Project"} · Project`;
-    case "worktrees":
-      return "Worktrees";
     case "diff":
       return `${r.dir.split("/").filter(Boolean).pop() ?? "Worktree"} · Diff`;
     case "file":

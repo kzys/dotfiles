@@ -1,7 +1,7 @@
 import "./style.css";
 import { render } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
-import { WorktreeDiffView, WorktreeList } from "./diffs.tsx";
+import { WorktreeDiffView } from "./diffs.tsx";
 import { FileView } from "./files.tsx";
 import { halMessage } from "./hal.ts";
 import { LearningsView } from "./learnings.tsx";
@@ -34,7 +34,6 @@ const TABS = [
   ["inbox", "/", "Inbox"],
   ["pulls", "/pulls", "Pulls"],
   ["projects", "/#projects", "Projects"],
-  ["worktrees", "/#diffs", "Worktrees"],
   ["learnings", "/#learnings", "Learnings"],
 ] as const;
 
@@ -162,12 +161,10 @@ function App() {
             {VERSION}
           </span>
         </header>
-        {at.view === "worktrees" ? (
-          <WorktreeList query={q} />
-        ) : at.view === "learnings" ? (
+        {at.view === "learnings" ? (
           <LearningsView query={q} />
         ) : at.view === "diff" ? (
-          <WorktreeDiffView key={at.dir} dir={at.dir} query={q} state={state} />
+          <WorktreeDiffView key={at.dir} dir={at.dir} project={at.project} query={q} state={state} />
         ) : at.view === "project" ? (
           <ProjectView key={at.dir} dir={at.dir} state={state} query={q} now={now} />
         ) : at.view === "file" ? (

@@ -389,10 +389,6 @@ code { font-family: var(--mono); font-size: var(--normal); }
 .wt + .wt { border-top: 1px solid var(--panel-edge); }
 .wt-name { font-weight: 500; border-bottom: 1px solid var(--faint); }
 .wt-name:hover { border-color: var(--accent); }
-.wt-branch { font: var(--normal) var(--mono); }
-.wt-base { color: var(--muted); }
-.wt-counts { flex: 1; display: flex; gap: var(--space-4); font-size: var(--normal); color: var(--muted); }
-.wt.clean .wt-name { color: var(--muted); }
 .wt-error { flex: 1; font-size: var(--normal); color: var(--red); overflow-wrap: anywhere; }
 
 .card .commits, .card .file-index { margin: 0; padding: var(--space-3) var(--space-5); list-style: none; font-size: var(--normal); }
