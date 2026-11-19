@@ -4,7 +4,7 @@
 import { execFile, execFileSync } from "node:child_process";
 import { readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { repoName } from "./github.ts";
+import { repoName } from "./github/pullrequest.ts";
 
 // Untracked files past this many go unshown.
 const MAX_UNTRACKED = 100;

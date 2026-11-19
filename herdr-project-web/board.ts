@@ -1,7 +1,7 @@
 // The board of the user's pull requests, each in the column of how far
 // it has come.
 
-import type { CopilotReview, Pull } from "./github.ts";
+import type { CopilotReview, PullRequest as Pull } from "./github/pullrequest.ts";
 import type { Owner } from "./owners.ts";
 
 // The board's columns, in order, each titled by what its pull requests
