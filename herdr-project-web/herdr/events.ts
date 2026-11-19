@@ -2,7 +2,7 @@
 // rather than asking it over and over.
 
 import { type Socket, createConnection } from "node:net";
-import type { Herdr } from "./state.ts";
+import type { Herdr } from "./backend.ts";
 
 // The events that change what the page shows of Herdr, besides agent
 // states, which Herdr only reports pane by pane.

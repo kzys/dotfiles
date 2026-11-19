@@ -15,14 +15,12 @@ import { type SSEStreamingApi, streamSSE } from "hono/streaming";
 import {
   type AgentActions, type AgentView, Outbox, forgetAnswered, fromPage, permission, routeAgents, undelivered,
 } from "./agents.ts";
-import { polled } from "./source/polled.ts";
-import { derived } from "./source/derived.ts";
-import { scheduled } from "./source/scheduled.ts";
-import { isRecord, stored } from "./source/stored.ts";
 import * as board from "./board.ts";
 import { requestCopilot } from "./github/api.ts";
 import * as github from "./github/poll.ts";
-import { herdrClient, herdrSource } from "./herdr.ts";
+import type { Herdr } from "./herdr/backend.ts";
+import { HerdrEvents } from "./herdr/events.ts";
+import { herdrClient, herdrSocket, readHerdr, tuiBackend } from "./herdr/tui.ts";
 import { type HookEvent, type HookHandler, hookServer, limit, listenOn, speaker } from "./hooks.ts";
 import { highlightDiff, highlightLines } from "./highlight.ts";
 import { frontMatter } from "./frontmatter.ts";
@@ -34,16 +32,17 @@ import { notesTexts, projectName } from "./owners.ts";
 import { NESTED_PATHS, PAGE_PATHS } from "./pages.ts";
 import { type PaneHerdr, checkPanes } from "./panes.ts";
 import { type Checked, checkQueue } from "./queues.ts";
+import { Schedule } from "./schedule.ts";
 import {
   codexTokens, lastPrompt, percent, resumedText, roleToReport, sessionCwd, sessionReport, statusLine, statusTokens, usageFile,
 } from "./report.ts";
-import { appAgentFree, appHerdrPanes, appOpener, appPanes, appTerminals, claudeSessions, terminalSession } from "./herdr-app.ts";
-import { type OpenHerdr, background, choices, inboxChoices, open, paneRecords, plan, rowNotes, workspacesToName } from "./rows.ts";
+import { appBackend, appHerdrPanes, appTerminals, claudeSessions } from "./herdr/app.ts";
+import { background, choices, inboxChoices, open, paneRecords, plan, rowNotes, workspacesToName } from "./rows.ts";
 import { claudeSessionDirs, codexContext, codexSessionDirs, codexSessions, reportedRole } from "./sessions.ts";
 import * as slack from "./slack.ts";
 import { loadState, saveState } from "./statefile.ts";
 import {
-  type Herdr, type Watched, agentStates, checkoutOf, linkCheckout, openProjects, projectDirs, projectLabels, readProjectFile, readState,
+  type Watched, agentStates, checkoutOf, linkCheckout, openProjects, projectDirs, projectLabels, readProjectFile, readState,
 } from "./state.ts";
 import { type Found, title, watchWorkspace, watchedFrom } from "./watched.ts";
 import { type Wait, readProcesses, runningSubagents, sessionFolder, waitsByPid } from "./waits.ts";
@@ -94,18 +93,61 @@ for (const f of bundle.outputFiles)
   assets[`/${relative(outdir, f.path)}`] = [types[extname(f.path)] ?? "application/octet-stream", f.contents];
 
 const clients = new Set<SSEStreamingApi>();
+const logError = (e: unknown) => console.error("herdr-project-web:", e);
 const { ask, tryAsk } = herdrClient();
-// Herdr's panes and workspaces, read when it says they changed.
-const tui = herdrSource(tryAsk);
+// Herdr's panes and workspaces, null while it can't be asked, read when
+// its events say something changed, and every minute, since panes'
+// directories change without events.
+let herdr: Herdr | null = null;
+const herdrReads = new Schedule(async () => {
+  const before = herdr;
+  const next = (herdr = await readHerdr(tryAsk));
+  // Each agent's state is its own subscription, and a failed one
+  // subscribes again.
+  herdrEvents.update(next);
+  const states = agentStates(before) ?? {};
+  forgetAnswered(hookEvents, states, agentStates(next) ?? states);
+  if (next) for (const pane of hookEvents.keys()) if (!next.panes.some((q) => q.pane_id === pane)) hookEvents.delete(pane);
+  deliver();
+  refresh();
+}, { every: 60_000, onError: logError });
+const herdrEvents = new HerdrEvents(herdrSocket, () => herdrReads.refresh());
 // What the checks found, by title, once they have checked, shown in this
 // order.
 const ORDER = ["Pull requests", "Panes", "Slack", "Linear"];
 const found = new Map<string, Found>();
+
+/** Returns the JSON object kept at path, or {} if there is none. */
+function loadRecord<T extends object>(path: string): T {
+  const loaded = loadState(path);
+  const value = (typeof loaded === "object" && loaded !== null && !Array.isArray(loaded) ? loaded : {}) as T;
+  saved.set(path, JSON.stringify(value));
+  return value;
+}
+
+// What was last saved or loaded at each path, as JSON.
+const saved = new Map<string, string>();
+
+/** Saves value at path unless it is what is there, logging a failure: the
+ * server goes on with it. Returns whether it changed. */
+function save(path: string, value: unknown): boolean {
+  const json = JSON.stringify(value);
+  if (saved.get(path) === json) return false;
+  saved.set(path, json);
+  try {
+    saveState(path, value);
+  } catch (e) {
+    logError(e);
+  }
+  return true;
+}
+
 // The columns the user moved pull requests to, and what came of asking
 // Copilot to review each.
-const logError = (e: unknown) => console.error("herdr-project-web:", e);
-const moves = stored(join(stateDir, "moves.json"), isRecord<board.Moves>, {}, { onError: logError });
-const copilotAsks = stored(join(stateDir, "copilot.json"), isRecord<board.CopilotAsks>, {}, { onError: logError });
+const movesPath = join(stateDir, "moves.json");
+const copilotPath = join(stateDir, "copilot.json");
+let moves = loadRecord<board.Moves>(movesPath);
+let copilotAsks = loadRecord<board.CopilotAsks>(copilotPath);
 // Each pane's last hook event.
 const hookEvents = new Map<string, HookEvent>();
 // The terminals of the Herdr app's spaces, which herdr-core runs, as
@@ -113,8 +155,16 @@ const hookEvents = new Map<string, HookEvent>();
 let appTerminalPanes: Herdr["panes"] = [];
 // Whether the Herdr app's terminals have been read yet.
 let appRead = false;
-const inApp = (pane: string) => appTerminalPanes.some((p) => p.pane_id === pane);
-const outbox = new Outbox(join(stateDir, "outbox.json"), (pane, text) => inApp(pane) ? hcSend(pane, text) : paneHerdr.run(pane, text), readyForText);
+const herdrTui = tuiBackend(ask, {
+  asking: (pane) => hookEvents.get(pane)?.event === "PermissionRequest",
+  title: async (workspace, directory) => reportTitle(workspace, directory),
+});
+const herdrApp = appBackend();
+/** Returns the Backend that pane, as last read, is in. */
+const backendOf = (pane: string) => appTerminalPanes.some((p) => p.pane_id === pane) ? herdrApp : herdrTui;
+const outbox = new Outbox(
+  join(stateDir, "outbox.json"), (pane, text) => backendOf(pane).send(pane, text), (pane) => backendOf(pane).ready(pane),
+);
 // The checkouts under ~/repos each project's agents went into, by project.
 const linksPath = join(stateDir, "checkouts.json");
 const links = (loadState(linksPath) as Record<string, string[]> | null) ?? {};
@@ -129,29 +179,9 @@ function agentViews(): Record<string, AgentView> {
   return views;
 }
 
-/** Returns the session in pane, "" if unknown, if it runs an idle agent, as
- * Herdr says right now, with no permission request open, or else null.
- * Text sent to anything else could answer a prompt, or run in a shell. */
-async function readyForText(pane: string): Promise<string | null> {
-  if (inApp(pane)) {
-    const now = JSON.parse((await promisify(execFile)("hc", ["get", pane, "--json"], { timeout: 10_000 })).stdout);
-    return appAgentFree(now) ? (terminalSession(now, claudeSessions()) ?? "") : null;
-  }
-  const { pane: now } = await ask("pane.get", { pane_id: pane });
-  const free = Boolean(now.agent) && ["idle", "done"].includes(now.agent_status) && hookEvents.get(pane)?.event !== "PermissionRequest";
-  return free ? (now.agent_session?.value ?? "") : null;
-}
-
-/** Types text into the Herdr app's terminal and presses Enter. */
-async function hcSend(terminal: string, text: string) {
-  // Text starting with "-" would be read as an option.
-  await promisify(execFile)("hc", ["send", terminal, "--", text], { timeout: 10_000 });
-}
-
 /** Returns Herdr's panes with the Herdr app's agents among them, or those
  * alone while Herdr can't be asked, or null if neither is known. */
 function everyPane(): Herdr | null {
-  const herdr = tui.current();
   if (!herdr && !appTerminalPanes.length) return null;
   return { workspaces: herdr?.workspaces ?? [], panes: [...(herdr?.panes ?? []), ...appTerminalPanes] };
 }
@@ -165,14 +195,12 @@ function pageState() {
   const sessions = Object.fromEntries((all?.panes ?? []).filter((p) => p.agent).map((p) => [p.pane_id, p.agent_session?.value ?? ""]));
   // Only messages for panes of what has been read can be told undelivered:
   // Herdr's panes are named like w1:p2, the app's terminals like t3.
-  const readable = Object.fromEntries(Object.entries(outbox.all()).filter(([pane]) => pane.includes(":") ? tui.current() !== null : appRead));
+  const readable = Object.fromEntries(Object.entries(outbox.all()).filter(([pane]) => pane.includes(":") ? herdr !== null : appRead));
   const left = undelivered(readable, sessions);
   const state = readState(watched(), projectRoot, all, home, links);
   for (const project of state.projects)
     for (const pane of project.panes) pane.waits = (sessions[pane.id] && waits.get(sessions[pane.id])) || [];
-  // Merged cards go a while after merging, whatever changed.
-  cards.refresh();
-  return { ...state, ...(orgs ? { controls: agentViews(), undelivered: left, board: cards.current() ?? [] } : {}) };
+  return { ...state, ...(orgs ? { controls: agentViews(), undelivered: left, board: cards() } : {}) };
 }
 
 /** Sends agents that are free what waits for them. */
@@ -183,34 +211,45 @@ function deliver() {
 /** Returns what the checks found, or null before any has. */
 function watched(): Watched | null {
   const ours = ORDER.flatMap((t) => found.get(t) ?? []);
-  return ours.length ? watchedFrom(ours, lastPoll()?.urls ?? []) : null;
+  return ours.length ? watchedFrom(ours, lastPoll?.urls ?? []) : null;
 }
 
-tui.onChange((next, before) => {
-  const states = agentStates(before) ?? {};
-  forgetAnswered(hookEvents, states, agentStates(next) ?? states);
-  if (next) for (const pane of hookEvents.keys()) if (!next.panes.some((q) => q.pane_id === pane)) hookEvents.delete(pane);
-  deliver();
-  refresh();
-});
+/** Returns the board's cards, from the pull requests, their projects and
+ * what the user did with them. Merged ones go a while after merging. */
+function cards(): board.Card[] {
+  if (!lastPoll) return [];
+  const names = Object.fromEntries(Object.values(lastPoll.owners).flatMap((o) => (o ? [[o.project, projectName(o.project)]] : [])));
+  return board.cards(lastPoll.pulls, lastPoll.owners, (d) => names[d] ?? d, moves, new Date(), copilotAsks);
+}
 
-// The Herdr app's agents, keeping the last ones read when hc fails.
-polled(async () => appHerdrPanes(await appTerminals(), claudeSessions()), { every: 5_000 }).onChange((next) => {
+// The Herdr app's agents, telling only of changes.
+new Schedule(async () => {
+  let next: Herdr["panes"];
+  try {
+    next = appHerdrPanes(await appTerminals(), claudeSessions());
+  } catch {
+    return; // Keeping the last ones while hc fails.
+  }
+  if (appRead && JSON.stringify(next) === JSON.stringify(appTerminalPanes)) return;
   appTerminalPanes = next;
   appRead = true;
   deliver();
   refresh();
-});
+}, { every: 5_000, onError: logError });
 
 // Where Claude Code keeps each session's files, once found.
 const sessionFolders = new Map<string, string>();
 
 // What agents wait on, keeping the last read when ps fails: their Bash
-// tool's commands, then the subagents of the sessions still running. A
-// Map's JSON tells nothing, so every read counts.
-polled(async () => {
+// tool's commands, then the subagents of the sessions still running.
+new Schedule(async () => {
   const sessions = claudeSessions();
-  const processes = await readProcesses();
+  let processes: Awaited<ReturnType<typeof readProcesses>>;
+  try {
+    processes = await readProcesses();
+  } catch {
+    return; // Keeping the last read while ps fails.
+  }
   const shells = waitsByPid(processes);
   const started = new Map(processes.map((p) => [p.pid, p.started]));
   const next = new Map<string, Wait[]>();
@@ -222,11 +261,9 @@ polled(async () => {
     const w = [...(shells.get(pid) ?? []), ...(folder && since !== undefined ? runningSubagents(folder, since) : [])];
     if (w.length) next.set(session, w);
   }
-  return next;
-}, { every: 10_000, equal: () => false }).onChange((next) => {
   waits = next;
   refresh();
-});
+}, { every: 10_000, onError: logError });
 
 // The title Herdr has, or is being told.
 let titled = "";
@@ -235,7 +272,7 @@ function refresh() {
   const found = watched();
   const next = JSON.stringify(pageState());
   // Tell Herdr how much waits on the user only as it changes.
-  const workspace = watchWorkspace(process.env, tui.current());
+  const workspace = watchWorkspace(process.env, herdr);
   const text = title(found?.inbox);
   if (workspace && found && text !== titled) {
     titled = text;
@@ -253,14 +290,13 @@ function refresh() {
 const paneHerdr: PaneHerdr = {
   list: async () => (await ask("pane.list")).panes,
   read: async (id) => (await ask("pane.read", { pane_id: id, source: "recent", lines: 50 })).read.text,
-  // Typing the text and Enter, as herdr pane run does.
-  run: async (id, text) => void (await ask("pane.send_input", { pane_id: id, text, keys: ["Enter"] })),
+  run: herdrTui.send,
 };
 
 // Check the panes five minutes after each check ends, so that two never
 // tell an agent at once, keeping the last items when one fails.
 const PANE_INTERVAL = 300_000;
-scheduled(async (): Promise<Found> => {
+new Schedule(async () => {
   const at = new Date();
   let lines: string[];
   let items = found.get("Panes")?.items ?? [];
@@ -270,11 +306,9 @@ scheduled(async (): Promise<Found> => {
     lines = [`Cannot check panes: ${String(e).split("\n")[0]}`];
   }
   const next = new Date(Date.now() + PANE_INTERVAL).toISOString();
-  return { title: "Panes", section: { title: "Panes", at: at.toISOString(), next, lines }, items };
-}, { after: PANE_INTERVAL, start: !!orgs }).onChange((checked) => {
-  found.set("Panes", checked);
+  found.set("Panes", { title: "Panes", section: { title: "Panes", at: at.toISOString(), next, lines }, items });
   refresh();
-});
+}, { every: PANE_INTERVAL, start: !!orgs, onError: logError });
 
 // The connected claude.ai connectors; the queues start together, so one
 // listing a minute serves both.
@@ -292,21 +326,15 @@ const notify = (title: string, body: string) => ask("notification.show", { title
 // projects they use.
 const QUEUE_INTERVAL = 1_800_000;
 const queues: [string, string, (texts: ReturnType<typeof notesTexts>) => Promise<Checked>][] = [
-  ["Slack", slack.CONNECTOR, (texts) => slack.poll(notify, texts, join(stateDir, "slack.json"), lastPoll()?.owners ?? {})],
-  ["Linear", linear.CONNECTOR, (texts) => linear.poll(notify, texts, join(stateDir, "linear.json"), lastPoll()?.owners ?? {})],
+  ["Slack", slack.CONNECTOR, (texts) => slack.poll(notify, texts, join(stateDir, "slack.json"), lastPoll?.owners ?? {})],
+  ["Linear", linear.CONNECTOR, (texts) => linear.poll(notify, texts, join(stateDir, "linear.json"), lastPoll?.owners ?? {})],
 ];
-const queueChecks = queues.map(([title, connector, check]) => {
-  const source = scheduled(async () => {
-    const names = await connected();
-    return checkQueue(title, connector, names, () => check(notesTexts(projectRoot)), found.get(title) ?? null,
-                      () => new Date(), QUEUE_INTERVAL);
-  }, { after: QUEUE_INTERVAL, start: false });
-  source.onChange((checked) => {
-    found.set(title, checked);
-    refresh();
-  });
-  return source;
-});
+const queueChecks = queues.map(([title, connector, check]) => new Schedule(async () => {
+  const names = await connected();
+  found.set(title, await checkQueue(title, connector, names, () => check(notesTexts(projectRoot)), found.get(title) ?? null,
+                                    () => new Date(), QUEUE_INTERVAL));
+  refresh();
+}, { every: QUEUE_INTERVAL, start: false, onError: logError }));
 
 const prHerdr: github.PollHerdr = {
   panes: paneHerdr.list,
@@ -328,52 +356,44 @@ const PR_INTERVAL = 300_000;
 // How soon to check when asked: GitHub's search takes a while to find a
 // new pull request.
 const PR_SOON = 15_000;
-// A check of the pull requests: when it ran, why it failed, if it did,
-// and what the last one that didn't found.
-type PullCheck = { at: Date; error: string | null; last: Awaited<ReturnType<typeof github.poll>> | null };
-const pullChecks = scheduled(async (): Promise<PullCheck> => {
+// What the last check of the pull requests that didn't fail found.
+let lastPoll: Awaited<ReturnType<typeof github.poll>> | null = null;
+const pullChecks = new Schedule(async () => {
   const at = new Date();
+  let error: string | null = null;
   try {
-    return { at, error: null, last: await github.poll(prHerdr, projectRoot, join(stateDir, "pull-requests.json"), orgs!) };
+    lastPoll = await github.poll(prHerdr, projectRoot, join(stateDir, "pull-requests.json"), orgs!);
   } catch (e) {
-    return { at, error: String(e).split("\n")[0], last: pullChecks.current()?.last ?? null };
+    error = String(e).split("\n")[0];
   }
-}, { after: PR_INTERVAL, start: !!orgs, onError: logError });
-/** Returns what the last check of the pull requests that didn't fail found. */
-const lastPoll = () => pullChecks.current()?.last ?? null;
+  showPullCheck(at, error);
+}, { every: PR_INTERVAL, start: !!orgs, onError: logError });
 /** Reports whether url is of an open pull request, as last found. */
-const isOpen = (url: unknown) => lastPoll()?.pulls.some((p) => p.url === url && p.state === "OPEN") ?? false;
+const isOpen = (url: unknown) => lastPoll?.pulls.some((p) => p.url === url && p.state === "OPEN") ?? false;
 let queuing = false;
-// Before the board hears of the check, so that the page never shows its
-// new cards beside the section before.
-pullChecks.onChange(({ at, error, last }) => {
-  try {
-    showPullCheck(at, error, last);
-  } catch (e) {
-    logError(e);
-  }
-});
 
-/** Shows a check of the pull requests that ran at at, failed with error,
- * if it did, and found last, if any did: on the page, in the watcher's
+/** Shows a check of the pull requests that ran at at and failed with
+ * error, if it did, else found lastPoll: on the page, in the watcher's
  * pane and in what the user did with them. */
-function showPullCheck(at: Date, error: string | null, last: PullCheck["last"]) {
+function showPullCheck(at: Date, error: string | null) {
   const title = "Pull requests";
+  const last = error ? null : lastPoll!;
   // A failed check keeps the items before, and shows no pull requests.
-  const lines = error ? [`Cannot check pull requests: ${error}`] : last!.lines;
-  const items = error ? (found.get(title)?.items ?? []) : last!.items;
+  const lines = last ? last.lines : [`Cannot check pull requests: ${error}`];
+  const items = last ? last.items : (found.get(title)?.items ?? []);
   const next = new Date(Date.now() + PR_INTERVAL).toISOString();
   found.set(title, {
     title,
-    section: { title, at: at.toISOString(), next, lines, ...(error ? {} : { pullRequests: last!.rows }) },
+    section: { title, at: at.toISOString(), next, lines, ...(last ? { pullRequests: last.rows } : {}) },
     items,
   });
-  // Forgetting what was done with pull requests that are gone, after the
-  // section, since the board refreshes the page as they change.
+  // Forgetting what was done with pull requests that are gone.
   if (last) {
-    moves.set(board.stillMoved(moves.current()!, last.pulls));
+    moves = board.stillMoved(moves, last.pulls);
+    save(movesPath, moves);
     const open = new Set(last.urls);
-    copilotAsks.set(Object.fromEntries(Object.entries(copilotAsks.current()!).filter(([url]) => open.has(url))));
+    copilotAsks = Object.fromEntries(Object.entries(copilotAsks).filter(([url]) => open.has(url)));
+    save(copilotPath, copilotAsks);
   }
   refresh();
   if (tty !== null)
@@ -384,16 +404,6 @@ function showPullCheck(at: Date, error: string | null, last: PullCheck["last"]) 
   queuing = true;
   for (const q of queueChecks) q.refresh();
 }
-
-// The board's cards, from the pull requests, their projects and what the
-// user did with them.
-const cards = derived([pullChecks, moves, copilotAsks], (check, moved, asks) => {
-  const last = check.last;
-  if (!last) return [];
-  const names = Object.fromEntries(Object.values(last.owners).flatMap((o) => (o ? [[o.project, projectName(o.project)]] : [])));
-  return board.cards(last.pulls, last.owners, (d) => names[d] ?? d, moved, new Date(), asks);
-});
-cards.onChange(() => refresh());
 
 /** Checks the pull requests PR_SOON from now, after any check due sooner
  * or running, showing when on the page. */
@@ -441,7 +451,7 @@ setInterval(changed, 30_000);
  * by the checkouts in ~/repos, where some tasks work on their branches. */
 function projectWorktrees() {
   return [
-    ...openProjects(projectRoot, tui.current()).map(([dir, readme]) => ({
+    ...openProjects(projectRoot, herdr).map(([dir, readme]) => ({
       dir,
       ...projectLabels(dir, readme),
       worktrees: worktreeDirs(dir),
@@ -471,7 +481,9 @@ async function askCopilotFrom(body: string | null): Promise<number> {
   const asked = await board.askCopilot(url, {}, (u) => requestCopilot(u));
   // Merged after the request, which can take a while, so as not to lose
   // what came of another asked meanwhile.
-  copilotAsks.set({ ...copilotAsks.current(), ...asked });
+  copilotAsks = { ...copilotAsks, ...asked };
+  save(copilotPath, copilotAsks);
+  refresh();
   return asked[url] === "requested" ? 204 : 502;
 }
 
@@ -482,10 +494,10 @@ async function setStageFrom(body: string | null): Promise<number> {
   const { url, stage } = JSON.parse(body ?? "{}");
   if (!(stage === null || board.MOVABLE.includes(stage))) return 400;
   if (!isOpen(url)) return 404;
-  const next = { ...moves.current() };
-  if (stage) next[url] = stage;
-  else delete next[url];
-  moves.set(next);
+  moves = { ...moves };
+  if (stage) moves[url] = stage;
+  else delete moves[url];
+  if (save(movesPath, moves)) refresh();
   return 204;
 }
 
@@ -493,7 +505,7 @@ const agentActions: AgentActions = {
   outbox,
   known: (pane) => Object.hasOwn(agentStates(everyPane()) ?? {}, pane),
   session: (pane) => everyPane()?.panes.find((p) => p.pane_id === pane)?.agent_session?.value,
-  focus: (pane) => inApp(pane) ? promisify(execFile)("herdr-app", ["do", "agent.focus", "--terminal", pane]) : ask("pane.focus", { pane_id: pane }),
+  focus: (pane) => backendOf(pane).focus(pane),
   changed: () => {
     deliver();
     refresh();
@@ -528,7 +540,7 @@ page.get("/api/diff", async (c) => {
   // Only the worktrees the page lists, not any directory asked for.
   const dir = c.req.query("dir") ?? "";
   if (!projectWorktrees().some((p) => p.worktrees.includes(dir))) return c.json({ error: "no such worktree" }, 404);
-  return c.json(await highlightDiff(await worktreeDiff(dir, lastPoll()?.bases ?? {})));
+  return c.json(await highlightDiff(await worktreeDiff(dir, lastPoll?.bases ?? {})));
 });
 page.get("/api/lines", async (c) => {
   // More context for a diff: only the worktrees the page lists, like it.
@@ -543,7 +555,7 @@ page.get("/api/lines", async (c) => {
 page.get("/api/file", (c) => {
   // Only the files of the projects the page lists, not any file asked for.
   const dir = c.req.query("dir");
-  const file = openProjects(projectRoot, tui.current()).some(([d]) => d === dir)
+  const file = openProjects(projectRoot, herdr).some(([d]) => d === dir)
     ? readProjectFile(dir!, c.req.query("name") ?? "")
     : null;
   return file === null ? c.json({ error: "no such file" }, 404) : c.json(file);
@@ -599,17 +611,6 @@ function launch(form: URLSearchParams): string {
   if (workspace) reportTitle(workspace, directory);
   return launchScript(directory, command);
 }
-
-const openHerdr: OpenHerdr = {
-  focus: (pane) => ask("agent.focus", { target: pane }),
-  tab: async (workspace, cwd) => (await ask("tab.create", { workspace_id: workspace, cwd, focus: true })).root_pane.pane_id,
-  workspace: async (cwd, label) => {
-    const { workspace, root_pane } = await ask("workspace.create", { cwd, focus: true, ...(label ? { label } : {}) });
-    return { workspace: workspace.workspace_id, pane: root_pane.pane_id };
-  },
-  title: async (workspace, directory) => reportTitle(workspace, directory),
-  run: (pane, command) => paneHerdr.run(pane, command),
-};
 
 const planDeps = {
   background,
@@ -672,7 +673,7 @@ async function nameWorkspaces() {
     const text = readProjectReadme(dir);
     return (text && frontMatter(text, "name")) || "";
   };
-  for (const { dir, workspace, name } of workspacesToName(tui.current(), named, (cwd) => projectDir(cwd, projectRoot), nameOf)) {
+  for (const { dir, workspace, name } of workspacesToName(herdr, named, (cwd) => projectDir(cwd, projectRoot), nameOf)) {
     if (!(await tryAsk("workspace.rename", { workspace_id: workspace, label: name }))) continue;
     named.add(dir);
     saveState(namedPath, [...named]);
@@ -727,9 +728,10 @@ const onHook: HookHandler = async (pane, { agent, event }, data) => {
   return dir ? resumedText(instructions(dir, dotfiles, new Date())) : "";
 };
 
-// Now, not as last polled: going by old panes could resume a session
-// that already runs. The Herdr app's, for a picker that opens rows there.
-const panes = async (app = false) => app ? appPanes() : paneRecords({ workspaces: [], panes: (await ask("pane.list")).panes });
+// The Herdr app, for a picker that opens rows there, else the TUI.
+const pickerBackend = (app: unknown) => app ? herdrApp : herdrTui;
+/** Returns the panes of the picker's Backend as the picker uses them. */
+const pickerPanes = async (app: unknown) => paneRecords({ workspaces: [], panes: await pickerBackend(app).panes() });
 
 // What herdr-project and the picker ask for on the socket.
 const socket = new Hono();
@@ -749,8 +751,8 @@ socket.get("/sessions", (c) =>
 socket.get("/picker", async (c) => {
   const app = c.req.query("app") !== undefined;
   return c.json(c.req.query("inbox") !== undefined
-    ? inboxChoices(await panes(app), codexSessions(), JSON.parse(last))
-    : choices(await panes(app), projectRoot, codexSessions()));
+    ? inboxChoices(await pickerPanes(app), codexSessions(), JSON.parse(last))
+    : choices(await pickerPanes(app), projectRoot, codexSessions()));
 });
 // From an agent that opened or changed a pull request, for the board.
 socket.post("/pulls/check", (c) => {
@@ -760,7 +762,9 @@ socket.post("/pulls/check", (c) => {
 socket.get("/picker/notes", (c) => c.text(rowNotes(c.req.query("kind") ?? "", c.req.query("dir") ?? "", c.req.query("session") ?? "")));
 socket.post("/picker/open", limit(), async (c) => {
   const { row, agent, app } = JSON.parse((await c.req.text()) || "{}");
-  await open(await plan(row, agent, await panes(app), projectRoot, launcher, planDeps), app ? appOpener() : openHerdr);
+  // Panes as they are now, not as last read: going by old ones could
+  // resume a session that already runs.
+  await open(await plan(row, agent, await pickerPanes(app), projectRoot, launcher, planDeps), pickerBackend(app).opener());
   return c.body(null, 204);
 });
 

@@ -3,8 +3,8 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { appAgentFree, appHerdrPanes, appOpener, appPaneRecords, appPanes, appTerminals, claudeSessions, procParent, psParents, terminalSession } from "./herdr-app.ts";
-import { open } from "./rows.ts";
+import { appAgentFree, appHerdrPanes, appOpener, appListedPanes, appPanes, appTerminals, claudeSessions, procParent, psParents, terminalSession } from "./app.ts";
+import { open } from "../rows.ts";
 
 const terminal = (o: object) => ({
   address: "t1", state: "live", cwd: "/start", agent: "claude-code",
@@ -22,14 +22,14 @@ test("reads Claude's session files by process", () => {
 
 test("reads the panes of the app's spaces", () => {
   const sessions = new Map([[10, "s1"]]);
-  assert.deepEqual(appPaneRecords([
+  assert.deepEqual(appListedPanes([
     terminal({}),
     terminal({ address: "t2", agent: undefined, foreground: { pid: 10 } }),
     terminal({ address: "t3", labels: {} }),
     terminal({ address: "t4", state: "exited" }),
   ], sessions), [
-    { agent: "claude", workspace: "sp1", cwd: "/now", pane: "t1", session: "s1", role: "" },
-    { agent: null, workspace: "sp1", cwd: "/start", pane: "t2", session: "", role: "" },
+    { pane_id: "t1", workspace_id: "sp1", cwd: "/now", agent: "claude", agent_session: { value: "s1" } },
+    { pane_id: "t2", workspace_id: "sp1", cwd: "/start", agent: null, agent_session: null },
   ]);
 });
 
@@ -58,7 +58,7 @@ test("leaves out terminals that end while it reads them", async () => {
     if (args[1] === "t2") throw new Error("gone");
     return terminal({ agent: undefined });
   };
-  assert.deepEqual((await appPanes(run, new Map())).map((p) => [p.pane, p.agent]), [["t1", "claude"]]);
+  assert.deepEqual((await appPanes(run, new Map())).map((p) => [p.pane_id, p.agent]), [["t1", "claude"]]);
   // Asked for all of them, it can't say which is missing.
   await assert.rejects(appTerminals(run, true), { message: "gone" });
 });

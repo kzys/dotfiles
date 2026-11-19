@@ -5,10 +5,7 @@
 import { execFile } from "node:child_process";
 import { createConnection } from "node:net";
 import { promisify } from "node:util";
-import { HerdrEvents } from "./events.ts";
-import { subscribed } from "./source/subscribed.ts";
-import type { Source } from "./source/source.ts";
-import type { Herdr } from "./state.ts";
+import type { Backend, Herdr, OpenHerdr } from "./backend.ts";
 
 // An error Herdr replied with, as opposed to failing to reach it.
 export class HerdrError extends Error {}
@@ -86,22 +83,42 @@ export function herdrClient(locate: () => Promise<string> = herdrSocket): { ask:
   return { ask: (method, params) => ask(method, params), tryAsk: (method, params) => ask(method, params).catch(() => null) };
 }
 
-/** Returns Herdr's workspaces and panes as a Source, null while Herdr
- * can't be asked through tryAsk, read when its events say something
- * changed, through the socket that locate finds, and every minute,
- * since panes' directories change without events. Every read counts, so
- * that a failed subscription subscribes again. */
-export function herdrSource(tryAsk: Ask, locate: () => Promise<string> = herdrSocket): Source<Herdr | null> {
-  return subscribed(
-    async (): Promise<Herdr | null> => {
-      const [w, p] = await Promise.all([tryAsk("workspace.list"), tryAsk("pane.list")]);
-      return w && p ? { workspaces: w.workspaces, panes: p.panes } : null;
+/** Returns Herdr's workspaces and panes, asking through tryAsk, or null
+ * while Herdr can't be asked. */
+export async function readHerdr(tryAsk: Ask): Promise<Herdr | null> {
+  const [w, p] = await Promise.all([tryAsk("workspace.list"), tryAsk("pane.list")]);
+  return w && p ? { workspaces: w.workspaces, panes: p.panes } : null;
+}
+
+/** Returns the Herdr TUI as a Backend, asking it through ask. asking
+ * reports whether an agent's pane has a permission request open, which
+ * Herdr doesn't tell, and title gives a workspace made for a directory
+ * its title. */
+export function tuiBackend(
+  ask: Ask,
+  options: { asking: (pane: string) => boolean; title: (workspace: string, directory: string) => Promise<unknown> },
+): Backend {
+  // Typing the text and Enter, as herdr pane run does.
+  const send = async (pane: string, text: string) => void (await ask("pane.send_input", { pane_id: pane, text, keys: ["Enter"] }));
+  const opener: OpenHerdr = {
+    focus: (pane) => ask("agent.focus", { target: pane }),
+    tab: async (workspace, cwd) => (await ask("tab.create", { workspace_id: workspace, cwd, focus: true })).root_pane.pane_id,
+    workspace: async (cwd, label) => {
+      const { workspace, root_pane } = await ask("workspace.create", { cwd, focus: true, ...(label ? { label } : {}) });
+      return { workspace: workspace.workspace_id, pane: root_pane.pane_id };
     },
-    (source) => {
-      const events = new HerdrEvents(locate, () => source.refresh());
-      // Each agent's state is its own subscription.
-      source.onChange((next) => events.update(next));
+    title: options.title,
+    run: send,
+  };
+  return {
+    async ready(pane) {
+      const { pane: now } = await ask("pane.get", { pane_id: pane });
+      const free = Boolean(now.agent) && ["idle", "done"].includes(now.agent_status) && !options.asking(pane);
+      return free ? (now.agent_session?.value ?? "") : null;
     },
-    { resyncEvery: 60_000, equal: () => false },
-  );
+    send,
+    focus: (pane) => ask("pane.focus", { pane_id: pane }),
+    panes: async () => (await ask("pane.list")).panes,
+    opener: () => opener,
+  };
 }

@@ -7,8 +7,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import type { OpenHerdr, PaneRecord } from "./rows.ts";
-import type { Herdr } from "./state.ts";
+import type { Backend, Herdr, OpenHerdr } from "./backend.ts";
 
 // herdr-core names some agents by their app, not their command.
 const AGENTS: Record<string, string> = { "claude-code": "claude" };
@@ -89,22 +88,22 @@ export function terminalSession(
 }
 
 /** Returns the panes among terminals, each as hc get describes it with the
- * agent hc ls reports, that show in a space of the Herdr app. sessions maps
- * the process IDs of running Claude sessions to their IDs, as for
- * terminalSession with parent; herdr-core doesn't know sessions, nor
- * roles. */
-export function appPaneRecords(
+ * agent hc ls reports, that show in a space of the Herdr app, as Herdr
+ * describes its panes. Unlike appHerdrPanes, a terminal is an agent as
+ * soon as hc ls says so. sessions maps the process IDs of running Claude
+ * sessions to their IDs, as for terminalSession with parent; herdr-core
+ * doesn't know sessions, nor roles. */
+export function appListedPanes(
   terminals: any[], sessions: Map<number, string>, parent: (pid: number) => number | null = procParent,
-): PaneRecord[] {
+): Herdr["panes"] {
   return terminals.filter((t) => t.state === "live" && t.labels?.["herdr.space"]).map((t) => {
     const agent = AGENTS[t.agent] ?? t.agent ?? null;
     return {
-      agent,
-      workspace: t.labels["herdr.space"],
+      pane_id: t.address,
+      workspace_id: t.labels["herdr.space"],
       cwd: t.foreground?.cwd || t.cwd || "",
-      pane: t.address,
-      session: agent === "claude" ? (terminalSession(t, sessions, parent) ?? "") : "",
-      role: "",
+      agent,
+      agent_session: agent === "claude" ? { value: terminalSession(t, sessions, parent) ?? "" } : null,
     };
   });
 }
@@ -124,16 +123,16 @@ export async function appTerminals(run: Json = json, all = false): Promise<any[]
 }
 
 /** Returns the panes of the Herdr app's spaces on this machine, as
- * appPaneRecords does. */
-export async function appPanes(run: Json = json, sessions = claudeSessions()): Promise<PaneRecord[]> {
-  return appPaneRecords(await appTerminals(run), sessions);
+ * appListedPanes does. */
+export async function appPanes(run: Json = json, sessions = claudeSessions()): Promise<Herdr["panes"]> {
+  return appListedPanes(await appTerminals(run), sessions);
 }
 
 /** Returns the terminals among terminals, as appTerminals reads them, that
  * show in a space of the Herdr app, as Herdr describes its panes, so that
  * their agents count as Herdr's do. A terminal is an agent only while its
  * program reports a status. sessions and parent are as for
- * appPaneRecords. */
+ * appListedPanes. */
 export function appHerdrPanes(
   terminals: any[], sessions: Map<number, string>, parent: (pid: number) => number | null = procParent,
 ): Herdr["panes"] {
@@ -187,5 +186,21 @@ export function appOpener(command: AppCommand = appCommand): OpenHerdr {
       pending.delete(pane);
       return command(made[0], { ...made[1], argv: ["sh", "-c", line] });
     },
+  };
+}
+
+/** Returns the Herdr app as a Backend, reading its terminals with hc. */
+export function appBackend(): Backend {
+  const run = (command: string, args: string[]) => promisify(execFile)(command, args, { timeout: 10_000 });
+  return {
+    async ready(terminal) {
+      const now = await json("hc", ["get", terminal, "--json"]);
+      return appAgentFree(now) ? (terminalSession(now, claudeSessions()) ?? "") : null;
+    },
+    // Text starting with "-" would be read as an option.
+    send: async (terminal, text) => void (await run("hc", ["send", terminal, "--", text])),
+    focus: (terminal) => run("herdr-app", ["do", "agent.focus", "--terminal", terminal]),
+    panes: () => appPanes(),
+    opener: () => appOpener(),
   };
 }

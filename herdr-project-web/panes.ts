@@ -7,7 +7,7 @@ import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
 import { FULL_AT, type Item } from "./inbox.ts";
 import { isProject } from "./launch.ts";
 import { projectName } from "./owners.ts";
-import type { Herdr } from "./state.ts";
+import type { Herdr } from "./herdr/backend.ts";
 import { loadState, saveState } from "./statefile.ts";
 
 // A pane as herdr pane list shows it.

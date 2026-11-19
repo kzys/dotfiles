@@ -10,7 +10,8 @@ import { promisify } from "node:util";
 import { frontMatter } from "./frontmatter.ts";
 import { type Agent, AGENTS, isProject, newProject, quote } from "./launch.ts";
 import { type CodexSession, codexContext, reportedRole, title, transcriptDir, transcripts } from "./sessions.ts";
-import type { Herdr, State } from "./state.ts";
+import type { Herdr, OpenHerdr } from "./herdr/backend.ts";
+import type { State } from "./state.ts";
 
 // Kind, directory, agent:session, and what the picker shows.
 export type Row = [string, string, string, string];
@@ -236,15 +237,6 @@ export async function plan(
   const workspace = panes.find((p) => inDir(p.cwd, directory))?.workspace ?? null;
   return { workspace, directory, command };
 }
-
-export type OpenHerdr = {
-  focus: (pane: string) => Promise<unknown>;
-  // Each returns the pane created.
-  tab: (workspace: string, directory: string) => Promise<string>;
-  workspace: (directory: string, label: string | null) => Promise<{ workspace: string; pane: string }>;
-  title: (workspace: string, directory: string) => Promise<unknown>;
-  run: (pane: string, command: string) => Promise<unknown>;
-};
 
 /** Returns the agents' workspaces to name after the projects they work in,
  * by project directory, from herdr, skipping projects in done. projectOf

@@ -5,6 +5,7 @@ import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, rea
 import { homedir } from "node:os";
 import { join, relative } from "node:path";
 import { frontMatter } from "./frontmatter.ts";
+import type { Herdr } from "./herdr/backend.ts";
 import { FULL_AT, type Item, projectItems, watchedItems } from "./inbox.ts";
 import { isProject } from "./launch.ts";
 import { isCheckout, lastSubject, worktreeDirs } from "./worktrees.ts";
@@ -105,25 +106,6 @@ export type Project = {
   items: Item[];
   // The files directly in dir, as projectFiles lists them.
   files: ProjectFile[];
-};
-
-// What herdr workspace list and herdr pane list say, in part.
-export type Herdr = {
-  workspaces: { workspace_id: string; label?: string }[];
-  panes: {
-    pane_id: string;
-    workspace_id: string;
-    tab_id?: string;
-    cwd?: string;
-    foreground_cwd?: string;
-    agent?: string | null;
-    agent_session?: { value?: string } | null;
-    agent_status?: string;
-    // The title its terminal shows, like what the agent is working on.
-    terminal_title?: string;
-    // What the agent's status line reports, like its role and ctx.
-    tokens?: Record<string, string>;
-  }[];
 };
 
 // What the watcher found: its sections, its inbox items by source, the
