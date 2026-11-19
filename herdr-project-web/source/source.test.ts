@@ -1,8 +1,13 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
+import { derived } from "./derived.ts";
 import { polled } from "./polled.ts";
 import { scheduled } from "./scheduled.ts";
 import type { Clock } from "./source.ts";
+import { isRecord, stored } from "./stored.ts";
 import { subscribed } from "./subscribed.ts";
 
 /** Returns a clock whose time moves only when advanced, running the
@@ -149,4 +154,45 @@ test("stops when its signal aborts", async () => {
   stop.abort();
   await advance(500);
   assert.deepEqual([calls.length, source.next()], [1, null]);
+});
+
+test("derives a value, again only when an input changes", async () => {
+  const { clock, advance } = fakeClock();
+  const a = polled(reads(1, 1, 2).read, { every: 100, clock });
+  const b = stored(join(mkdtempSync(join(tmpdir(), "src-")), "b.json"), (v): v is number => typeof v === "number", 10);
+  let computed = 0;
+  const sum = derived([a, b], (x, y) => (computed++, x + y));
+  assert.equal(sum.current(), null);
+  await advance(0);
+  assert.deepEqual([sum.current(), computed], [11, 1]);
+  // The same value from a doesn't compute it again.
+  await advance(100);
+  assert.equal(computed, 1);
+  await advance(100);
+  b.set(20);
+  assert.deepEqual([sum.current(), computed], [22, 3]);
+});
+
+test("keeps what is set in its file, starting from what is valid there", () => {
+  const path = join(mkdtempSync(join(tmpdir(), "src-")), "moves.json");
+  writeFileSync(path, "[1]");
+  const first = stored(path, isRecord<Record<string, string>>, {});
+  assert.deepEqual(first.current(), {});
+  const heard: unknown[] = [];
+  first.onChange((value) => heard.push(value));
+  first.set({ a: "x" });
+  first.set({ a: "x" });
+  assert.deepEqual([heard, JSON.parse(readFileSync(path, "utf8"))], [[{ a: "x" }], { a: "x" }]);
+  assert.deepEqual(stored(path, isRecord<Record<string, string>>, {}).current(), { a: "x" });
+});
+
+test("keeps what is set, and tells of it, when saving it fails", () => {
+  // A directory can't be written as a file.
+  const path = mkdtempSync(join(tmpdir(), "src-"));
+  const raised: unknown[] = [];
+  const heard: unknown[] = [];
+  const value = stored(path, isRecord<Record<string, string>>, {}, { onError: (e) => raised.push(e) });
+  value.onChange((v) => heard.push(v));
+  value.set({ a: "x" });
+  assert.deepEqual([value.current(), heard, raised.length], [{ a: "x" }, [{ a: "x" }], 1]);
 });
