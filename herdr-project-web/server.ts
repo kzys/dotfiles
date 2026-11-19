@@ -27,7 +27,7 @@ import { readLearnings } from "./learnings.ts";
 import { connectors } from "./headless.ts";
 import * as linear from "./linear.ts";
 import { type Owner, notesTexts, projectName } from "./owners.ts";
-import { PAGE_PATHS } from "./pages.ts";
+import { NESTED_PATHS, PAGE_PATHS } from "./pages.ts";
 import { type PaneHerdr, checkPanes } from "./panes.ts";
 import { type Checked, checkQueue } from "./queues.ts";
 import {
@@ -43,7 +43,7 @@ import {
 } from "./state.ts";
 import { type Found, title, watchWorkspace, watchedFrom } from "./watched.ts";
 import { type Wait, readProcesses, runningSubagents, sessionFolder, waitsByPid } from "./waits.ts";
-import { type PullBases, changedSince, checkoutDirs, fileLines, setBase, summarize, worktreeDiff, worktreeDirs } from "./worktrees.ts";
+import { type PullBases, changedSince, checkoutDirs, fileLines, setBase, worktreeDiff, worktreeDirs } from "./worktrees.ts";
 
 const here = import.meta.dirname;
 const home = homedir();
@@ -528,38 +528,6 @@ function projectWorktrees() {
   ].filter((p) => p.worktrees.length);
 }
 
-// How long a listing of worktrees is shown again unless asked to be
-// fresh. Listing them all walks every checkout, taking half a minute.
-const WORKTREES_FRESH_MS = 60_000;
-// The last listing of worktrees, or the one being made, and when it began.
-let worktreeListing: { at: number; done: boolean; projects: Promise<unknown[]> } | null = null;
-
-/** Returns the open projects' worktrees with how each differs from where
- * its branch started: the listing being made if any, else the last one if
- * it began within WORKTREES_FRESH_MS and fresh isn't set, else a new one.
- * Worktrees aren't watched, so only git knows. One being made may have
- * begun before what fresh asks to see. */
-function listWorktrees(fresh: boolean): Promise<unknown[]> {
-  const last = worktreeListing;
-  if (last && (!last.done || (!fresh && Date.now() - last.at < WORKTREES_FRESH_MS))) return last.projects;
-  const listing = {
-    at: Date.now(),
-    done: false,
-    projects: Promise.all(
-      projectWorktrees().map(async (p) => ({ ...p, worktrees: await Promise.all(p.worktrees.map((w) => summarize(w, pullBases))) })),
-    ),
-  };
-  listing.projects.then(
-    () => (listing.done = true),
-    () => {
-      // A failed listing isn't shown again.
-      if (worktreeListing === listing) worktreeListing = null;
-    },
-  );
-  worktreeListing = listing;
-  return listing.projects;
-}
-
 // Other names for this address come from DNS rebinding, which would let
 // any site read the page.
 const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
@@ -570,10 +538,7 @@ async function setBaseFrom(body: string | null): Promise<number> {
   const { dir, branch, base } = JSON.parse(body ?? "{}");
   if (!projectWorktrees().some((p) => p.worktrees.includes(dir))) return 404;
   if (typeof branch !== "string" || !(base === null || typeof base === "string")) return 400;
-  if (!(await setBase(dir, branch, base))) return 409;
-  // Listings made before show the old base.
-  worktreeListing = null;
-  return 204;
+  return (await setBase(dir, branch, base)) ? 204 : 409;
 }
 
 /** Asks Copilot to review the open pull request that body, a request's,
@@ -659,7 +624,6 @@ page.get("/api/events", (c) => streamSSE(c, async (stream) => {
   await closed;
   clients.delete(stream);
 }));
-page.get("/api/worktrees", async (c) => c.json(await listWorktrees(c.req.query("fresh") !== undefined)));
 page.get("/api/diff", async (c) => {
   // Only the worktrees the page lists, not any directory asked for.
   const dir = c.req.query("dir") ?? "";
@@ -687,6 +651,8 @@ page.get("/api/file", (c) => {
 // They are small and change rarely, so they are read each time.
 page.get("/api/learnings", (c) => c.json(readLearnings(reposRoot)));
 for (const [path, [type, body]] of Object.entries(assets)) page.get(path, (c) => c.body(body, 200, { "Content-Type": type }));
+// The views under the paths that nest, as /projects/<dir>.
+for (const path of NESTED_PATHS) page.get(`${path}/*`, (c) => c.body(assets["/"][1], 200, { "Content-Type": assets["/"][0] }));
 
 const server = createServer(getRequestListener(page.fetch));
 
@@ -750,7 +716,6 @@ const planDeps = {
 function noteCheckout(dir: string | null, cwd: string) {
   const checkout = checkoutOf(cwd, home);
   if (!dir || !checkout || !linkCheckout(links, dir, checkout)) return;
-  worktreeListing = null;
   try {
     saveState(linksPath, links);
   } catch (e) {

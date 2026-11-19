@@ -1,13 +1,13 @@
-// The page's view of the worktrees in the projects and their diffs.
+// The page's view of a worktree's diff.
 
 import { Fragment } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { type DiffLine, type FileDiff, type Gap, type Hunk, expandHunks, filePath, gapAt, splitRows } from "./diff.ts";
 import type { HighlightedDiff } from "./highlight.ts";
 import { type Comment, type Reviewer, clearReviewer, commentKey, displaced, receiverStarted, receiverStatus, reviewMessage, reviewers, withComment } from "./review.ts";
+import { projectHref } from "./pages.ts";
 import type { State } from "./state.ts";
 import { Refresh, matches, send as post, useFetched } from "./ui.tsx";
-import type { Summary } from "./worktrees.ts";
 
 // Files with more lines than this start folded.
 const FOLD_LINES = 400;
@@ -36,11 +36,6 @@ function useLayout(): [Layout, (l: Layout) => void] {
   return [layout, choose];
 }
 
-type ProjectWorktrees = { dir: string; name: string; title: string; worktrees: Summary[] };
-
-/** Returns the link to the diff of the worktree in dir. */
-export const diffHref = (dir: string) => `#diffs/${encodeURIComponent(dir)}`;
-
 const base = (dir: string) => dir.split("/").pop() ?? dir;
 
 function Stat({ added, removed }: { added: number; removed: number }) {
@@ -48,75 +43,6 @@ function Stat({ added, removed }: { added: number; removed: number }) {
     <span class="stat">
       <span class="stat-add">+{added}</span> <span class="stat-del">−{removed}</span>
     </span>
-  );
-}
-
-function WorktreeRow({ wt }: { wt: Summary }) {
-  const clean = !wt.files && !wt.untracked && !wt.ahead;
-  return (
-    <li class={clean ? "wt clean" : "wt"}>
-      <a class="wt-name" href={diffHref(wt.dir)}>
-        {base(wt.dir)}
-      </a>
-      {wt.error ? (
-        <span class="wt-error">{wt.error}</span>
-      ) : (
-        <>
-          <span class="wt-branch">
-            {wt.branch ?? "detached"}
-            {wt.base && <span class="wt-base"> ← {wt.base}</span>}
-          </span>
-          <span class="wt-counts">
-            {wt.ahead > 0 && <span>{wt.ahead} commit{wt.ahead === 1 ? "" : "s"}</span>}
-            {wt.files > 0 && <span>{wt.files} file{wt.files === 1 ? "" : "s"}</span>}
-            {wt.untracked > 0 && <span>{wt.untracked} untracked</span>}
-            {clean && <span>no changes</span>}
-          </span>
-          {wt.files > 0 && <Stat added={wt.added} removed={wt.removed} />}
-        </>
-      )}
-    </li>
-  );
-}
-
-/** Returns the open projects' worktrees, matching query, with how each
- * differs from where its branch started. */
-export function WorktreeList({ query }: { query: string }) {
-  // Focus shows a recent listing again; Refresh asks git.
-  const [projects, error, at, refresh] = useFetched<ProjectWorktrees[]>("/api/worktrees", "fresh");
-  const shown = (projects ?? [])
-    .map((p) =>
-      matches(query, p.name, p.title)
-        ? p
-        : { ...p, worktrees: p.worktrees.filter((w) => matches(query, `${base(w.dir)} ${w.branch ?? ""}`)) },
-    )
-    .filter((p) => p.worktrees.length);
-  return (
-    <div class="diffs">
-      <h2>
-        Worktrees <Refresh at={at} onClick={refresh} />
-      </h2>
-      {error && <p class="empty">Couldn't list worktrees: {error}</p>}
-      {!projects ? (
-        !error && <p class="empty">Asking git…</p>
-      ) : !shown.length ? (
-        <p class="empty">{query ? "No match." : "No worktrees in open projects."}</p>
-      ) : (
-        shown.map((p) => (
-          <section key={p.dir} class="card">
-            <header>
-              <span class="name">{p.name}</span>
-              <span class="title">{p.title}</span>
-            </header>
-            <ul class="wts">
-              {p.worktrees.map((w) => (
-                <WorktreeRow key={w.dir} wt={w} />
-              ))}
-            </ul>
-          </section>
-        ))
-      )}
-    </div>
   );
 }
 
@@ -597,8 +523,11 @@ const fileKey = (f: FileDiff) => `${f.from}:${f.to}`;
 const changesOf = (f: FileDiff) => JSON.stringify(f.hunks.map((h) => [h.header, h.lines.map((l) => l.text)]));
 
 /** Returns the diff of the worktree in dir, from where its branch
- * started, with its files matching query. */
-export function WorktreeDiffView({ dir, query, state }: { dir: string; query: string; state: State | null }) {
+ * started, with its files matching query, under project, the project it
+ * was opened from, or else the one that lists it in state. */
+export function WorktreeDiffView({ dir, project, query, state }: { dir: string; project: string | null; query: string; state: State | null }) {
+  const owner = project ?? state?.projects.find((p) => p.worktrees.some((w) => w.dir === dir))?.dir ?? null;
+  const ownerName = state?.projects.find((p) => p.dir === owner)?.name ?? owner?.split("/").pop();
   const [layout, setLayout] = useLayout();
   const review = useReview(dir);
   const [fetched, error, at, refresh] = useFetched<HighlightedDiff>(`/api/diff?dir=${encodeURIComponent(dir)}`);
@@ -660,7 +589,7 @@ export function WorktreeDiffView({ dir, query, state }: { dir: string; query: st
   return (
     <div class="diffs">
       <h2>
-        <a href="#diffs">Worktrees</a> / {base(dir)}
+        <a href="/projects">Projects</a> / {owner && <><a href={projectHref(owner)}>{ownerName}</a> / </>}{base(dir)}
         <span class="layout" role="group" aria-label="Layout">
           {(["unified", "split"] as const).map((l) => (
             <button key={l} class={l === layout ? "here" : ""} aria-pressed={l === layout} onClick={() => setLayout(l)}>
