@@ -1,7 +1,7 @@
 // Working out how to start an agent in its project: where it runs, what
 // it is told, and the command that starts it.
 
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 
 export const AGENTS = ["claude", "codex", "opencode"] as const;
@@ -72,24 +72,12 @@ export function newProject(projects: string, now: Date): string {
   return mkdtempSync(join(projects, `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-`));
 }
 
-/** Returns now as the instructions give it, like 2026-10-16 14:50 PDT. */
-export function startTime(now: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const zone = new Intl.DateTimeFormat("en-US", { timeZoneName: "short" }).formatToParts(now)
-    .find((p) => p.type === "timeZoneName")?.value ?? "";
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())} ${zone}`;
-}
-
-/** Returns the instructions in PROJECT.md of the dotfiles checkout,
- * followed by those in its work/PROJECT.md if it has it, filling in the
- * project's directory, now as the session's start time and the checkout's
- * directory. work/ is gitignored, so it can hold private rules. */
-export function instructions(directory: string, dotfiles: string, now: Date): string {
-  let text = readFileSync(join(dotfiles, "PROJECT.md"), "utf8");
-  try {
-    text += `\n${readFileSync(join(dotfiles, "work/PROJECT.md"), "utf8")}`;
-  } catch {}
-  return text.replaceAll("$PWD", () => directory).replaceAll("$start", () => startTime(now)).replaceAll("$dotfiles", () => dotfiles);
+/** Returns the instructions in PROJECT.md of the dotfiles checkout. They
+ * tell agents to read its work/PROJECT.md too, which is gitignored, so it
+ * can hold private rules, and name the checkout ~/repos/kzys/dotfiles,
+ * which they assume dotfiles is. */
+export function instructions(dotfiles: string): string {
+  return readFileSync(join(dotfiles, "PROJECT.md"), "utf8");
 }
 
 export type Command = { program: string; args: string[]; env: Record<string, string> };
@@ -106,21 +94,24 @@ function alive(pid: number): boolean {
 
 /** Returns the command that starts agent in directory, passing it argv.
  * origin is the directory it was started from, outside its project, which
- * it may also work in, or null. OpenCode reads instructions only from
+ * it may also work in, or null. Claude reads PROJECT.md itself, which
+ * keeps it out of ps. OpenCode reads instructions only from
  * files, so for it they are written to one named after pid, the process
  * that becomes the agent, under stateDir, removing those of agents that
  * have exited. OpenCode isn't given origin or the dotfiles checkout as
  * extra directories; it asks before working outside its project. */
 export function agentCommand(
   agent: Agent, argv: string[], directory: string, origin: string | null,
-  { dotfiles, stateDir, pid, now }: { dotfiles: string; stateDir: string; pid: number; now: Date },
+  { dotfiles, stateDir, pid }: { dotfiles: string; stateDir: string; pid: number },
 ): Command {
-  let text = instructions(directory, dotfiles, now);
+  const note = origin
+    ? `This session was launched from \`${origin}\`, outside ~/project, so \`${directory}\` was made as its task's directory. `
+      + `Work on what is in \`${origin}\` as Checkouts says, keeping your notes in \`${directory}\`.`
+    : null;
+  const text = instructions(dotfiles) + (note ? `\n\n${note}` : "");
   const extra: string[] = [];
   const env: Record<string, string> = { CLAUDE_CODE_SHELL: "/bin/bash" };
   if (origin) {
-    text += `\n\nThis session was started in \`${origin}\`, outside ~/project, so this task's directory was made for it. `
-      + `Work on what is in \`${origin}\` as Checkouts says, keeping your notes here.`;
     extra.push("--add-dir", origin);
     // Claude reads CLAUDE.md files of added directories only if asked.
     env.CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD = "1";
@@ -151,9 +142,17 @@ export function agentCommand(
     }
     const path = join(folder, `${pid}.md`);
     writeFileSync(path, `${text}\n`);
-    return { program: "opencode", args, env: { OPENCODE_CONFIG_CONTENT: JSON.stringify({ instructions: [path] }) } };
+    // It would ask before reading work/PROJECT.md, outside its project.
+    const work = join(dotfiles, "work/PROJECT.md");
+    const files = existsSync(work) ? [path, work] : [path];
+    return { program: "opencode", args, env: { OPENCODE_CONFIG_CONTENT: JSON.stringify({ instructions: files }) } };
   }
-  return { program: "claude", args: ["--add-dir", dotfiles, ...extra, "--append-system-prompt", text, ...argv], env };
+  return {
+    program: "claude",
+    args: ["--add-dir", dotfiles, ...extra, "--append-system-prompt-file", join(dotfiles, "PROJECT.md"),
+           ...(note ? ["--append-system-prompt", note] : []), ...argv],
+    env,
+  };
 }
 
 /** Returns text quoted for a POSIX shell. */

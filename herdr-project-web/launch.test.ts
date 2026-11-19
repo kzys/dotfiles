@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import {
-  agentCommand, instructions, launchDirectory, launchScript, newProject, parseAgent, projectDir, quote, startIn, startTime,
+  agentCommand, launchDirectory, launchScript, newProject, parseAgent, projectDir, quote, startIn,
 } from "./launch.ts";
 
 const temp = () => realpathSync(mkdtempSync(join(tmpdir(), "launch-")));
@@ -13,7 +13,7 @@ const now = new Date(2026, 10, 4, 9, 5);
 
 function dotfiles() {
   const dir = temp();
-  writeFileSync(join(dir, "PROJECT.md"), "in $PWD since $start, from $dotfiles\n");
+  writeFileSync(join(dir, "PROJECT.md"), "the rules\n");
   mkdirSync(join(dir, "config/opencode"), { recursive: true });
   writeFileSync(join(dir, "config/opencode/AGENTS.md"), "@../../rules\n");
   return dir;
@@ -61,34 +61,18 @@ test("creates a project named for the date", () => {
   assert.equal(readdirSync(projects).length, 2);
 });
 
-test("gives the time with its zone", () => {
-  assert.match(startTime(now), /^2026-11-04 09:05 \S+$/);
-});
+const options = (dir: string, stateDir = temp()) => ({ dotfiles: dir, stateDir, pid: process.pid });
 
-test("fills in the instructions and adds the private ones", () => {
-  const dir = dotfiles();
-  assert.equal(instructions("/p", dir, now), `in /p since ${startTime(now)}, from ${dir}\n`);
-  mkdirSync(join(dir, "work"));
-  writeFileSync(join(dir, "work/PROJECT.md"), "private\n");
-  assert.match(instructions("/p", dir, now), /\n\nprivate\n$/);
-});
-
-const options = (dir: string, stateDir = temp()) => ({ dotfiles: dir, stateDir, pid: process.pid, now });
-
-test("takes a directory as it is, even with $ in it", () => {
-  assert.match(instructions("/a/$&b", dotfiles(), now), /^in \/a\/\$&b since/);
-});
-
-test("starts Claude with its instructions and origin", () => {
+test("starts Claude with PROJECT.md and its origin", () => {
   const dir = dotfiles();
   const plain = agentCommand("claude", ["--resume", "s"], "/p", null, options(dir));
   assert.equal(plain.program, "claude");
-  assert.deepEqual(plain.args.slice(0, 3), ["--add-dir", dir, "--append-system-prompt"]);
-  assert.deepEqual(plain.args.slice(-2), ["--resume", "s"]);
+  assert.deepEqual(plain.args, ["--add-dir", dir, "--append-system-prompt-file", join(dir, "PROJECT.md"), "--resume", "s"]);
   assert.deepEqual(plain.env, { CLAUDE_CODE_SHELL: "/bin/bash" });
   const from = agentCommand("claude", [], "/p", "/work", options(dir));
-  assert.deepEqual(from.args.slice(2, 4), ["--add-dir", "/work"]);
-  assert.match(from.args.at(-1)!, /started in `\/work`/);
+  assert.deepEqual(from.args.slice(2, 7),
+                   ["--add-dir", "/work", "--append-system-prompt-file", join(dir, "PROJECT.md"), "--append-system-prompt"]);
+  assert.match(from.args.at(-1)!, /launched from `\/work`.*notes in `\/p`/);
   assert.equal(from.env.CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD, "1");
 });
 
@@ -99,6 +83,8 @@ test("starts Codex with the rules and its own way to resume", () => {
   assert.deepEqual(args.slice(-2), ["resume", "s"]);
   const instructed = args[args.indexOf("-c") + 1];
   assert.ok(instructed.includes(`@${dir}/rules`));
+  const from = agentCommand("codex", [], "/p", "/work", options(dir));
+  assert.match(from.args[from.args.indexOf("-c") + 1], /launched from `\/work`/);
 });
 
 test("gives OpenCode its instructions in a file, removing dead agents' files", () => {
@@ -110,8 +96,15 @@ test("gives OpenCode its instructions in a file, removing dead agents' files", (
   assert.equal(program, "opencode");
   assert.deepEqual(args, ["--session", "s"]);
   const [path] = JSON.parse(env.OPENCODE_CONFIG_CONTENT).instructions;
-  assert.match(readFileSync(path, "utf8"), /^in \/p/);
+  assert.match(readFileSync(path, "utf8"), /^the rules/);
   assert.deepEqual(readdirSync(join(state, "opencode")), [`${process.pid}.md`]);
+  // With the private rules and an origin.
+  mkdirSync(join(dir, "work"));
+  writeFileSync(join(dir, "work/PROJECT.md"), "private\n");
+  const from = agentCommand("opencode", [], "/p", "/work", options(dir, state));
+  const files = JSON.parse(from.env.OPENCODE_CONFIG_CONTENT).instructions;
+  assert.deepEqual(files.slice(1), [join(dir, "work/PROJECT.md")]);
+  assert.match(readFileSync(files[0], "utf8"), /launched from `\/work`/);
 });
 
 test("a shell runs the script as given", () => {

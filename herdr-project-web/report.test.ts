@@ -91,6 +91,6 @@ test("reports what a Codex hook says", () => {
   assert.ok(!("ctx" in codexTokens("Stop", { cwd: "/p" }, undefined, null, "")));
 });
 
-test("tells a resumed session its instructions replace the old ones", () => {
-  assert.match(resumedText("rules"), /^This session resumed[\s\S]*\n\nrules$/);
+test("tells a resumed session its task's directory and instructions", () => {
+  assert.match(resumedText("/p/a", "rules"), /^This session resumed; its task's directory is `\/p\/a`\.[\s\S]*\n\nrules$/);
 });

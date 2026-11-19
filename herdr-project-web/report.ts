@@ -147,7 +147,9 @@ export function codexTokens(
   return tokens;
 }
 
-/** Returns the instructions to add to the context of a session resuming,
- * with text being the instructions themselves. */
-export const resumedText = (text: string) => "This session resumed. These instructions replace any earlier copy of them, "
-  + `and give the time it resumed as its start; skip the steps you already did.\n\n${text}`;
+/** Returns what to add to the context of a session resuming in the task
+ * directory dir, with text being its instructions: one resumed without
+ * herdr-project, as when Herdr restores it, has no other copy. */
+export const resumedText = (dir: string, text: string) => `This session resumed; its task's directory is \`${dir}\`. `
+  + "These instructions replace any earlier copy of them. Check the time with `date` again, "
+  + `and skip the other steps you already did.\n\n${text}`;
