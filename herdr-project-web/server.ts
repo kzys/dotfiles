@@ -18,6 +18,9 @@ import {
 import * as board from "./board.ts";
 import { requestCopilot } from "./github/api.ts";
 import * as github from "./github/poll.ts";
+import * as pullSection from "./github-section.ts";
+import { type PullChecked, PullRequests } from "./github/watch.ts";
+import { BoardStore } from "./board-store.ts";
 import type { Herdr } from "./herdr/backend.ts";
 import { HerdrEvents } from "./herdr/events.ts";
 import { herdrClient, herdrSocket, readHerdr, tuiBackend } from "./herdr/tui.ts";
@@ -117,37 +120,9 @@ const herdrEvents = new HerdrEvents(herdrSocket, () => herdrReads.refresh());
 const ORDER = ["Pull requests", "Panes", "Slack", "Linear"];
 const found = new Map<string, Found>();
 
-/** Returns the JSON object kept at path, or {} if there is none. */
-function loadRecord<T extends object>(path: string): T {
-  const loaded = loadState(path);
-  const value = (typeof loaded === "object" && loaded !== null && !Array.isArray(loaded) ? loaded : {}) as T;
-  saved.set(path, JSON.stringify(value));
-  return value;
-}
-
-// What was last saved or loaded at each path, as JSON.
-const saved = new Map<string, string>();
-
-/** Saves value at path unless it is what is there, logging a failure: the
- * server goes on with it. Returns whether it changed. */
-function save(path: string, value: unknown): boolean {
-  const json = JSON.stringify(value);
-  if (saved.get(path) === json) return false;
-  saved.set(path, json);
-  try {
-    saveState(path, value);
-  } catch (e) {
-    logError(e);
-  }
-  return true;
-}
-
 // The columns the user moved pull requests to, and what came of asking
 // Copilot to review each.
-const movesPath = join(stateDir, "moves.json");
-const copilotPath = join(stateDir, "copilot.json");
-let moves = loadRecord<board.Moves>(movesPath);
-let copilotAsks = loadRecord<board.CopilotAsks>(copilotPath);
+const boardStore = new BoardStore(stateDir, logError);
 // Each pane's last hook event.
 const hookEvents = new Map<string, HookEvent>();
 // The terminals of the Herdr app's spaces, which herdr-core runs, as
@@ -200,7 +175,7 @@ function pageState() {
   const state = readState(watched(), projectRoot, all, home, links);
   for (const project of state.projects)
     for (const pane of project.panes) pane.waits = (sessions[pane.id] && waits.get(sessions[pane.id])) || [];
-  return { ...state, ...(orgs ? { controls: agentViews(), undelivered: left, board: cards() } : {}) };
+  return { ...state, ...(orgs ? { controls: agentViews(), undelivered: left, board: boardStore.cards(pulls.latest(), new Date()) } : {}) };
 }
 
 /** Sends agents that are free what waits for them. */
@@ -211,15 +186,7 @@ function deliver() {
 /** Returns what the checks found, or null before any has. */
 function watched(): Watched | null {
   const ours = ORDER.flatMap((t) => found.get(t) ?? []);
-  return ours.length ? watchedFrom(ours, lastPoll?.urls ?? []) : null;
-}
-
-/** Returns the board's cards, from the pull requests, their projects and
- * what the user did with them. Merged ones go a while after merging. */
-function cards(): board.Card[] {
-  if (!lastPoll) return [];
-  const { names } = lastPoll;
-  return board.cards(lastPoll.pulls, lastPoll.owners, (d) => names[d] ?? d, moves, new Date(), copilotAsks);
+  return ours.length ? watchedFrom(ours, pulls.latest()?.urls ?? []) : null;
 }
 
 // The Herdr app's agents, telling only of changes.
@@ -326,8 +293,8 @@ const notify = (title: string, body: string) => ask("notification.show", { title
 // projects they use.
 const QUEUE_INTERVAL = 1_800_000;
 const queues: [string, string, (texts: ReturnType<typeof notesTexts>) => Promise<Checked>][] = [
-  ["Slack", slack.CONNECTOR, (texts) => slack.poll(notify, texts, join(stateDir, "slack.json"), lastPoll?.owners ?? {})],
-  ["Linear", linear.CONNECTOR, (texts) => linear.poll(notify, texts, join(stateDir, "linear.json"), lastPoll?.owners ?? {})],
+  ["Slack", slack.CONNECTOR, (texts) => slack.poll(notify, texts, join(stateDir, "slack.json"), pulls.latest()?.owners ?? {})],
+  ["Linear", linear.CONNECTOR, (texts) => linear.poll(notify, texts, join(stateDir, "linear.json"), pulls.latest()?.owners ?? {})],
 ];
 const queueChecks = queues.map(([title, connector, check]) => new Schedule(async () => {
   const names = await connected();
@@ -349,59 +316,40 @@ try {
   console.error("herdr-project-web:", e);
 }
 
-// Check the pull requests five minutes after each check ends, or sooner
-// when asked, keeping the last items, and the URLs the page links, when
-// one fails.
+// Check the pull requests five minutes after each check ends, or 15s after
+// asked, keeping the last items, and the URLs the page links, when one
+// fails.
 const PR_INTERVAL = 300_000;
-// How soon to check when asked: GitHub's search takes a while to find a
-// new pull request.
-const PR_SOON = 15_000;
-// What the last check of the pull requests that didn't fail found.
-let lastPoll: Awaited<ReturnType<typeof github.poll>> | null = null;
-const pullChecks = new Schedule(async () => {
-  const at = new Date();
-  let error: string | null = null;
-  try {
-    lastPoll = await github.poll(prHerdr, projectRoot, join(stateDir, "pull-requests.json"), orgs!);
-  } catch (e) {
-    error = String(e).split("\n")[0];
-  }
-  showPullCheck(at, error);
-}, { every: PR_INTERVAL, start: !!orgs, onError: logError });
+const pulls = new PullRequests(
+  () => github.poll(prHerdr, projectRoot, join(stateDir, "pull-requests.json"), orgs!),
+  showPullCheck,
+  { every: PR_INTERVAL, soon: 15_000, start: !!orgs, onError: logError },
+);
 /** Reports whether url is of an open pull request, as last found. */
-const isOpen = (url: unknown) => board.isOpen(lastPoll?.pulls ?? [], url);
+const isOpen = (url: unknown) => board.isOpen(pulls.latest()?.pulls ?? [], url);
 let queuing = false;
 
-/** Shows a check of the pull requests that ran at at and failed with
- * error, if it did, else found lastPoll: on the page, in the watcher's
- * pane and in what the user did with them. */
-function showPullCheck(at: Date, error: string | null) {
-  const last = error ? null : lastPoll!;
-  const shown = github.shown(at, new Date(Date.now() + PR_INTERVAL), last, error, found.get("Pull requests")?.items ?? []);
+/** Shows a check of the pull requests: on the page, in the watcher's pane
+ * and in what the user did with them. */
+function showPullCheck({ at, error, last }: PullChecked) {
+  const check = error ? null : last;
+  const shown = pullSection.shown(at, new Date(Date.now() + PR_INTERVAL), check, error, found.get("Pull requests")?.items ?? []);
   found.set(shown.title, shown);
-  // Forgetting what was done with pull requests that are gone.
-  if (last) {
-    moves = board.stillMoved(moves, last.pulls);
-    save(movesPath, moves);
-    copilotAsks = board.stillAsked(copilotAsks, last.urls);
-    save(copilotPath, copilotAsks);
-  }
+  if (check) boardStore.forget(check);
   refresh();
   if (tty !== null)
     try {
-      writeSync(tty, `\x1b[H\x1b[2J${github.screen(shown.title, at, shown.section!.lines)}`);
+      writeSync(tty, `\x1b[H\x1b[2J${pullSection.screen(shown.title, at, shown.section!.lines)}`);
     } catch {} // The page still shows them.
   if (queuing) return;
   queuing = true;
   for (const q of queueChecks) q.refresh();
 }
 
-/** Checks the pull requests PR_SOON from now, after any check due sooner
- * or running, showing when on the page. */
+/** Checks the pull requests soon, showing when on the page. */
 function checkPullRequestsSoon() {
-  pullChecks.refresh(PR_SOON);
+  const next = pulls.checkSoon();
   const section = found.get("Pull requests")?.section;
-  const next = pullChecks.next();
   if (section && next) {
     section.next = next.toISOString();
     refresh();
@@ -469,13 +417,9 @@ async function setBaseFrom(body: string | null): Promise<number> {
 async function askCopilotFrom(body: string | null): Promise<number> {
   const { url } = JSON.parse(body ?? "{}");
   if (!isOpen(url)) return 404;
-  const asked = await board.askCopilot(url, {}, (u) => requestCopilot(u));
-  // Merged after the request, which can take a while, so as not to lose
-  // what came of another asked meanwhile.
-  copilotAsks = { ...copilotAsks, ...asked };
-  save(copilotPath, copilotAsks);
+  const asked = await boardStore.askCopilot(url, (u) => requestCopilot(u));
   refresh();
-  return asked[url] === "requested" ? 204 : 502;
+  return asked ? 204 : 502;
 }
 
 /** Moves the open pull request that body, a request's, names to the
@@ -485,8 +429,7 @@ async function setStageFrom(body: string | null): Promise<number> {
   const { url, stage } = JSON.parse(body ?? "{}");
   if (!(stage === null || board.MOVABLE.includes(stage))) return 400;
   if (!isOpen(url)) return 404;
-  moves = board.withMove(moves, url, stage);
-  if (save(movesPath, moves)) refresh();
+  if (boardStore.move(url, stage)) refresh();
   return 204;
 }
 
@@ -529,7 +472,7 @@ page.get("/api/diff", async (c) => {
   // Only the worktrees the page lists, not any directory asked for.
   const dir = c.req.query("dir") ?? "";
   if (!projectWorktrees().some((p) => p.worktrees.includes(dir))) return c.json({ error: "no such worktree" }, 404);
-  return c.json(await highlightDiff(await worktreeDiff(dir, lastPoll?.bases ?? {})));
+  return c.json(await highlightDiff(await worktreeDiff(dir, pulls.latest()?.bases ?? {})));
 });
 page.get("/api/lines", async (c) => {
   // More context for a diff: only the worktrees the page lists, like it.

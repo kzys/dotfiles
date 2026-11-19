@@ -4,30 +4,9 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { pullRequests } from "./pullrequest.ts";
 import { wakeMessage } from "./changes.ts";
-import { type Snapshot, look, poll, screen, shown, waitingItems } from "./poll.ts";
+import { type Snapshot, look, poll } from "./poll.ts";
+import { view } from "../github-section.ts";
 import { fakeHerdr, gitCheckout, prNode, search, tmp } from "./fixtures.ts";
-
-test("lists pull requests waiting on me", () => {
-  const prs = pullRequests(search(
-    prNode(1, "a", { checks: "FAILURE", failed: ["test"] }),
-    prNode(2, "b", { checks: "SUCCESS", review: "CHANGES_REQUESTED" }),
-    prNode(3, "c", { checks: "SUCCESS", review: "APPROVED" }),
-    prNode(4, "d", { checks: "PENDING", review: "APPROVED" }),
-    prNode(5, "e", { state: "MERGED", checks: "FAILURE" }),
-    prNode(6, "f", { checks: "SUCCESS" }),
-  ));
-  const owners = { [prs[0].url]: { project: "/p/a", dir: "/p/a/app" } };
-  assert.deepEqual(waitingItems(prs, owners).map((i) => [i.project, i.text]), [
-    ["/p/a", "app#1 checks failed: test: PR 1"],
-    [null, "app#2 changes requested: PR 2"],
-    [null, "app#3 approved, ready to merge: PR 3"],
-  ]);
-});
-
-test("draws the watcher's pane", () => {
-  assert.equal(screen("Pull requests", new Date(2026, 9, 16, 15, 4), ["a", "b"]), "Pull requests at 15:04\na\nb");
-  assert.equal(screen("Pull requests", new Date(2026, 9, 16, 9, 5), []), "Pull requests at 09:05");
-});
 
 test("polls pull requests", async () => {
   // Only GitHub and Herdr are replaced; git, the notes and the state
@@ -45,18 +24,18 @@ test("polls pull requests", async () => {
   ], calls);
   const state = join(root, "state/pull-requests.json");
   let found = await poll(herdr, join(root, "project"), state, [], fetchPrs);
-  assert.deepEqual(found.items, []);
+  assert.deepEqual(view(found).items, []);
   // The agent is in the project but not the checkout, so may be busy
   // with something else.
-  assert.deepEqual(found.rows.map((r) => [r.label, r.project, r.agent, r.pane, r.checks]),
+  assert.deepEqual(view(found).rows.map((r) => [r.label, r.project, r.agent, r.pane, r.checks]),
                    [["app#1", "one", true, null, "PENDING"]]);
   assert.equal(found.owners["https://github.com/org/app/pull/1"]?.project, project);
-  assert.deepEqual(found.lines, [`… ● ${"app#1".padEnd(24)} ${"one".padEnd(20)} PR 1`]);
+  assert.deepEqual(view(found).lines, [`… ● ${"app#1".padEnd(24)} ${"one".padEnd(20)} PR 1`]);
   assert.deepEqual(calls, []);
 
   found = await poll(herdr, join(root, "project"), state, [], fetchPrs);
-  assert.deepEqual(found.items, [{ project, role: null, mark: "pr", text: "app#1 checks failed: test: PR 1" }]);
-  assert.ok(found.lines[0].startsWith("✗ ● app#1"));
+  assert.deepEqual(view(found).items, [{ project, role: null, mark: "pr", text: "app#1 checks failed: test: PR 1" }]);
+  assert.ok(view(found).lines[0].startsWith("✗ ● app#1"));
   const [pr] = pullRequests(search(prNode(1, "me/one")));
   assert.deepEqual(calls, [
     ["notify", "app#1 checks failed: test", "PR 1 (20261001-a)", "request"],
@@ -86,7 +65,7 @@ test("keeps changes for later while Herdr is down", async () => {
   const fetchPrs = async () => responses.shift();
   await poll(herdr, join(root, "project"), state, [], fetchPrs);
   up = false;
-  const { rows } = await poll(herdr, join(root, "project"), state, [], fetchPrs);
+  const { rows } = view(await poll(herdr, join(root, "project"), state, [], fetchPrs));
   assert.deepEqual(rows.map((r) => r.checks), ["SUCCESS"]);
   assert.deepEqual(calls, []);
   up = true;
@@ -109,7 +88,7 @@ test("wakes the agent in the checkout over one in the project", async () => {
       tokens: {} },
   ], calls);
   const state = join(root, "state/pull-requests.json");
-  const { rows } = await poll(herdr, join(root, "project"), state, [], async () => responses.shift());
+  const { rows } = view(await poll(herdr, join(root, "project"), state, [], async () => responses.shift()));
   assert.deepEqual(rows.map((r) => [r.project, r.agent, r.pane]), [["20261001-a", true, "w2:p1"]]);
   await poll(herdr, join(root, "project"), state, [], async () => responses.shift());
   assert.deepEqual(calls.filter((c) => c[0] === "run").map((c) => c[1]), ["w2:p1"]);
@@ -127,7 +106,7 @@ test("finds what to show and tell from what a check read", () => {
     seen: { [prs[0].url]: { state: "OPEN", checks: "PENDING", review: null } },
   };
   const found = look(snapshot);
-  assert.deepEqual(found.rows.map((r) => [r.label, r.projectDir, r.pane]), [["app#1", "/p/a", "w1:p1"], ["app#2", null, null]]);
+  assert.deepEqual(view(found).rows.map((r) => [r.label, r.projectDir, r.pane]), [["app#1", "/p/a", "w1:p1"], ["app#2", null, null]]);
   assert.deepEqual(found.tells, [{
     title: "app#1 checks failed: test", body: "PR 1 (a)", sound: "request",
     wake: { pane: "w1:p1", text: wakeMessage(prs[0], "checks failed: test") },
@@ -138,13 +117,3 @@ test("finds what to show and tell from what a check read", () => {
   assert.deepEqual([later.tells, later.seen], [[], null]);
 });
 
-test("shows a failed check with the items before", () => {
-  const at = new Date("2026-11-19T10:00:00Z");
-  const next = new Date("2026-11-19T10:05:00Z");
-  const before = [{ project: null, role: null, mark: "pr", text: "app#1 approved" }];
-  assert.deepEqual(shown(at, next, null, "gh: timeout", before), {
-    title: "Pull requests",
-    section: { title: "Pull requests", at: at.toISOString(), next: next.toISOString(), lines: ["Cannot check pull requests: gh: timeout"] },
-    items: before,
-  });
-});
