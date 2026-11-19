@@ -11,10 +11,13 @@
 #
 # herdr-project --start-watch starts it in a new Herdr workspace named
 # watch, unless a pane already has it.
+#
+# herdr-project --background starts it in the background, unless it
+# runs. Starting an agent does that, and waits for it, if it isn't running.
 
 here=$(dirname "$(readlink -f "$0")")
 case $1 in
---watch | --start-watch)
+--watch | --start-watch | --background)
     WATCH_TTY=$(tty 2>/dev/null) && export WATCH_TTY
     exec node --experimental-strip-types --disable-warning=ExperimentalWarning \
         "$here/../herdr-project-web/watch-main.ts" "$@"
@@ -26,12 +29,32 @@ for arg in "$@"; do
     shift
 done
 state=${XDG_STATE_HOME:-$HOME/.local/state}
-script=$(curl --silent --fail-with-body --max-time 10 \
-    --unix-socket "$state/herdr-project/run/server.sock" \
-    --data-urlencode "cwd=$(pwd -P)" --data-urlencode "pid=$$" \
-    --data-urlencode "herdr=${HERDR_ENV:-}" --data-urlencode "workspace=${HERDR_WORKSPACE_ID:-}" \
-    "$@" http://localhost/launch) || {
-    echo "herdr-project: ${script:-the server is not answering. See ~/.local/state/herdr-project/web.log.}" >&2
+ask() {
+    script=$(curl --silent --fail-with-body --max-time 10 \
+        --unix-socket "$state/herdr-project/run/server.sock" \
+        --data-urlencode "cwd=$(pwd -P)" --data-urlencode "pid=$$" \
+        --data-urlencode "herdr=${HERDR_ENV:-}" --data-urlencode "workspace=${HERDR_WORKSPACE_ID:-}" \
+        "$@" http://localhost/launch)
+}
+ask "$@"
+code=$?
+# 7: nothing listens on the socket. A server that is only slow is left be,
+# and --background leaves one that does listen be.
+if [ "$code" = 7 ]; then
+    echo "herdr-project: starting the server..." >&2
+    "$0" --background
+    tries=0
+    # 56: the starting watcher dropped the connection before handing on
+    # the socket.
+    while { [ "$code" = 7 ] || [ "$code" = 56 ]; } && [ "$tries" -lt 60 ]; do
+        sleep 0.5
+        tries=$((tries + 1))
+        ask "$@"
+        code=$?
+    done
+fi
+[ "$code" = 0 ] || {
+    echo "herdr-project: ${script:-the server is not answering. See web.log and watch.log in ~/.local/state/herdr-project.}" >&2
     exit 1
 }
 eval "$script"

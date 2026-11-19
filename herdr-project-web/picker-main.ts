@@ -2,12 +2,15 @@
 // --inbox what waits on the user, from the server, and opens the row the
 // user picks, in the Herdr app with --app. Typing filters the list. See picker.ts for the keys.
 
+import { execFileSync } from "node:child_process";
 import { request } from "node:http";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { AGENTS } from "./launch.ts";
 import { columns, draw, listLines, parseKeys, press, start } from "./picker.ts";
 import type { Row } from "./rows.ts";
+import { answers } from "./watch.ts";
 
 const stateHome = process.env.XDG_STATE_HOME || join(homedir(), ".local/state");
 const socketPath = join(stateHome, "herdr-project/run/server.sock");
@@ -26,6 +29,17 @@ function ask(method: string, path: string, body?: object): Promise<string> {
     req.on("error", reject);
     req.end(body ? JSON.stringify(body) : undefined);
   });
+}
+
+/** Starts the server through herdr-project, as for agents, if nothing
+ * answers on its socket, and waits up to 30 seconds for it to. */
+async function startServerIfNeeded() {
+  if (await answers(socketPath)) return;
+  process.stdout.write("Starting the server…\r\n");
+  try {
+    execFileSync(join(import.meta.dirname, "../bin/herdr-project"), ["--background"], { stdio: "ignore", timeout: 10_000 });
+  } catch {}
+  for (let tries = 0; tries < 60 && !(await answers(socketPath)); tries++) await sleep(500);
 }
 
 /** Waits for a key, so that a popup stays until what it says is read. */
@@ -92,6 +106,7 @@ async function main() {
     // Open rows in the Herdr app rather than in Herdr.
     const app = process.argv.includes("--app");
     if (app) query.set("app", "1");
+    await startServerIfNeeded();
     const rows: Row[] = JSON.parse(await ask("GET", `/picker${query.size ? `?${query}` : ""}`));
     const picked = await pick(rows);
     if (picked) await ask("POST", "/picker/open", { row: picked[0], agent: picked[1], app });

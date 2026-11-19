@@ -656,8 +656,13 @@ for (const path of NESTED_PATHS) page.get(`${path}/*`, (c) => c.body(assets["/"]
 
 const server = createServer(getRequestListener(page.fetch));
 
+// The watcher's sockets, which it keeps across restarts, as file
+// descriptors, if it passed them.
+const pageFd = Number(process.env.HERDR_PROJECT_PAGE_FD) || null;
+const socketFd = Number(process.env.HERDR_PROJECT_SOCKET_FD) || null;
+
 // Only this machine: the page shows private work.
-server.listen(port, "127.0.0.1", () => console.log(`herdr-project-web on http://127.0.0.1:${port}/`));
+server.listen(pageFd ? { fd: pageFd } : { port, host: "127.0.0.1" }, () => console.log(`herdr-project-web on http://127.0.0.1:${port}/`));
 
 const dotfiles = dirname(here);
 const launcher = join(dotfiles, "bin/herdr-project");
@@ -861,5 +866,7 @@ socket.post("/picker/open", limit(), async (c) => {
 // Only the watcher's server: hooks reach one server, like the checks.
 if (orgs) {
   const hookListener = hookServer(hookEvents, undefined, onHook, socket);
-  await listenOn(hookListener, join(stateDir, "run/server.sock"));
+  if (socketFd) hookListener.listen({ fd: socketFd });
+  // Run alone, as with npm start.
+  else await listenOn(hookListener, join(stateDir, "run/server.sock"));
 }

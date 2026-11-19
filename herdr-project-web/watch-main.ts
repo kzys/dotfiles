@@ -1,5 +1,5 @@
-// Runs herdr-project --watch or --start-watch.
+// Runs herdr-project --watch, --start-watch, --background or --supervise.
 
 import { main } from "./watch.ts";
 
-main(process.argv.slice(2));
+await main(process.argv.slice(2));
