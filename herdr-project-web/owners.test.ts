@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { type NotesText, notesTexts, projectOf } from "./owners.ts";
+import { type NotesText, notesTexts, projectNameIn, projectOf } from "./owners.ts";
 
 test("reads the projects' notes", () => {
   const root = mkdtempSync(join(tmpdir(), "owners-"));
@@ -29,4 +29,9 @@ test("prefers the latest project, and its last agent's notes to its README", () 
   assert.deepEqual(projectOf(/X-1/, [], texts.slice(0, 2), {}), { project: "/p/b", role: null });
   assert.deepEqual(projectOf(/X-2/, ["u"], texts, { u: { project: "/p/x" } }), { project: "/p/c", role: null });
   assert.deepEqual(projectOf(/X-3/, ["v", "u"], texts, { u: { project: "/p/x" }, v: null }), { project: "/p/x" });
+});
+
+test("names a project from its README.md among the notes, else by its directory", () => {
+  const texts: NotesText[] = [["/p/a", "main", "---\nname: wrong\n---\n"], ["/p/a", null, "---\nname: one\n---\n"]];
+  assert.deepEqual([projectNameIn("/p/a", texts), projectNameIn("/p/20261001-b", texts)], ["one", "20261001-b"]);
 });

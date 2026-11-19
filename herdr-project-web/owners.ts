@@ -78,6 +78,12 @@ export function projectName(dir: string): string {
   return projectLabels(dir, readme).name;
 }
 
+/** Returns the short name of the project in dir, as projectName does, from
+ * texts, the projects' notes, which hold its README.md if it has one. */
+export function projectNameIn(dir: string, texts: NotesText[]): string {
+  return projectLabels(dir, texts.find(([project, role]) => project === dir && role === null)?.[2] ?? null).name;
+}
+
 /** Returns an inbox item for text with mark, belonging to found, or to
  * no project if found is null. */
 export function ownedItem(found: Owner | null | undefined, mark: string, text: string): Item {

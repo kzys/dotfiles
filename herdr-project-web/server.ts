@@ -28,7 +28,7 @@ import { agentCommand, instructions, launchDirectory, launchScript, parseAgent, 
 import { readLearnings } from "./learnings.ts";
 import { connectors } from "./headless.ts";
 import * as linear from "./linear.ts";
-import { notesTexts, projectName } from "./owners.ts";
+import { notesTexts } from "./owners.ts";
 import { NESTED_PATHS, PAGE_PATHS } from "./pages.ts";
 import { type PaneHerdr, checkPanes } from "./panes.ts";
 import { type Checked, checkQueue } from "./queues.ts";
@@ -218,7 +218,7 @@ function watched(): Watched | null {
  * what the user did with them. Merged ones go a while after merging. */
 function cards(): board.Card[] {
   if (!lastPoll) return [];
-  const names = Object.fromEntries(Object.values(lastPoll.owners).flatMap((o) => (o ? [[o.project, projectName(o.project)]] : [])));
+  const { names } = lastPoll;
   return board.cards(lastPoll.pulls, lastPoll.owners, (d) => names[d] ?? d, moves, new Date(), copilotAsks);
 }
 
@@ -369,36 +369,27 @@ const pullChecks = new Schedule(async () => {
   showPullCheck(at, error);
 }, { every: PR_INTERVAL, start: !!orgs, onError: logError });
 /** Reports whether url is of an open pull request, as last found. */
-const isOpen = (url: unknown) => lastPoll?.pulls.some((p) => p.url === url && p.state === "OPEN") ?? false;
+const isOpen = (url: unknown) => board.isOpen(lastPoll?.pulls ?? [], url);
 let queuing = false;
 
 /** Shows a check of the pull requests that ran at at and failed with
  * error, if it did, else found lastPoll: on the page, in the watcher's
  * pane and in what the user did with them. */
 function showPullCheck(at: Date, error: string | null) {
-  const title = "Pull requests";
   const last = error ? null : lastPoll!;
-  // A failed check keeps the items before, and shows no pull requests.
-  const lines = last ? last.lines : [`Cannot check pull requests: ${error}`];
-  const items = last ? last.items : (found.get(title)?.items ?? []);
-  const next = new Date(Date.now() + PR_INTERVAL).toISOString();
-  found.set(title, {
-    title,
-    section: { title, at: at.toISOString(), next, lines, ...(last ? { pullRequests: last.rows } : {}) },
-    items,
-  });
+  const shown = github.shown(at, new Date(Date.now() + PR_INTERVAL), last, error, found.get("Pull requests")?.items ?? []);
+  found.set(shown.title, shown);
   // Forgetting what was done with pull requests that are gone.
   if (last) {
     moves = board.stillMoved(moves, last.pulls);
     save(movesPath, moves);
-    const open = new Set(last.urls);
-    copilotAsks = Object.fromEntries(Object.entries(copilotAsks).filter(([url]) => open.has(url)));
+    copilotAsks = board.stillAsked(copilotAsks, last.urls);
     save(copilotPath, copilotAsks);
   }
   refresh();
   if (tty !== null)
     try {
-      writeSync(tty, `\x1b[H\x1b[2J${github.screen(title, at, lines)}`);
+      writeSync(tty, `\x1b[H\x1b[2J${github.screen(shown.title, at, shown.section!.lines)}`);
     } catch {} // The page still shows them.
   if (queuing) return;
   queuing = true;
@@ -494,9 +485,7 @@ async function setStageFrom(body: string | null): Promise<number> {
   const { url, stage } = JSON.parse(body ?? "{}");
   if (!(stage === null || board.MOVABLE.includes(stage))) return 400;
   if (!isOpen(url)) return 404;
-  moves = { ...moves };
-  if (stage) moves[url] = stage;
-  else delete moves[url];
+  moves = board.withMove(moves, url, stage);
   if (save(movesPath, moves)) refresh();
   return 204;
 }
