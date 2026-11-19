@@ -10,6 +10,7 @@ import {
   type NotesText, type Owner, cut, escapeRegExp, ownedItem, pad, projectName, projectOf,
 } from "./owners.ts";
 import { loadState, saveState } from "./statefile.ts";
+import { day } from "./day.ts";
 
 // The claude.ai connector the headless session needs.
 export const CONNECTOR = "Slack";
@@ -52,12 +53,6 @@ export type Conversation = {
   last_ts: string;
   links?: string[];
 };
-
-/** Returns date as YYYY-MM-DD in local time. */
-export function day(date: Date): string {
-  const two = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())}`;
-}
 
 /** Returns what to ask Claude for the conversations since the date since. */
 export function prompt(since: Date): string {

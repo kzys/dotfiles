@@ -3,7 +3,8 @@
 
 import { uniqueKeys } from "./inbox.ts";
 import { type AgentState, agentState, readiness, runsByState } from "./pulls.ts";
-import type { Entry, PullRequest, Run, Section, State } from "./state.ts";
+import type { Run } from "./github/pullrequest.ts";
+import type { Entry, PullRequest, Section, State } from "./state.ts";
 import { Linked, matches } from "./ui.tsx";
 
 /** Returns how the checks of a pull request went, for its status dot,

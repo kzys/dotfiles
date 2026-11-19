@@ -3,7 +3,7 @@
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { day } from "../slack.ts";
+import { day } from "../day.ts";
 
 const QUERY = `
 query($q: String!, $open: String!) {
