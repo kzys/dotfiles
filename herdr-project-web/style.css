@@ -166,6 +166,7 @@ main {
 .agent-counts { display: flex; gap: var(--space-4); font-size: var(--normal); color: var(--muted); }
 .ctx { font: var(--normal) var(--mono); color: var(--muted); }
 .ctx-full { color: var(--red); font-weight: 600; }
+.pane-title { font-size: var(--normal); color: var(--fg); }
 .card > .panes:last-child { border-bottom: 0; }
 .pane { flex-wrap: wrap; flex-basis: 100%; }
 .agent-controls { flex-basis: 100%; display: grid; gap: var(--space-2); }

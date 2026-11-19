@@ -83,6 +83,8 @@ export type Pane = {
   status: string | null;
   // How full its context is, in percent, if it says.
   ctx: number | null;
+  // The title its terminal shows, if any.
+  title?: string;
   // What its Bash tool still runs, longest-running first, if known.
   waits?: import("./waits.ts").Wait[];
 };
@@ -117,6 +119,8 @@ export type Herdr = {
     agent?: string | null;
     agent_session?: { value?: string } | null;
     agent_status?: string;
+    // The title its terminal shows, like what the agent is working on.
+    terminal_title?: string;
     // What the agent's status line reports, like its role and ctx.
     tokens?: Record<string, string>;
   }[];
@@ -361,6 +365,7 @@ export function projectPanes(dir: string, herdr: Herdr | null): Pane[] {
         role: p.tokens?.role || null,
         status: p.agent_status ?? null,
         ctx: /^\d+%*$/.test(ctx) ? parseInt(ctx, 10) : null,
+        ...(p.terminal_title ? { title: p.terminal_title } : {}),
       };
     });
 }

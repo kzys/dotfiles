@@ -37,12 +37,12 @@ test("reads the agents of the app's spaces as Herdr's panes", () => {
   const sessions = new Map([[10, "s1"]]);
   const labels = { "herdr.space": "sp1", "herdr.tab": "tb1" };
   assert.deepEqual(appHerdrPanes([
-    terminal({ labels, status: { app: "claude-code", state: "idle" }, foreground: { pid: 10, cwd: "/p/a" } }),
+    terminal({ labels, status: { app: "claude-code", state: "idle" }, foreground: { pid: 10, cwd: "/p/a" }, title: "Fix the board" }),
     terminal({ address: "t2", labels, status: null }),
     terminal({ address: "t3", labels: {}, status: { app: "codex", state: "working" } }),
   ], sessions), [
-    { pane_id: "t1", workspace_id: "sp1", tab_id: "tb1", cwd: "/p/a", agent: "claude", agent_status: "idle", agent_session: { value: "s1" } },
-    { pane_id: "t2", workspace_id: "sp1", tab_id: "tb1", cwd: "/now", agent: null, agent_status: undefined, agent_session: null },
+    { pane_id: "t1", workspace_id: "sp1", tab_id: "tb1", cwd: "/p/a", agent: "claude", agent_status: "idle", agent_session: { value: "s1" }, terminal_title: "Fix the board" },
+    { pane_id: "t2", workspace_id: "sp1", tab_id: "tb1", cwd: "/now", agent: null, agent_status: undefined, agent_session: null, terminal_title: undefined },
   ]);
 });
 

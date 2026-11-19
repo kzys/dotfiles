@@ -87,6 +87,7 @@ function PaneRow({ panes, agents }: { panes: Pane[]; agents: Record<string, Agen
         return (
           <span key={p.id} class="pane" title={`${p.id} · ${p.status ?? "unknown"}`}>
             <span class={`pr-agent agent-${state}`}>{p.role ?? p.id}</span>
+            {p.title && <span class="pane-title">{p.title}</span>}
             {p.ctx !== null && <span class={p.ctx >= FULL_AT ? "ctx ctx-full" : "ctx"}>{p.ctx}%</span>}
             {agents[p.id] && <AgentControls pane={p} view={agents[p.id]} />}
             {waiting([p]).length > 0 && (
