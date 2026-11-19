@@ -3,9 +3,10 @@ import { test } from "node:test";
 import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { Herdr } from "./herdr/backend.ts";
 import { linkParts } from "./inbox.ts";
 import {
-  type Herdr, type Watched, checkoutOf, linkCheckout, namedCheckouts, projectFiles, projectPanes, projectTabs, pullRequestLinks, readProjectFile, readState, workspaceLabels,
+  type Watched, checkoutOf, linkCheckout, namedCheckouts, projectFiles, projectPanes, projectTabs, pullRequestLinks, readProjectFile, readState, workspaceLabels,
 } from "./state.ts";
 
 test("finds the checkout holding a directory", () => {

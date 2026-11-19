@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { Herdr } from "./state.ts";
+import type { Herdr } from "./herdr/backend.ts";
 import { title, watchWorkspace, watchedFrom } from "./watched.ts";
 
 test("puts what the checks found together", () => {

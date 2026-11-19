@@ -18,7 +18,9 @@ import {
 import * as board from "./board.ts";
 import { requestCopilot } from "./github/api.ts";
 import * as github from "./github/poll.ts";
-import { herdrClient, tuiBackend, watchHerdr } from "./herdr/tui.ts";
+import type { Herdr } from "./herdr/backend.ts";
+import { HerdrEvents } from "./herdr/events.ts";
+import { herdrClient, herdrSocket, readHerdr, tuiBackend } from "./herdr/tui.ts";
 import { type HookEvent, type HookHandler, hookServer, limit, listenOn, speaker } from "./hooks.ts";
 import { highlightDiff, highlightLines } from "./highlight.ts";
 import { frontMatter } from "./frontmatter.ts";
@@ -35,12 +37,12 @@ import {
   codexTokens, lastPrompt, percent, resumedText, roleToReport, sessionCwd, sessionReport, statusLine, statusTokens, usageFile,
 } from "./report.ts";
 import { appBackend, appHerdrPanes, appTerminals, claudeSessions } from "./herdr/app.ts";
-import { background, choices, inboxChoices, open, plan, rowNotes, workspacesToName } from "./rows.ts";
+import { background, choices, inboxChoices, open, paneRecords, plan, rowNotes, workspacesToName } from "./rows.ts";
 import { claudeSessionDirs, codexContext, codexSessionDirs, codexSessions, reportedRole } from "./sessions.ts";
 import * as slack from "./slack.ts";
 import { loadState, saveState } from "./statefile.ts";
 import {
-  type Herdr, type Watched, agentStates, checkoutOf, linkCheckout, openProjects, projectDirs, projectLabels, readProjectFile, readState,
+  type Watched, agentStates, checkoutOf, linkCheckout, openProjects, projectDirs, projectLabels, readProjectFile, readState,
 } from "./state.ts";
 import { type Found, title, watchWorkspace, watchedFrom } from "./watched.ts";
 import { type Wait, readProcesses, runningSubagents, sessionFolder, waitsByPid } from "./waits.ts";
@@ -93,14 +95,23 @@ for (const f of bundle.outputFiles)
 const clients = new Set<SSEStreamingApi>();
 const logError = (e: unknown) => console.error("herdr-project-web:", e);
 const { ask, tryAsk } = herdrClient();
-// Herdr's panes and workspaces, read when it says they changed.
-const tui = watchHerdr(tryAsk, (next, before) => {
+// Herdr's panes and workspaces, null while it can't be asked, read when
+// its events say something changed, and every minute, since panes'
+// directories change without events.
+let herdr: Herdr | null = null;
+const herdrReads = new Schedule(async () => {
+  const before = herdr;
+  const next = (herdr = await readHerdr(tryAsk));
+  // Each agent's state is its own subscription, and a failed one
+  // subscribes again.
+  herdrEvents.update(next);
   const states = agentStates(before) ?? {};
   forgetAnswered(hookEvents, states, agentStates(next) ?? states);
   if (next) for (const pane of hookEvents.keys()) if (!next.panes.some((q) => q.pane_id === pane)) hookEvents.delete(pane);
   deliver();
   refresh();
-}, { onError: logError });
+}, { every: 60_000, onError: logError });
+const herdrEvents = new HerdrEvents(herdrSocket, () => herdrReads.refresh());
 // What the checks found, by title, once they have checked, shown in this
 // order.
 const ORDER = ["Pull requests", "Panes", "Slack", "Linear"];
@@ -171,7 +182,6 @@ function agentViews(): Record<string, AgentView> {
 /** Returns Herdr's panes with the Herdr app's agents among them, or those
  * alone while Herdr can't be asked, or null if neither is known. */
 function everyPane(): Herdr | null {
-  const herdr = tui();
   if (!herdr && !appTerminalPanes.length) return null;
   return { workspaces: herdr?.workspaces ?? [], panes: [...(herdr?.panes ?? []), ...appTerminalPanes] };
 }
@@ -185,7 +195,7 @@ function pageState() {
   const sessions = Object.fromEntries((all?.panes ?? []).filter((p) => p.agent).map((p) => [p.pane_id, p.agent_session?.value ?? ""]));
   // Only messages for panes of what has been read can be told undelivered:
   // Herdr's panes are named like w1:p2, the app's terminals like t3.
-  const readable = Object.fromEntries(Object.entries(outbox.all()).filter(([pane]) => pane.includes(":") ? tui() !== null : appRead));
+  const readable = Object.fromEntries(Object.entries(outbox.all()).filter(([pane]) => pane.includes(":") ? herdr !== null : appRead));
   const left = undelivered(readable, sessions);
   const state = readState(watched(), projectRoot, all, home, links);
   for (const project of state.projects)
@@ -262,7 +272,7 @@ function refresh() {
   const found = watched();
   const next = JSON.stringify(pageState());
   // Tell Herdr how much waits on the user only as it changes.
-  const workspace = watchWorkspace(process.env, tui());
+  const workspace = watchWorkspace(process.env, herdr);
   const text = title(found?.inbox);
   if (workspace && found && text !== titled) {
     titled = text;
@@ -441,7 +451,7 @@ setInterval(changed, 30_000);
  * by the checkouts in ~/repos, where some tasks work on their branches. */
 function projectWorktrees() {
   return [
-    ...openProjects(projectRoot, tui()).map(([dir, readme]) => ({
+    ...openProjects(projectRoot, herdr).map(([dir, readme]) => ({
       dir,
       ...projectLabels(dir, readme),
       worktrees: worktreeDirs(dir),
@@ -545,7 +555,7 @@ page.get("/api/lines", async (c) => {
 page.get("/api/file", (c) => {
   // Only the files of the projects the page lists, not any file asked for.
   const dir = c.req.query("dir");
-  const file = openProjects(projectRoot, tui()).some(([d]) => d === dir)
+  const file = openProjects(projectRoot, herdr).some(([d]) => d === dir)
     ? readProjectFile(dir!, c.req.query("name") ?? "")
     : null;
   return file === null ? c.json({ error: "no such file" }, 404) : c.json(file);
@@ -663,7 +673,7 @@ async function nameWorkspaces() {
     const text = readProjectReadme(dir);
     return (text && frontMatter(text, "name")) || "";
   };
-  for (const { dir, workspace, name } of workspacesToName(tui(), named, (cwd) => projectDir(cwd, projectRoot), nameOf)) {
+  for (const { dir, workspace, name } of workspacesToName(herdr, named, (cwd) => projectDir(cwd, projectRoot), nameOf)) {
     if (!(await tryAsk("workspace.rename", { workspace_id: workspace, label: name }))) continue;
     named.add(dir);
     saveState(namedPath, [...named]);
@@ -720,6 +730,8 @@ const onHook: HookHandler = async (pane, { agent, event }, data) => {
 
 // The Herdr app, for a picker that opens rows there, else the TUI.
 const pickerBackend = (app: unknown) => app ? herdrApp : herdrTui;
+/** Returns the panes of the picker's Backend as the picker uses them. */
+const pickerPanes = async (app: unknown) => paneRecords({ workspaces: [], panes: await pickerBackend(app).panes() });
 
 // What herdr-project and the picker ask for on the socket.
 const socket = new Hono();
@@ -739,8 +751,8 @@ socket.get("/sessions", (c) =>
 socket.get("/picker", async (c) => {
   const app = c.req.query("app") !== undefined;
   return c.json(c.req.query("inbox") !== undefined
-    ? inboxChoices(await pickerBackend(app).panes(), codexSessions(), JSON.parse(last))
-    : choices(await pickerBackend(app).panes(), projectRoot, codexSessions()));
+    ? inboxChoices(await pickerPanes(app), codexSessions(), JSON.parse(last))
+    : choices(await pickerPanes(app), projectRoot, codexSessions()));
 });
 // From an agent that opened or changed a pull request, for the board.
 socket.post("/pulls/check", (c) => {
@@ -752,8 +764,7 @@ socket.post("/picker/open", limit(), async (c) => {
   const { row, agent, app } = JSON.parse((await c.req.text()) || "{}");
   // Panes as they are now, not as last read: going by old ones could
   // resume a session that already runs.
-  const backend = pickerBackend(app);
-  await open(await plan(row, agent, await backend.panes(), projectRoot, launcher, planDeps), backend.opener());
+  await open(await plan(row, agent, await pickerPanes(app), projectRoot, launcher, planDeps), pickerBackend(app).opener());
   return c.body(null, 204);
 });
 

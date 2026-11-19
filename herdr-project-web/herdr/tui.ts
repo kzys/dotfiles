@@ -5,11 +5,7 @@
 import { execFile } from "node:child_process";
 import { createConnection } from "node:net";
 import { promisify } from "node:util";
-import { HerdrEvents } from "../events.ts";
-import { paneRecords } from "../rows.ts";
-import { Schedule } from "../schedule.ts";
-import type { Herdr } from "../state.ts";
-import type { Backend, OpenHerdr } from "./backend.ts";
+import type { Backend, Herdr, OpenHerdr } from "./backend.ts";
 
 // An error Herdr replied with, as opposed to failing to reach it.
 export class HerdrError extends Error {}
@@ -87,29 +83,11 @@ export function herdrClient(locate: () => Promise<string> = herdrSocket): { ask:
   return { ask: (method, params) => ask(method, params), tryAsk: (method, params) => ask(method, params).catch(() => null) };
 }
 
-/** Keeps what Herdr shows current, reading its workspaces and panes
- * through tryAsk when its events, through the socket that locate finds,
- * say something changed, and every minute, since panes' directories
- * change without events. Calls onRead with each read and the one before,
- * each null while Herdr can't be asked, and onError with what onRead
- * raises. Returns a function returning the last read. */
-export function watchHerdr(
-  tryAsk: Ask,
-  onRead: (next: Herdr | null, before: Herdr | null) => void,
-  options: { locate?: () => Promise<string>; onError?: (error: unknown) => void } = {},
-): () => Herdr | null {
-  let herdr: Herdr | null = null;
-  const reads = new Schedule(async () => {
-    const [w, p] = await Promise.all([tryAsk("workspace.list"), tryAsk("pane.list")]);
-    const before = herdr;
-    herdr = w && p ? { workspaces: w.workspaces, panes: p.panes } : null;
-    // Each agent's state is its own subscription, and a failed one
-    // subscribes again.
-    events.update(herdr);
-    onRead(herdr, before);
-  }, { every: 60_000, onError: options.onError });
-  const events = new HerdrEvents(options.locate ?? herdrSocket, () => reads.refresh());
-  return () => herdr;
+/** Returns Herdr's workspaces and panes, asking through tryAsk, or null
+ * while Herdr can't be asked. */
+export async function readHerdr(tryAsk: Ask): Promise<Herdr | null> {
+  const [w, p] = await Promise.all([tryAsk("workspace.list"), tryAsk("pane.list")]);
+  return w && p ? { workspaces: w.workspaces, panes: p.panes } : null;
 }
 
 /** Returns the Herdr TUI as a Backend, asking it through ask. asking
@@ -140,7 +118,7 @@ export function tuiBackend(
     },
     send,
     focus: (pane) => ask("pane.focus", { pane_id: pane }),
-    panes: async () => paneRecords({ workspaces: [], panes: (await ask("pane.list")).panes }),
+    panes: async () => (await ask("pane.list")).panes,
     opener: () => opener,
   };
 }

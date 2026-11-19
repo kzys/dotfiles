@@ -10,8 +10,8 @@ import { promisify } from "node:util";
 import { frontMatter } from "./frontmatter.ts";
 import { type Agent, AGENTS, isProject, newProject, quote } from "./launch.ts";
 import { type CodexSession, codexContext, reportedRole, title, transcriptDir, transcripts } from "./sessions.ts";
-import type { OpenHerdr } from "./herdr/backend.ts";
-import type { Herdr, State } from "./state.ts";
+import type { Herdr, OpenHerdr } from "./herdr/backend.ts";
+import type { State } from "./state.ts";
 
 // Kind, directory, agent:session, and what the picker shows.
 export type Row = [string, string, string, string];

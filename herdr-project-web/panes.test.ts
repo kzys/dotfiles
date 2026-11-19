@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { type PaneHerdr, checkPanes, ctx, projectDir, wakeMessage } from "./panes.ts";
-import type { Herdr } from "./state.ts";
+import type { Herdr } from "./herdr/backend.ts";
 
 type HerdrPane = Herdr["panes"][number];
 
