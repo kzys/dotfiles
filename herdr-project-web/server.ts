@@ -15,10 +15,11 @@ import { type SSEStreamingApi, streamSSE } from "hono/streaming";
 import {
   type AgentActions, type AgentView, Outbox, forgetAnswered, fromPage, permission, routeAgents, undelivered,
 } from "./agents.ts";
-import { HerdrEvents } from "./events.ts";
+import { polled } from "./source/polled.ts";
+import { scheduled } from "./source/scheduled.ts";
 import * as board from "./board.ts";
 import * as github from "./github.ts";
-import { HerdrError, request } from "./herdr.ts";
+import { herdrClient, herdrSource } from "./herdr.ts";
 import { type HookEvent, type HookHandler, hookServer, limit, listenOn, speaker } from "./hooks.ts";
 import { highlightDiff, highlightLines } from "./highlight.ts";
 import { frontMatter } from "./frontmatter.ts";
@@ -90,7 +91,9 @@ for (const f of bundle.outputFiles)
   assets[`/${relative(outdir, f.path)}`] = [types[extname(f.path)] ?? "application/octet-stream", f.contents];
 
 const clients = new Set<SSEStreamingApi>();
-let herdr: Herdr | null = null;
+const { ask, tryAsk } = herdrClient();
+// Herdr's panes and workspaces, read when it says they changed.
+const tui = herdrSource(tryAsk);
 // What the checks found, by title, once they have checked, shown in this
 // order.
 const ORDER = ["Pull requests", "Panes", "Slack", "Linear"];
@@ -161,6 +164,7 @@ async function hcSend(terminal: string, text: string) {
 /** Returns Herdr's panes with the Herdr app's agents among them, or those
  * alone while Herdr can't be asked, or null if neither is known. */
 function everyPane(): Herdr | null {
+  const herdr = tui.current();
   if (!herdr && !appTerminalPanes.length) return null;
   return { workspaces: herdr?.workspaces ?? [], panes: [...(herdr?.panes ?? []), ...appTerminalPanes] };
 }
@@ -174,7 +178,7 @@ function pageState() {
   const sessions = Object.fromEntries((all?.panes ?? []).filter((p) => p.agent).map((p) => [p.pane_id, p.agent_session?.value ?? ""]));
   // Only messages for panes of what has been read can be told undelivered:
   // Herdr's panes are named like w1:p2, the app's terminals like t3.
-  const readable = Object.fromEntries(Object.entries(outbox.all()).filter(([pane]) => pane.includes(":") ? herdr !== null : appRead));
+  const readable = Object.fromEntries(Object.entries(outbox.all()).filter(([pane]) => pane.includes(":") ? tui.current() !== null : appRead));
   const left = undelivered(readable, sessions);
   const state = readState(watched(), projectRoot, all, home, links);
   for (const project of state.projects)
@@ -194,121 +198,47 @@ function watched(): Watched | null {
   return ours.length ? watchedFrom(ours, prUrls) : null;
 }
 
-// Herdr's socket, found again after a request can't reach it.
-let socketPath: Promise<string> | null = null;
+tui.onChange((next, before) => {
+  const states = agentStates(before) ?? {};
+  forgetAnswered(hookEvents, states, agentStates(next) ?? states);
+  if (next) for (const pane of hookEvents.keys()) if (!next.panes.some((q) => q.pane_id === pane)) hookEvents.delete(pane);
+  deliver();
+  refresh();
+});
 
-/** Returns the result of method with params from Herdr, raising if it
- * fails. Where the socket is gone, as when Herdr came back elsewhere, it
- * finds it again and tries once more; the request never reached Herdr,
- * so it isn't sent twice. */
-async function ask(method: string, params: object = {}, again = true): Promise<any> {
-  const path = (socketPath ??= herdrSocket());
-  try {
-    return await request(await path, method, params);
-  } catch (e) {
-    if (e instanceof HerdrError) throw e;
-    // Unless another request found it again already.
-    if (socketPath === path) socketPath = null;
-    const code = (e as NodeJS.ErrnoException).code;
-    if (again && (code === "ENOENT" || code === "ECONNREFUSED")) return ask(method, params, false);
-    throw e;
-  }
-}
-
-/** Returns the result of method with params from Herdr, or null if it
- * fails. */
-function tryAsk(method: string, params: object = {}): Promise<any> {
-  return ask(method, params).catch(() => null);
-}
-
-// Read Herdr when its events say something changed. A read asked for
-// while one runs runs again after it, so the last change isn't missed.
-let polling = false;
-let again = false;
-async function pollHerdr() {
-  if (polling) {
-    again = true;
-    return;
-  }
-  polling = true;
-  try {
-    do {
-      again = false;
-      const [w, p] = await Promise.all([tryAsk("workspace.list"), tryAsk("pane.list")]);
-      const before = agentStates(herdr) ?? {};
-      herdr = w && p ? { workspaces: w.workspaces, panes: p.panes } : null;
-      events.update(herdr);
-      forgetAnswered(hookEvents, before, agentStates(herdr) ?? before);
-      if (herdr) for (const pane of hookEvents.keys()) if (!herdr.panes.some((q) => q.pane_id === pane)) hookEvents.delete(pane);
-      deliver();
-      refresh();
-    } while (again);
-  } finally {
-    polling = false;
-  }
-}
-// Herdr's socket, as its CLI, $HERDR_BIN_PATH if set, finds it, for the
-// session it reads.
-async function herdrSocket(): Promise<string> {
-  const { stdout } = await promisify(execFile)(process.env.HERDR_BIN_PATH || "herdr", ["status", "server"], {
-    timeout: 5000,
-  });
-  const path = stdout.match(/^socket: (.+)$/m)?.[1];
-  if (!path) throw new Error("herdr status server names no socket");
-  return path;
-}
-const events = new HerdrEvents(herdrSocket, pollHerdr);
-pollHerdr();
-// Panes' directories change without events, and Herdr may be away.
-setInterval(pollHerdr, 60_000);
-
-// Read the Herdr app's agents, keeping the last ones read when hc fails.
-let appPolling = false;
-async function pollApp() {
-  if (appPolling) return;
-  appPolling = true;
-  try {
-    const next = appHerdrPanes(await appTerminals(), claudeSessions());
-    const first = !appRead;
-    appRead = true;
-    if (!first && JSON.stringify(next) === JSON.stringify(appTerminalPanes)) return;
-    appTerminalPanes = next;
-    deliver();
-    refresh();
-  } catch {
-  } finally {
-    appPolling = false;
-  }
-}
-pollApp();
-setInterval(pollApp, 5_000);
+// The Herdr app's agents, keeping the last ones read when hc fails.
+polled(async () => appHerdrPanes(await appTerminals(), claudeSessions()), { every: 5_000 }).onChange((next) => {
+  appTerminalPanes = next;
+  appRead = true;
+  deliver();
+  refresh();
+});
 
 // Where Claude Code keeps each session's files, once found.
 const sessionFolders = new Map<string, string>();
 
-// Read what agents wait on, keeping the last read when ps fails: their
-// Bash tool's commands, then the subagents of the sessions still running.
-async function pollWaits() {
-  try {
-    const sessions = claudeSessions();
-    const processes = await readProcesses();
-    const shells = waitsByPid(processes);
-    const started = new Map(processes.map((p) => [p.pid, p.started]));
-    const next = new Map<string, Wait[]>();
-    const projects = join(home, ".claude/projects");
-    for (const [pid, session] of sessions) {
-      let folder = sessionFolders.get(session) ?? null;
-      if (!folder && (folder = sessionFolder(projects, session))) sessionFolders.set(session, folder);
-      const since = started.get(pid);
-      const w = [...(shells.get(pid) ?? []), ...(folder && since !== undefined ? runningSubagents(folder, since) : [])];
-      if (w.length) next.set(session, w);
-    }
-    waits = next;
-    refresh();
-  } catch {}
-}
-pollWaits();
-setInterval(pollWaits, 10_000);
+// What agents wait on, keeping the last read when ps fails: their Bash
+// tool's commands, then the subagents of the sessions still running. A
+// Map's JSON tells nothing, so every read counts.
+polled(async () => {
+  const sessions = claudeSessions();
+  const processes = await readProcesses();
+  const shells = waitsByPid(processes);
+  const started = new Map(processes.map((p) => [p.pid, p.started]));
+  const next = new Map<string, Wait[]>();
+  const projects = join(home, ".claude/projects");
+  for (const [pid, session] of sessions) {
+    let folder = sessionFolders.get(session) ?? null;
+    if (!folder && (folder = sessionFolder(projects, session))) sessionFolders.set(session, folder);
+    const since = started.get(pid);
+    const w = [...(shells.get(pid) ?? []), ...(folder && since !== undefined ? runningSubagents(folder, since) : [])];
+    if (w.length) next.set(session, w);
+  }
+  return next;
+}, { every: 10_000, equal: () => false }).onChange((next) => {
+  waits = next;
+  refresh();
+});
 
 // The title Herdr has, or is being told.
 let titled = "";
@@ -317,7 +247,7 @@ function refresh() {
   const found = watched();
   const next = JSON.stringify(pageState());
   // Tell Herdr how much waits on the user only as it changes.
-  const workspace = watchWorkspace(process.env, herdr);
+  const workspace = watchWorkspace(process.env, tui.current());
   const text = title(found?.inbox);
   if (workspace && found && text !== titled) {
     titled = text;
@@ -342,7 +272,7 @@ const paneHerdr: PaneHerdr = {
 // Check the panes five minutes after each check ends, so that two never
 // tell an agent at once, keeping the last items when one fails.
 const PANE_INTERVAL = 300_000;
-async function watchPanes() {
+scheduled(async (): Promise<Found> => {
   const at = new Date();
   let lines: string[];
   let items = found.get("Panes")?.items ?? [];
@@ -352,11 +282,11 @@ async function watchPanes() {
     lines = [`Cannot check panes: ${String(e).split("\n")[0]}`];
   }
   const next = new Date(Date.now() + PANE_INTERVAL).toISOString();
-  found.set("Panes", { title: "Panes", section: { title: "Panes", at: at.toISOString(), next, lines }, items });
+  return { title: "Panes", section: { title: "Panes", at: at.toISOString(), next, lines }, items };
+}, { after: PANE_INTERVAL, start: !!orgs }).onChange((checked) => {
+  found.set("Panes", checked);
   refresh();
-  setTimeout(watchPanes, PANE_INTERVAL);
-}
-if (orgs) watchPanes();
+});
 
 // The connected claude.ai connectors; the queues start together, so one
 // listing a minute serves both.
@@ -377,14 +307,18 @@ const queues: [string, string, (texts: ReturnType<typeof notesTexts>) => Promise
   ["Slack", slack.CONNECTOR, (texts) => slack.poll(notify, texts, join(stateDir, "slack.json"), prOwners)],
   ["Linear", linear.CONNECTOR, (texts) => linear.poll(notify, texts, join(stateDir, "linear.json"), prOwners)],
 ];
-async function watchQueue(title: string, connector: string, check: (texts: ReturnType<typeof notesTexts>) => Promise<Checked>) {
-  const names = await connected();
-  const result = await checkQueue(title, connector, names, () => check(notesTexts(projectRoot)), found.get(title) ?? null,
-                                  () => new Date(), QUEUE_INTERVAL);
-  found.set(title, result);
-  refresh();
-  setTimeout(() => watchQueue(title, connector, check), QUEUE_INTERVAL);
-}
+const queueChecks = queues.map(([title, connector, check]) => {
+  const source = scheduled(async () => {
+    const names = await connected();
+    return checkQueue(title, connector, names, () => check(notesTexts(projectRoot)), found.get(title) ?? null,
+                      () => new Date(), QUEUE_INTERVAL);
+  }, { after: QUEUE_INTERVAL, start: false });
+  source.onChange((checked) => {
+    found.set(title, checked);
+    refresh();
+  });
+  return source;
+});
 
 const prHerdr: github.PollHerdr = {
   panes: paneHerdr.list,
@@ -406,48 +340,27 @@ const PR_INTERVAL = 300_000;
 // How soon to check when asked: GitHub's search takes a while to find a
 // new pull request.
 const PR_SOON = 15_000;
+// Each check counts, even one that failed, so that the queues start.
+const pullChecks = scheduled(() => checkPullRequests().catch((e) => console.error("herdr-project-web:", e)), {
+  after: PR_INTERVAL, start: !!orgs,
+});
 let queuing = false;
-let prTimer: ReturnType<typeof setTimeout> | null = null;
-// When the next check is due, while one is waiting.
-let prDue = 0;
-// The latest time a check was asked for, which a check that started
-// before it may have missed.
-let prWanted = 0;
+pullChecks.onChange(() => {
+  if (queuing) return;
+  queuing = true;
+  for (const q of queueChecks) q.refresh();
+});
 
-/** Checks the pull requests in ms, showing when on the page. */
-function schedulePullRequests(ms: number) {
-  if (prTimer) clearTimeout(prTimer);
-  prDue = Date.now() + ms;
-  prTimer = setTimeout(watchPullRequests, ms);
+/** Checks the pull requests PR_SOON from now, after any check due sooner
+ * or running, showing when on the page. */
+function checkPullRequestsSoon() {
+  pullChecks.refresh(PR_SOON);
   const section = found.get("Pull requests")?.section;
-  if (section) {
-    section.next = new Date(prDue).toISOString();
+  const next = pullChecks.next();
+  if (section && next) {
+    section.next = next.toISOString();
     refresh();
   }
-}
-
-async function watchPullRequests() {
-  prTimer = null;
-  const started = Date.now();
-  try {
-    await checkPullRequests();
-  } catch (e) {
-    console.error("herdr-project-web:", e);
-  }
-  if (!queuing) {
-    queuing = true;
-    for (const q of queues) watchQueue(...q);
-  }
-  schedulePullRequests(prWanted > started ? Math.max(prWanted - Date.now(), 0) : PR_INTERVAL);
-}
-
-/** Checks the pull requests PR_SOON from now rather than at the next
- * check, and again then if a check due sooner, or running, starts before
- * it. Asking again never puts a check off. */
-function checkPullRequestsSoon() {
-  const by = Date.now() + PR_SOON;
-  prWanted = Math.max(prWanted, by);
-  if (prTimer && prDue > by) schedulePullRequests(PR_SOON);
 }
 async function checkPullRequests() {
   const title = "Pull requests";
@@ -482,7 +395,6 @@ async function checkPullRequests() {
       writeSync(tty, `\x1b[H\x1b[2J${github.screen(title, at, lines)}`);
     } catch {} // The page still shows them.
 }
-if (orgs) watchPullRequests();
 
 let timer: ReturnType<typeof setTimeout> | undefined;
 function changed() {
@@ -519,7 +431,7 @@ setInterval(changed, 30_000);
  * by the checkouts in ~/repos, where some tasks work on their branches. */
 function projectWorktrees() {
   return [
-    ...openProjects(projectRoot, herdr).map(([dir, readme]) => ({
+    ...openProjects(projectRoot, tui.current()).map(([dir, readme]) => ({
       dir,
       ...projectLabels(dir, readme),
       worktrees: worktreeDirs(dir),
@@ -643,7 +555,7 @@ page.get("/api/lines", async (c) => {
 page.get("/api/file", (c) => {
   // Only the files of the projects the page lists, not any file asked for.
   const dir = c.req.query("dir");
-  const file = openProjects(projectRoot, herdr).some(([d]) => d === dir)
+  const file = openProjects(projectRoot, tui.current()).some(([d]) => d === dir)
     ? readProjectFile(dir!, c.req.query("name") ?? "")
     : null;
   return file === null ? c.json({ error: "no such file" }, 404) : c.json(file);
@@ -771,7 +683,7 @@ async function nameWorkspaces() {
     const text = readProjectReadme(dir);
     return (text && frontMatter(text, "name")) || "";
   };
-  for (const { dir, workspace, name } of workspacesToName(herdr, named, (cwd) => projectDir(cwd, projectRoot), nameOf)) {
+  for (const { dir, workspace, name } of workspacesToName(tui.current(), named, (cwd) => projectDir(cwd, projectRoot), nameOf)) {
     if (!(await tryAsk("workspace.rename", { workspace_id: workspace, label: name }))) continue;
     named.add(dir);
     saveState(namedPath, [...named]);

@@ -1,7 +1,14 @@
-// Asking Herdr through its socket, one request per connection, as its
-// CLI does, rather than running the CLI each time.
+// Talking to the Herdr TUI: asking it through its socket, one request per
+// connection, as its CLI does, rather than running the CLI each time, and
+// keeping what it shows current.
 
+import { execFile } from "node:child_process";
 import { createConnection } from "node:net";
+import { promisify } from "node:util";
+import { HerdrEvents } from "./events.ts";
+import { subscribed } from "./source/subscribed.ts";
+import type { Source } from "./source/source.ts";
+import type { Herdr } from "./state.ts";
 
 // An error Herdr replied with, as opposed to failing to reach it.
 export class HerdrError extends Error {}
@@ -40,4 +47,61 @@ export function request(path: string, method: string, params: object = {}, timeo
     socket.on("end", () => reject(new Error(`herdr ${method}: no reply`)));
     socket.write(`${JSON.stringify({ id: method, method, params })}\n`);
   });
+}
+
+/** Returns where Herdr's socket is, as its CLI, $HERDR_BIN_PATH if set,
+ * finds it, for the session it reads. */
+export async function herdrSocket(): Promise<string> {
+  const { stdout } = await promisify(execFile)(process.env.HERDR_BIN_PATH || "herdr", ["status", "server"], {
+    timeout: 5000,
+  });
+  const path = stdout.match(/^socket: (.+)$/m)?.[1];
+  if (!path) throw new Error("herdr status server names no socket");
+  return path;
+}
+
+export type Ask = (method: string, params?: object) => Promise<any>;
+
+/** Returns ask, which returns the result of method with params from
+ * Herdr, raising if it fails, and tryAsk, which returns null instead,
+ * both through the socket that locate finds. Where the socket is gone,
+ * as when Herdr came back elsewhere, ask finds it again and tries once
+ * more; the request never reached Herdr, so it isn't sent twice. */
+export function herdrClient(locate: () => Promise<string> = herdrSocket): { ask: Ask; tryAsk: Ask } {
+  // Found again after a request can't reach it.
+  let socketPath: Promise<string> | null = null;
+  const ask = async (method: string, params: object = {}, again = true): Promise<any> => {
+    const path = (socketPath ??= locate());
+    try {
+      return await request(await path, method, params);
+    } catch (e) {
+      if (e instanceof HerdrError) throw e;
+      // Unless another request found it again already.
+      if (socketPath === path) socketPath = null;
+      const code = (e as NodeJS.ErrnoException).code;
+      if (again && (code === "ENOENT" || code === "ECONNREFUSED")) return ask(method, params, false);
+      throw e;
+    }
+  };
+  return { ask: (method, params) => ask(method, params), tryAsk: (method, params) => ask(method, params).catch(() => null) };
+}
+
+/** Returns Herdr's workspaces and panes as a Source, null while Herdr
+ * can't be asked through tryAsk, read when its events say something
+ * changed, through the socket that locate finds, and every minute,
+ * since panes' directories change without events. Every read counts, so
+ * that a failed subscription subscribes again. */
+export function herdrSource(tryAsk: Ask, locate: () => Promise<string> = herdrSocket): Source<Herdr | null> {
+  return subscribed(
+    async (): Promise<Herdr | null> => {
+      const [w, p] = await Promise.all([tryAsk("workspace.list"), tryAsk("pane.list")]);
+      return w && p ? { workspaces: w.workspaces, panes: p.panes } : null;
+    },
+    (source) => {
+      const events = new HerdrEvents(locate, () => source.refresh());
+      // Each agent's state is its own subscription.
+      source.onChange((next) => events.update(next));
+    },
+    { resyncEvery: 60_000, equal: () => false },
+  );
 }
