@@ -87,12 +87,17 @@ export function terminalSession(
   return undefined;
 }
 
+/** Returns the role an agent in terminal, as hc get describes it, reported
+ * with hc label, as Herdr's panes have it in their tokens, if any. */
+const roleTokens = (terminal: any): { tokens?: Record<string, string> } =>
+  terminal.labels?.role ? { tokens: { role: terminal.labels.role } } : {};
+
 /** Returns the panes among terminals, each as hc get describes it with the
  * agent hc ls reports, that show in a space of the Herdr app, as Herdr
  * describes its panes. Unlike appHerdrPanes, a terminal is an agent as
  * soon as hc ls says so. sessions maps the process IDs of running Claude
  * sessions to their IDs, as for terminalSession with parent; herdr-core
- * doesn't know sessions, nor roles. */
+ * doesn't know sessions, and knows roles only as labels. */
 export function appListedPanes(
   terminals: any[], sessions: Map<number, string>, parent: (pid: number) => number | null = procParent,
 ): Herdr["panes"] {
@@ -104,6 +109,7 @@ export function appListedPanes(
       cwd: t.foreground?.cwd || t.cwd || "",
       agent,
       agent_session: agent === "claude" ? { value: terminalSession(t, sessions, parent) ?? "" } : null,
+      ...roleTokens(t),
     };
   });
 }
@@ -148,6 +154,7 @@ export function appHerdrPanes(
       agent_status: t.status?.state,
       agent_session: agent === "claude" ? { value: terminalSession(t, sessions, parent) ?? "" } : null,
       terminal_title: t.title || undefined,
+      ...roleTokens(t),
     };
   });
 }

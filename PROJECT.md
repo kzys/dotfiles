@@ -129,10 +129,17 @@ curl -s -X POST --unix-socket "${XDG_STATE_HOME:-$HOME/.local/state}/herdr-proje
 ## Herdr
 
 Your role is `main` unless you report another. If it is, report it once
-you know it, at the start of every session, including resumed ones:
+you know it, at the start of every session, including resumed ones. In
+Herdr, where `$HERDR_PANE_ID` is set:
 
 ```
 herdr pane report-metadata "$HERDR_PANE_ID" --source agent-notes --token role=<role>
+```
+
+In the Herdr app, where `$HC_TERMINAL_ID` is set instead:
+
+```
+hc label "$HC_TERMINAL_ID" role=<role>
 ```
 
 About 5 minutes after the session started, once the task is clear,

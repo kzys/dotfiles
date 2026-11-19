@@ -25,11 +25,13 @@ test("reads the panes of the app's spaces", () => {
   assert.deepEqual(appListedPanes([
     terminal({}),
     terminal({ address: "t2", agent: undefined, foreground: { pid: 10 } }),
+    terminal({ address: "t5", labels: { "herdr.space": "sp1", role: "reviewer" } }),
     terminal({ address: "t3", labels: {} }),
     terminal({ address: "t4", state: "exited" }),
   ], sessions), [
     { pane_id: "t1", workspace_id: "sp1", cwd: "/now", agent: "claude", agent_session: { value: "s1" } },
     { pane_id: "t2", workspace_id: "sp1", cwd: "/start", agent: null, agent_session: null },
+    { pane_id: "t5", workspace_id: "sp1", cwd: "/now", agent: "claude", agent_session: { value: "s1" }, tokens: { role: "reviewer" } },
   ]);
 });
 
