@@ -184,6 +184,10 @@
     }
   ],
   "background": "canvas",
+  "border": {
+    "width": 1,
+    "color": "dim"
+  },
   "terminal_padding": [
     14,
     12
