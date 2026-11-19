@@ -1,10 +1,12 @@
 # Project directory
 
-These instructions come from `$dotfiles/PROJECT.md`, followed by
-`$dotfiles/work/PROJECT.md` if it exists.
+These instructions come from `~/repos/kzys/dotfiles/PROJECT.md`. If
+`~/repos/kzys/dotfiles/work/PROJECT.md` exists, read it before anything
+else and follow it too.
 
-Each task has a scratch directory under `~/project`; this task's is
-`$PWD`. Other agents may work in it too, sharing what they learn there:
+Each task has a scratch directory under `~/project`; this task's is the
+one directly under `~/project` that holds the directory the session
+started in. Other agents may work in it too, sharing what they learn there:
 
 ```
 ~/project/
@@ -101,9 +103,8 @@ short name for its part, such as `main` or `reviewer`, in this shape:
 Write only to your own file. When resuming another agent's work, keep
 using its file, but only if that agent has stopped: if another agent
 pane in `herdr pane list` is in this directory, it is still working, so
-pick a role of your own. The session started at $start; check the time
-with `date` and update your notes about every hour, and before you
-finish.
+pick a role of your own. Check the time with `date` when the session
+starts, and update your notes about every hour, and before you finish.
 
 ## Checkouts
 
@@ -111,8 +112,8 @@ Git checkouts are under `~/repos/<org>/<repo>`, named after the GitHub
 organization and repository. Use them instead of cloning.
 
 Make a git worktree in this task's directory to work on a branch;
-don't switch branches in an existing checkout. `$dotfiles` is the
-exception: tools read their config from that checkout, so start a
+don't switch branches in an existing checkout. `~/repos/kzys/dotfiles`
+is the exception: tools read their config from that checkout, so start a
 branch there with `git switch -c` from where it is, and don't switch to
 other branches.
 

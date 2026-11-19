@@ -535,7 +535,7 @@ function launch(form: URLSearchParams): string {
   const now = new Date();
   const [directory, origin] = launchDirectory(form.get("cwd") ?? home, projectRoot, home, argv, now);
   const pid = Number(form.get("pid"));
-  const command = agentCommand(agent, argv, directory, origin, { dotfiles, stateDir, pid, now });
+  const command = agentCommand(agent, argv, directory, origin, { dotfiles, stateDir, pid });
   // Herdr already tracks sessions, so keep them out of the background.
   if (form.get("herdr") === "1" && agent === "claude") command.env.CLAUDE_CODE_DISABLE_AGENT_VIEW = "1";
   if (origin) noteCheckout(directory, origin);
@@ -657,7 +657,7 @@ const onHook: HookHandler = async (pane, { agent, event }, data) => {
   refresh();
   if (agent !== "claude" || event !== "SessionStart" || data.source !== "resume" || typeof data.cwd !== "string") return "";
   const dir = projectDir(data.cwd, projectRoot);
-  return dir ? resumedText(instructions(dir, dotfiles, new Date())) : "";
+  return dir ? resumedText(dir, instructions(dotfiles)) : "";
 };
 
 // The Herdr app, for a picker that opens rows there, else the TUI.
