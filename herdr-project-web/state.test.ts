@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { linkParts } from "./inbox.ts";
 import {
-  type Herdr, type Watched, checkoutOf, linkCheckout, namedCheckouts, projectFiles, projectTabs, pullRequestLinks, readProjectFile, readState, workspaceLabels,
+  type Herdr, type Watched, checkoutOf, linkCheckout, namedCheckouts, projectFiles, projectPanes, projectTabs, pullRequestLinks, readProjectFile, readState, workspaceLabels,
 } from "./state.ts";
 
 test("finds the checkout holding a directory", () => {
@@ -168,6 +168,13 @@ test("lists the checkouts a project works in after its worktrees", () => {
   const links = { [p2]: [join(root, "repos/o/r1"), join(root, "repos/o/r2"), join(root, "repos/o/gone")] };
   const linked = readState(null, projects, null, root, links);
   assert.deepEqual(linked.projects[1].worktrees.map((w) => w.dir), [join(root, "repos/o/r1"), join(root, "repos/o/r2")]);
+});
+
+test("gives each agent in a project the title its terminal shows", () => {
+  const pane = (pane_id: string, terminal_title?: string) =>
+    ({ pane_id, workspace_id: "w1", cwd: "/p/a", agent: "claude", agent_status: "idle", terminal_title });
+  const herdr = { workspaces: [], panes: [pane("t1", "Fix the board"), pane("t2", "")] };
+  assert.deepEqual(projectPanes("/p/a", herdr).map((p) => [p.id, p.title]), [["t1", "Fix the board"], ["t2", undefined]]);
 });
 
 test("counts the tabs with panes in a project", () => {

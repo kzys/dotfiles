@@ -148,6 +148,7 @@ export function appHerdrPanes(
       agent,
       agent_status: t.status?.state,
       agent_session: agent === "claude" ? { value: terminalSession(t, sessions, parent) ?? "" } : null,
+      terminal_title: t.title || undefined,
     };
   });
 }
