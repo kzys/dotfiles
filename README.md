@@ -85,7 +85,8 @@ mod here, switch layouts away and back (Ctrl+Shift+L) to reload it.
 One server, written in TypeScript, behind all of the above. `hp`, the picker,
 `bin/agent-hook` and `bin/claude-statusline` are small clients of it, over a
 Unix socket at `~/.local/state/herdr-project/run/server.sock`. They need it
-running: without it `hp` and the picker say so and stop, and hooks do nothing.
+running: without it `hp` and the picker start it in the background, logging
+to `~/.local/state/herdr-project/watch.log`, and hooks do nothing.
 Plain `claude` in a shell still works for fixing it.
 
 Its localhost-only page shows the open projects under `~/project`, with their
@@ -99,8 +100,9 @@ until that is merged, else the default branch.
 Clicking a line number in a diff comments on that line, and the comments go to
 the agent you choose as one message, once it is idle.
 
-The server runs in a pane of the `watch` workspace. Shells in Herdr start it if
-no pane has it, which needs Node 22.13 or later and its packages:
+`hp` and the picker start the server in the background when it isn't running;
+in the Herdr TUI, shells also start it in a pane of the `watch` workspace if
+nothing runs it. Either needs Node 22.13 or later and its packages:
 
 ```
 cd herdr-project-web && npm install
