@@ -4,7 +4,7 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { HerdrError, request } from "./tui.ts";
+import { HerdrError, request, tuiBackend } from "./tui.ts";
 
 test("asks Herdr one request per connection", async (t) => {
   // A stand-in for Herdr's socket that answers each request as told.
@@ -49,4 +49,25 @@ test("asks Herdr one request per connection", async (t) => {
     () => request(join(path, "none"), "x"),
   ])
     await assert.rejects(ask, (e) => e instanceof Error && !(e instanceof HerdrError));
+});
+
+test("sends only to an idle agent with no permission request open", async () => {
+  const panes: Record<string, object> = {
+    idle: { agent: "claude", agent_status: "idle", agent_session: { value: "s1" } },
+    done: { agent: "claude", agent_status: "done" },
+    asking: { agent: "claude", agent_status: "idle" },
+    working: { agent: "claude", agent_status: "working" },
+    shell: { agent_status: "idle" },
+  };
+  const asked: [string, object][] = [];
+  const ask = async (method: string, params: any = {}) => {
+    asked.push([method, params]);
+    return method === "pane.get" ? { pane: panes[params.pane_id] } : {};
+  };
+  const tui = tuiBackend(ask, { asking: (pane) => pane === "asking", title: async () => {} });
+  const ready = await Promise.all(Object.keys(panes).map((p) => tui.ready(p)));
+  assert.deepEqual(ready, ["s1", "", null, null, null]);
+  asked.length = 0;
+  await tui.send("idle", "hello");
+  assert.deepEqual(asked, [["pane.send_input", { pane_id: "idle", text: "hello", keys: ["Enter"] }]]);
 });

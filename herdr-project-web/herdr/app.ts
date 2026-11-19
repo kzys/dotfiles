@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import type { OpenHerdr, PaneRecord } from "../rows.ts";
 import type { Herdr } from "../state.ts";
+import type { Backend } from "./backend.ts";
 
 // herdr-core names some agents by their app, not their command.
 const AGENTS: Record<string, string> = { "claude-code": "claude" };
@@ -187,5 +188,21 @@ export function appOpener(command: AppCommand = appCommand): OpenHerdr {
       pending.delete(pane);
       return command(made[0], { ...made[1], argv: ["sh", "-c", line] });
     },
+  };
+}
+
+/** Returns the Herdr app as a Backend, reading its terminals with hc. */
+export function appBackend(): Backend {
+  const run = (command: string, args: string[]) => promisify(execFile)(command, args, { timeout: 10_000 });
+  return {
+    async ready(terminal) {
+      const now = await json("hc", ["get", terminal, "--json"]);
+      return appAgentFree(now) ? (terminalSession(now, claudeSessions()) ?? "") : null;
+    },
+    // Text starting with "-" would be read as an option.
+    send: async (terminal, text) => void (await run("hc", ["send", terminal, "--", text])),
+    focus: (terminal) => run("herdr-app", ["do", "agent.focus", "--terminal", terminal]),
+    panes: () => appPanes(),
+    opener: () => appOpener(),
   };
 }

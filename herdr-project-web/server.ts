@@ -18,7 +18,7 @@ import {
 import * as board from "./board.ts";
 import { requestCopilot } from "./github/api.ts";
 import * as github from "./github/poll.ts";
-import { herdrClient, watchHerdr } from "./herdr/tui.ts";
+import { herdrClient, tuiBackend, watchHerdr } from "./herdr/tui.ts";
 import { type HookEvent, type HookHandler, hookServer, limit, listenOn, speaker } from "./hooks.ts";
 import { highlightDiff, highlightLines } from "./highlight.ts";
 import { frontMatter } from "./frontmatter.ts";
@@ -34,8 +34,8 @@ import { Schedule } from "./schedule.ts";
 import {
   codexTokens, lastPrompt, percent, resumedText, roleToReport, sessionCwd, sessionReport, statusLine, statusTokens, usageFile,
 } from "./report.ts";
-import { appAgentFree, appHerdrPanes, appOpener, appPanes, appTerminals, claudeSessions, terminalSession } from "./herdr/app.ts";
-import { type OpenHerdr, background, choices, inboxChoices, open, paneRecords, plan, rowNotes, workspacesToName } from "./rows.ts";
+import { appBackend, appHerdrPanes, appTerminals, claudeSessions } from "./herdr/app.ts";
+import { background, choices, inboxChoices, open, plan, rowNotes, workspacesToName } from "./rows.ts";
 import { claudeSessionDirs, codexContext, codexSessionDirs, codexSessions, reportedRole } from "./sessions.ts";
 import * as slack from "./slack.ts";
 import { loadState, saveState } from "./statefile.ts";
@@ -144,8 +144,16 @@ const hookEvents = new Map<string, HookEvent>();
 let appTerminalPanes: Herdr["panes"] = [];
 // Whether the Herdr app's terminals have been read yet.
 let appRead = false;
-const inApp = (pane: string) => appTerminalPanes.some((p) => p.pane_id === pane);
-const outbox = new Outbox(join(stateDir, "outbox.json"), (pane, text) => inApp(pane) ? hcSend(pane, text) : paneHerdr.run(pane, text), readyForText);
+const herdrTui = tuiBackend(ask, {
+  asking: (pane) => hookEvents.get(pane)?.event === "PermissionRequest",
+  title: async (workspace, directory) => reportTitle(workspace, directory),
+});
+const herdrApp = appBackend();
+/** Returns the Backend that pane, as last read, is in. */
+const backendOf = (pane: string) => appTerminalPanes.some((p) => p.pane_id === pane) ? herdrApp : herdrTui;
+const outbox = new Outbox(
+  join(stateDir, "outbox.json"), (pane, text) => backendOf(pane).send(pane, text), (pane) => backendOf(pane).ready(pane),
+);
 // The checkouts under ~/repos each project's agents went into, by project.
 const linksPath = join(stateDir, "checkouts.json");
 const links = (loadState(linksPath) as Record<string, string[]> | null) ?? {};
@@ -158,25 +166,6 @@ function agentViews(): Record<string, AgentView> {
   for (const [pane, status] of Object.entries(agentStates(everyPane()) ?? {}))
     views[pane] = { queued: outbox.queued(pane), permission: permission(hookEvents.get(pane), status) };
   return views;
-}
-
-/** Returns the session in pane, "" if unknown, if it runs an idle agent, as
- * Herdr says right now, with no permission request open, or else null.
- * Text sent to anything else could answer a prompt, or run in a shell. */
-async function readyForText(pane: string): Promise<string | null> {
-  if (inApp(pane)) {
-    const now = JSON.parse((await promisify(execFile)("hc", ["get", pane, "--json"], { timeout: 10_000 })).stdout);
-    return appAgentFree(now) ? (terminalSession(now, claudeSessions()) ?? "") : null;
-  }
-  const { pane: now } = await ask("pane.get", { pane_id: pane });
-  const free = Boolean(now.agent) && ["idle", "done"].includes(now.agent_status) && hookEvents.get(pane)?.event !== "PermissionRequest";
-  return free ? (now.agent_session?.value ?? "") : null;
-}
-
-/** Types text into the Herdr app's terminal and presses Enter. */
-async function hcSend(terminal: string, text: string) {
-  // Text starting with "-" would be read as an option.
-  await promisify(execFile)("hc", ["send", terminal, "--", text], { timeout: 10_000 });
 }
 
 /** Returns Herdr's panes with the Herdr app's agents among them, or those
@@ -291,8 +280,7 @@ function refresh() {
 const paneHerdr: PaneHerdr = {
   list: async () => (await ask("pane.list")).panes,
   read: async (id) => (await ask("pane.read", { pane_id: id, source: "recent", lines: 50 })).read.text,
-  // Typing the text and Enter, as herdr pane run does.
-  run: async (id, text) => void (await ask("pane.send_input", { pane_id: id, text, keys: ["Enter"] })),
+  run: herdrTui.send,
 };
 
 // Check the panes five minutes after each check ends, so that two never
@@ -507,7 +495,7 @@ const agentActions: AgentActions = {
   outbox,
   known: (pane) => Object.hasOwn(agentStates(everyPane()) ?? {}, pane),
   session: (pane) => everyPane()?.panes.find((p) => p.pane_id === pane)?.agent_session?.value,
-  focus: (pane) => inApp(pane) ? promisify(execFile)("herdr-app", ["do", "agent.focus", "--terminal", pane]) : ask("pane.focus", { pane_id: pane }),
+  focus: (pane) => backendOf(pane).focus(pane),
   changed: () => {
     deliver();
     refresh();
@@ -613,17 +601,6 @@ function launch(form: URLSearchParams): string {
   if (workspace) reportTitle(workspace, directory);
   return launchScript(directory, command);
 }
-
-const openHerdr: OpenHerdr = {
-  focus: (pane) => ask("agent.focus", { target: pane }),
-  tab: async (workspace, cwd) => (await ask("tab.create", { workspace_id: workspace, cwd, focus: true })).root_pane.pane_id,
-  workspace: async (cwd, label) => {
-    const { workspace, root_pane } = await ask("workspace.create", { cwd, focus: true, ...(label ? { label } : {}) });
-    return { workspace: workspace.workspace_id, pane: root_pane.pane_id };
-  },
-  title: async (workspace, directory) => reportTitle(workspace, directory),
-  run: (pane, command) => paneHerdr.run(pane, command),
-};
 
 const planDeps = {
   background,
@@ -741,9 +718,8 @@ const onHook: HookHandler = async (pane, { agent, event }, data) => {
   return dir ? resumedText(instructions(dir, dotfiles, new Date())) : "";
 };
 
-// Now, not as last polled: going by old panes could resume a session
-// that already runs. The Herdr app's, for a picker that opens rows there.
-const panes = async (app = false) => app ? appPanes() : paneRecords({ workspaces: [], panes: (await ask("pane.list")).panes });
+// The Herdr app, for a picker that opens rows there, else the TUI.
+const pickerBackend = (app: unknown) => app ? herdrApp : herdrTui;
 
 // What herdr-project and the picker ask for on the socket.
 const socket = new Hono();
@@ -763,8 +739,8 @@ socket.get("/sessions", (c) =>
 socket.get("/picker", async (c) => {
   const app = c.req.query("app") !== undefined;
   return c.json(c.req.query("inbox") !== undefined
-    ? inboxChoices(await panes(app), codexSessions(), JSON.parse(last))
-    : choices(await panes(app), projectRoot, codexSessions()));
+    ? inboxChoices(await pickerBackend(app).panes(), codexSessions(), JSON.parse(last))
+    : choices(await pickerBackend(app).panes(), projectRoot, codexSessions()));
 });
 // From an agent that opened or changed a pull request, for the board.
 socket.post("/pulls/check", (c) => {
@@ -774,7 +750,10 @@ socket.post("/pulls/check", (c) => {
 socket.get("/picker/notes", (c) => c.text(rowNotes(c.req.query("kind") ?? "", c.req.query("dir") ?? "", c.req.query("session") ?? "")));
 socket.post("/picker/open", limit(), async (c) => {
   const { row, agent, app } = JSON.parse((await c.req.text()) || "{}");
-  await open(await plan(row, agent, await panes(app), projectRoot, launcher, planDeps), app ? appOpener() : openHerdr);
+  // Panes as they are now, not as last read: going by old ones could
+  // resume a session that already runs.
+  const backend = pickerBackend(app);
+  await open(await plan(row, agent, await backend.panes(), projectRoot, launcher, planDeps), backend.opener());
   return c.body(null, 204);
 });
 
