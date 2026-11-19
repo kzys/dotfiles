@@ -50,12 +50,8 @@ name: <name>
   a YAML list of `~/repos/<org>/<repo>`. Worktrees here are found on
   their own and need no entry. Without it, any `~/repos/<org>/<repo>`
   that `README.md` or the `AGENT-*.md` notes mention counts instead.
-- `closed`: added only when the project is closed, as `closed: <link>`.
-  A link to what carries the outcome and any remaining work, such as a
-  pull request or a ticket, or a few words on the outcome if nothing
-  does.
 
-Write `README.md` if it doesn't exist, without `closed`; otherwise
+Write `README.md` if it doesn't exist; otherwise
 change it only when the task itself changes. If you take this
 directory over for a different task, rewrite `README.md` for it and
 mark each other agent's remaining items as done or moved in your own
@@ -101,9 +97,10 @@ short name for its part, such as `main` or `reviewer`, in this shape:
   when updating the other sections.
 
 Write only to your own file. When resuming another agent's work, keep
-using its file, but only if that agent has stopped: if another agent
-pane in `herdr pane list` is in this directory, it is still working, so
-pick a role of your own. Check the time with `date` when the session
+using its file, but only if that agent has stopped: if another agent's
+pane is in this directory, as `herdr pane list` shows Herdr's and
+`hc ls` the Herdr app's, it is still working, so pick a role of your
+own. Check the time with `date` when the session
 starts, and update your notes about every hour, and before you finish.
 
 ## Checkouts
@@ -170,11 +167,11 @@ directory can be deleted:
    or `~/repos/kzys/LEARNINGS.md` if it is about none, under a heading
    for the system or topic, unless it is already there. Leave out this
    task's history.
-3. Follow the closing rules below, if any, then add `closed` to the
-   front matter of `README.md` and empty your `## Remaining` section.
-4. Offer to delete the directory, after checking that no other agent
-   pane in `herdr pane list` is in it and listing what else it holds,
-   such as scripts, logs and data. Delete it only if the user agrees.
-   Remove its git worktrees first with `git worktree remove`, never with
-   `--force`: if one has uncommitted changes or a branch that isn't
-   pushed, stop and tell the user.
+3. Follow the closing rules below, if any, then empty your
+   `## Remaining` section.
+4. Offer to delete the directory, after checking that no other agent's
+   pane is in it, in `herdr pane list` or `hc ls`, and listing what else
+   it holds, such as scripts, logs and data. Delete it only if the user
+   agrees. Remove its git worktrees first with `git worktree remove`,
+   never with `--force`: if one has uncommitted changes or a branch that
+   isn't pushed, stop and tell the user.
