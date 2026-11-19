@@ -18,7 +18,9 @@ import {
 import { polled } from "./source/polled.ts";
 import { scheduled } from "./source/scheduled.ts";
 import * as board from "./board.ts";
-import * as github from "./github.ts";
+import { requestCopilot } from "./github/api.ts";
+import * as github from "./github/poll.ts";
+import type { PullRequest as Pull } from "./github/pullrequest.ts";
 import { herdrClient, herdrSource } from "./herdr.ts";
 import { type HookEvent, type HookHandler, hookServer, limit, listenOn, speaker } from "./hooks.ts";
 import { highlightDiff, highlightLines } from "./highlight.ts";
@@ -106,7 +108,7 @@ let pullBases: PullBases = {};
 const prOwners: Record<string, Owner | null> = {};
 // The user's pull requests as last found, the names of their projects by
 // directory, and the columns the user moved them to.
-let prPulls: github.Pull[] = [];
+let prPulls: Pull[] = [];
 let prNames: Record<string, string> = {};
 const movesPath = join(stateDir, "moves.json");
 const loadedMoves = loadState(movesPath);
@@ -458,7 +460,7 @@ async function setBaseFrom(body: string | null): Promise<number> {
 async function askCopilotFrom(body: string | null): Promise<number> {
   const { url } = JSON.parse(body ?? "{}");
   if (!prPulls.some((p) => p.url === url && p.state === "OPEN")) return 404;
-  const asked = await board.askCopilot(url, {}, (u) => github.requestCopilot(u));
+  const asked = await board.askCopilot(url, {}, (u) => requestCopilot(u));
   // Merged after the request, which can take a while, so as not to lose
   // what came of another asked meanwhile.
   saveAsks({ ...copilotAsks, ...asked });
