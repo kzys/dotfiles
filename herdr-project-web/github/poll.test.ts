@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { pullRequests } from "./pullrequest.ts";
 import { wakeMessage } from "./changes.ts";
-import { poll, screen, waitingItems } from "./poll.ts";
+import { type Snapshot, look, poll, screen, shown, waitingItems } from "./poll.ts";
 import { fakeHerdr, gitCheckout, prNode, search, tmp } from "./fixtures.ts";
 
 test("lists pull requests waiting on me", () => {
@@ -113,4 +113,38 @@ test("wakes the agent in the checkout over one in the project", async () => {
   assert.deepEqual(rows.map((r) => [r.project, r.agent, r.pane]), [["20261001-a", true, "w2:p1"]]);
   await poll(herdr, join(root, "project"), state, [], async () => responses.shift());
   assert.deepEqual(calls.filter((c) => c[0] === "run").map((c) => c[1]), ["w2:p1"]);
+});
+
+test("finds what to show and tell from what a check read", () => {
+  const prs = pullRequests(search(prNode(1, "me/one", { checks: "FAILURE", failed: ["test"] }), prNode(2, "two")));
+  const pane = { pane_id: "w1:p1", workspace_id: "w1", agent: "claude", agent_status: "idle", cwd: "/p/a/app", tokens: {} };
+  const snapshot: Snapshot = {
+    prs,
+    trees: [{ project: "/p/a", dir: "/p/a/app", branch: "me/one", repo: "org/app" }],
+    texts: [],
+    panes: [pane],
+    checkouts: { [prs[0].url]: pane },
+    seen: { [prs[0].url]: { state: "OPEN", checks: "PENDING", review: null } },
+  };
+  const found = look(snapshot);
+  assert.deepEqual(found.rows.map((r) => [r.label, r.projectDir, r.pane]), [["app#1", "/p/a", "w1:p1"], ["app#2", null, null]]);
+  assert.deepEqual(found.tells, [{
+    title: "app#1 checks failed: test", body: "PR 1 (a)", sound: "request",
+    wake: { pane: "w1:p1", text: wakeMessage(prs[0], "checks failed: test") },
+  }]);
+  assert.deepEqual(Object.keys(found.seen ?? {}), [prs[0].url, prs[1].url]);
+  // Without Herdr's panes, it tells nothing and keeps the state before.
+  const later = look({ ...snapshot, panes: null, checkouts: {} });
+  assert.deepEqual([later.tells, later.seen], [[], null]);
+});
+
+test("shows a failed check with the items before", () => {
+  const at = new Date("2026-11-19T10:00:00Z");
+  const next = new Date("2026-11-19T10:05:00Z");
+  const before = [{ project: null, role: null, mark: "pr", text: "app#1 approved" }];
+  assert.deepEqual(shown(at, next, null, "gh: timeout", before), {
+    title: "Pull requests",
+    section: { title: "Pull requests", at: at.toISOString(), next: next.toISOString(), lines: ["Cannot check pull requests: gh: timeout"] },
+    items: before,
+  });
 });

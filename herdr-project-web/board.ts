@@ -117,6 +117,13 @@ export function stillMoved(moves: Moves, prs: Pull[]): Moves {
 // "requested", or why the request failed.
 export type CopilotAsks = Record<string, string>;
 
+/** Returns asks without those of pull requests not in open, the URLs of
+ * the open ones. */
+export function stillAsked(asks: CopilotAsks, open: string[]): CopilotAsks {
+  const urls = new Set(open);
+  return Object.fromEntries(Object.entries(asks).filter(([url]) => urls.has(url)));
+}
+
 /** Returns whether the user can ask Copilot to review card: once its
  * checks pass and until Copilot's review lets it on, so also while its
  * threads are open, to ask again once they are addressed. */

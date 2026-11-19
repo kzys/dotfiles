@@ -376,29 +376,20 @@ let queuing = false;
  * error, if it did, else found lastPoll: on the page, in the watcher's
  * pane and in what the user did with them. */
 function showPullCheck(at: Date, error: string | null) {
-  const title = "Pull requests";
   const last = error ? null : lastPoll!;
-  // A failed check keeps the items before, and shows no pull requests.
-  const lines = last ? last.lines : [`Cannot check pull requests: ${error}`];
-  const items = last ? last.items : (found.get(title)?.items ?? []);
-  const next = new Date(Date.now() + PR_INTERVAL).toISOString();
-  found.set(title, {
-    title,
-    section: { title, at: at.toISOString(), next, lines, ...(last ? { pullRequests: last.rows } : {}) },
-    items,
-  });
+  const shown = github.shown(at, new Date(Date.now() + PR_INTERVAL), last, error, found.get("Pull requests")?.items ?? []);
+  found.set(shown.title, shown);
   // Forgetting what was done with pull requests that are gone.
   if (last) {
     moves = board.stillMoved(moves, last.pulls);
     save(movesPath, moves);
-    const open = new Set(last.urls);
-    copilotAsks = Object.fromEntries(Object.entries(copilotAsks).filter(([url]) => open.has(url)));
+    copilotAsks = board.stillAsked(copilotAsks, last.urls);
     save(copilotPath, copilotAsks);
   }
   refresh();
   if (tty !== null)
     try {
-      writeSync(tty, `\x1b[H\x1b[2J${github.screen(title, at, lines)}`);
+      writeSync(tty, `\x1b[H\x1b[2J${github.screen(shown.title, at, shown.section!.lines)}`);
     } catch {} // The page still shows them.
   if (queuing) return;
   queuing = true;

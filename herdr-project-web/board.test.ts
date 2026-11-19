@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { askCopilot, canAskCopilot, cards, moveTo, stage, stillMoved } from "./board.ts";
+import { askCopilot, canAskCopilot, cards, moveTo, stage, stillAsked, stillMoved } from "./board.ts";
 import type { PullRequest as Pull } from "./github/pullrequest.ts";
 
 function pull(number: number, over: Partial<Pull> = {}): Pull {
@@ -79,4 +79,8 @@ test("keeps what came of each request to Copilot", async () => {
   asks = await askCopilot(prs[1].url, asks, request);
   assert.deepEqual(asks, { [prs[0].url]: "requested", [prs[1].url]: "could not request Copilot" });
   assert.equal(cards(prs, {}, (d) => d, {}, new Date(), asks)[1].copilotAsk, "could not request Copilot");
+});
+
+test("forgets requests to Copilot for pull requests no longer open", () => {
+  assert.deepEqual(stillAsked({ a: "requested", b: "failed" }, ["b", "c"]), { b: "failed" });
 });
