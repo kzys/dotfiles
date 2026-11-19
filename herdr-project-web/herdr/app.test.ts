@@ -3,8 +3,8 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { appAgentFree, appHerdrPanes, appOpener, appPaneRecords, appPanes, appTerminals, claudeSessions, procParent, psParents, terminalSession } from "./herdr-app.ts";
-import { open } from "./rows.ts";
+import { appAgentFree, appHerdrPanes, appOpener, appPaneRecords, appPanes, appTerminals, claudeSessions, procParent, psParents, terminalSession } from "./app.ts";
+import { open } from "../rows.ts";
 
 const terminal = (o: object) => ({
   address: "t1", state: "live", cwd: "/start", agent: "claude-code",

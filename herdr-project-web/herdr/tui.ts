@@ -5,9 +5,9 @@
 import { execFile } from "node:child_process";
 import { createConnection } from "node:net";
 import { promisify } from "node:util";
-import { HerdrEvents } from "./events.ts";
-import { Schedule } from "./schedule.ts";
-import type { Herdr } from "./state.ts";
+import { HerdrEvents } from "../events.ts";
+import { Schedule } from "../schedule.ts";
+import type { Herdr } from "../state.ts";
 
 // An error Herdr replied with, as opposed to failing to reach it.
 export class HerdrError extends Error {}

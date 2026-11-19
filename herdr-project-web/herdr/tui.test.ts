@@ -4,7 +4,7 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { HerdrError, request } from "./herdr.ts";
+import { HerdrError, request } from "./tui.ts";
 
 test("asks Herdr one request per connection", async (t) => {
   // A stand-in for Herdr's socket that answers each request as told.

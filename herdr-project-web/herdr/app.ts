@@ -7,8 +7,8 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import type { OpenHerdr, PaneRecord } from "./rows.ts";
-import type { Herdr } from "./state.ts";
+import type { OpenHerdr, PaneRecord } from "../rows.ts";
+import type { Herdr } from "../state.ts";
 
 // herdr-core names some agents by their app, not their command.
 const AGENTS: Record<string, string> = { "claude-code": "claude" };

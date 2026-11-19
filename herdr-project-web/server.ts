@@ -18,7 +18,7 @@ import {
 import * as board from "./board.ts";
 import { requestCopilot } from "./github/api.ts";
 import * as github from "./github/poll.ts";
-import { herdrClient, watchHerdr } from "./herdr.ts";
+import { herdrClient, watchHerdr } from "./herdr/tui.ts";
 import { type HookEvent, type HookHandler, hookServer, limit, listenOn, speaker } from "./hooks.ts";
 import { highlightDiff, highlightLines } from "./highlight.ts";
 import { frontMatter } from "./frontmatter.ts";
@@ -34,7 +34,7 @@ import { Schedule } from "./schedule.ts";
 import {
   codexTokens, lastPrompt, percent, resumedText, roleToReport, sessionCwd, sessionReport, statusLine, statusTokens, usageFile,
 } from "./report.ts";
-import { appAgentFree, appHerdrPanes, appOpener, appPanes, appTerminals, claudeSessions, terminalSession } from "./herdr-app.ts";
+import { appAgentFree, appHerdrPanes, appOpener, appPanes, appTerminals, claudeSessions, terminalSession } from "./herdr/app.ts";
 import { type OpenHerdr, background, choices, inboxChoices, open, paneRecords, plan, rowNotes, workspacesToName } from "./rows.ts";
 import { claudeSessionDirs, codexContext, codexSessionDirs, codexSessions, reportedRole } from "./sessions.ts";
 import * as slack from "./slack.ts";
