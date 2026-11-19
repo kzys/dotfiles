@@ -6,8 +6,7 @@ import { execFile } from "node:child_process";
 import { createConnection } from "node:net";
 import { promisify } from "node:util";
 import { HerdrEvents } from "./events.ts";
-import { subscribed } from "./source/subscribed.ts";
-import type { Source } from "./source/source.ts";
+import { Schedule } from "./schedule.ts";
 import type { Herdr } from "./state.ts";
 
 // An error Herdr replied with, as opposed to failing to reach it.
@@ -86,22 +85,27 @@ export function herdrClient(locate: () => Promise<string> = herdrSocket): { ask:
   return { ask: (method, params) => ask(method, params), tryAsk: (method, params) => ask(method, params).catch(() => null) };
 }
 
-/** Returns Herdr's workspaces and panes as a Source, null while Herdr
- * can't be asked through tryAsk, read when its events say something
- * changed, through the socket that locate finds, and every minute,
- * since panes' directories change without events. Every read counts, so
- * that a failed subscription subscribes again. */
-export function herdrSource(tryAsk: Ask, locate: () => Promise<string> = herdrSocket): Source<Herdr | null> {
-  return subscribed(
-    async (): Promise<Herdr | null> => {
-      const [w, p] = await Promise.all([tryAsk("workspace.list"), tryAsk("pane.list")]);
-      return w && p ? { workspaces: w.workspaces, panes: p.panes } : null;
-    },
-    (source) => {
-      const events = new HerdrEvents(locate, () => source.refresh());
-      // Each agent's state is its own subscription.
-      source.onChange((next) => events.update(next));
-    },
-    { resyncEvery: 60_000, equal: () => false },
-  );
+/** Keeps what Herdr shows current, reading its workspaces and panes
+ * through tryAsk when its events, through the socket that locate finds,
+ * say something changed, and every minute, since panes' directories
+ * change without events. Calls onRead with each read and the one before,
+ * each null while Herdr can't be asked, and onError with what onRead
+ * raises. Returns a function returning the last read. */
+export function watchHerdr(
+  tryAsk: Ask,
+  onRead: (next: Herdr | null, before: Herdr | null) => void,
+  options: { locate?: () => Promise<string>; onError?: (error: unknown) => void } = {},
+): () => Herdr | null {
+  let herdr: Herdr | null = null;
+  const reads = new Schedule(async () => {
+    const [w, p] = await Promise.all([tryAsk("workspace.list"), tryAsk("pane.list")]);
+    const before = herdr;
+    herdr = w && p ? { workspaces: w.workspaces, panes: p.panes } : null;
+    // Each agent's state is its own subscription, and a failed one
+    // subscribes again.
+    events.update(herdr);
+    onRead(herdr, before);
+  }, { every: 60_000, onError: options.onError });
+  const events = new HerdrEvents(options.locate ?? herdrSocket, () => reads.refresh());
+  return () => herdr;
 }
