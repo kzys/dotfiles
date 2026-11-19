@@ -589,7 +589,7 @@ export function WorktreeDiffView({ dir, project, query, state }: { dir: string; 
   return (
     <div class="diffs">
       <h2>
-        <a href="/#projects">Projects</a> / {owner && <><a href={projectHref(owner)}>{ownerName}</a> / </>}{base(dir)}
+        <a href="/projects">Projects</a> / {owner && <><a href={projectHref(owner)}>{ownerName}</a> / </>}{base(dir)}
         <span class="layout" role="group" aria-label="Layout">
           {(["unified", "split"] as const).map((l) => (
             <button key={l} class={l === layout ? "here" : ""} aria-pressed={l === layout} onClick={() => setLayout(l)}>

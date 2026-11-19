@@ -268,7 +268,7 @@ export function ProjectView({ dir, state, query, now }: { dir: string; state: St
   return (
     <div class="diffs">
       <h2>
-        <a href="#projects">Projects</a> / {project?.name ?? dir.split("/").pop()}
+        <a href="/projects">Projects</a> / {project?.name ?? dir.split("/").pop()}
         {project && <DirName dir={dir} name={project.name} />}
       </h2>
       {!state ? (

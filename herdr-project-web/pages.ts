@@ -1,10 +1,17 @@
 // The page's views, by its location: its path, as /pulls, or after its #.
 
 // The paths the page is served at besides /, each a view.
-export const PAGE_PATHS = ["/pulls"];
+export const PAGE_PATHS = ["/pulls", "/projects"];
+// Those of them with more views under them, as /projects/<dir>.
+export const NESTED_PATHS = ["/projects"];
+
+/** Returns the path in PAGE_PATHS that pathname is or, if it nests, is
+ * under, or null. */
+const pagePathOf = (pathname: string) =>
+  PAGE_PATHS.find((p) => pathname === p || (NESTED_PATHS.includes(p) && pathname.startsWith(`${p}/`))) ?? null;
 
 /** Reports whether the page is served at pathname. */
-export const isPagePath = (pathname: string) => pathname === "/" || PAGE_PATHS.includes(pathname);
+export const isPagePath = (pathname: string) => pathname === "/" || pagePathOf(pathname) !== null;
 
 /** Returns the location route reads from the page's pathname and hash:
  * the hash without its #, if any, else the path without its first /. */
@@ -16,7 +23,7 @@ export function locationKey(pathname: string, hash: string): string {
  * path, is now, or null if it hasn't moved. */
 export function movedTo(hash: string): string | null {
   const path = `/${hash.replace(/^#/, "")}`;
-  return PAGE_PATHS.includes(path) ? path : null;
+  return path !== "/" && pagePathOf(path) ? path : null;
 }
 
 export type Route =
@@ -67,12 +74,12 @@ export function tab(r: Route): "inbox" | "pulls" | "projects" | "learnings" {
 }
 
 /** Returns the link to the page of the project in dir. */
-export const projectHref = (dir: string) => `#projects/${encodeURIComponent(dir)}`;
+export const projectHref = (dir: string) => `/projects/${encodeURIComponent(dir)}`;
 
 /** Returns the link to the diff of the worktree in dir, a worktree of
  * the project in project. */
 export const diffHref = (project: string, dir: string) =>
-  `#projects/${encodeURIComponent(project)}/diffs/${encodeURIComponent(dir)}`;
+  `/projects/${encodeURIComponent(project)}/diffs/${encodeURIComponent(dir)}`;
 
 /** Returns the link to the page of the file called name in the project
  * in dir. */

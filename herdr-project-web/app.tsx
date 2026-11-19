@@ -33,7 +33,7 @@ function Readout({ text }: { text: string }) {
 const TABS = [
   ["inbox", "/", "Inbox"],
   ["pulls", "/pulls", "Pulls"],
-  ["projects", "/#projects", "Projects"],
+  ["projects", "/projects", "Projects"],
   ["learnings", "/#learnings", "Learnings"],
 ] as const;
 

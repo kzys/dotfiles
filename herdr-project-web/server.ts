@@ -27,7 +27,7 @@ import { readLearnings } from "./learnings.ts";
 import { connectors } from "./headless.ts";
 import * as linear from "./linear.ts";
 import { type Owner, notesTexts, projectName } from "./owners.ts";
-import { PAGE_PATHS } from "./pages.ts";
+import { NESTED_PATHS, PAGE_PATHS } from "./pages.ts";
 import { type PaneHerdr, checkPanes } from "./panes.ts";
 import { type Checked, checkQueue } from "./queues.ts";
 import {
@@ -651,6 +651,8 @@ page.get("/api/file", (c) => {
 // They are small and change rarely, so they are read each time.
 page.get("/api/learnings", (c) => c.json(readLearnings(reposRoot)));
 for (const [path, [type, body]] of Object.entries(assets)) page.get(path, (c) => c.body(body, 200, { "Content-Type": type }));
+// The views under the paths that nest, as /projects/<dir>.
+for (const path of NESTED_PATHS) page.get(`${path}/*`, (c) => c.body(assets["/"][1], 200, { "Content-Type": assets["/"][0] }));
 
 const server = createServer(getRequestListener(page.fetch));
 

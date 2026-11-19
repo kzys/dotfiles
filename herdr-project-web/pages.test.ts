@@ -36,9 +36,15 @@ test("reads views from the path or the hash", () => {
   assert.deepEqual(route(locationKey("/pulls", "#projects")), { view: "projects" });
   assert.deepEqual(route(locationKey("/", "")), { view: "inbox" });
   assert.equal(movedTo("#pulls"), "/pulls");
-  assert.equal(movedTo("#projects"), null);
+  assert.equal(movedTo("#projects"), "/projects");
+  assert.equal(movedTo("#projects/%2Fp%2Fa"), "/projects/%2Fp%2Fa");
+  assert.equal(movedTo("#learnings"), null);
+  assert.equal(movedTo("#pullsx"), null);
+  assert.equal(movedTo("#pulls/x"), null);
   assert.equal(movedTo(""), null);
-  assert.ok(isPagePath("/") && isPagePath("/pulls") && !isPagePath("/api/state"));
+  assert.ok(isPagePath("/") && isPagePath("/pulls") && isPagePath("/projects") && isPagePath("/projects/%2Fp%2Fa"));
+  assert.ok(!isPagePath("/api/state") && !isPagePath("/projectsx") && !isPagePath("/pulls/x"));
+  assert.deepEqual(route(locationKey("/projects/%2Fp%2Fa", "")), { view: "project", dir: "/p/a" });
 });
 
 test("links diffs under their project", () => {
