@@ -4,8 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import {
-  type OpenHerdr, type PaneRecord, type PlanDeps, choices, inboxChoices, notes, open, paneRecords, plan, rowNotes, workspacesToName,
+  type PaneRecord, type PlanDeps, choices, inboxChoices, notes, open, paneRecords, plan, rowNotes, workspacesToName,
 } from "./rows.ts";
+import type { OpenHerdr } from "./herdr/backend.ts";
 import { transcriptDir } from "./sessions.ts";
 import type { State } from "./state.ts";
 
