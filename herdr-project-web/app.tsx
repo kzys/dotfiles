@@ -7,10 +7,9 @@ import { halMessage } from "./hal.ts";
 import { LearningsView } from "./learnings.tsx";
 import { isPagePath, locationKey, movedTo, pageTitle, route, tab } from "./pages.ts";
 import { BoardView } from "./board.tsx";
-import { ProjectList, ProjectView, ProjectsColumn, pressing } from "./projects.tsx";
+import { ProjectList, ProjectView, pressing } from "./projects.tsx";
 import type { State } from "./state.ts";
 import { Links } from "./ui.tsx";
-import { WatcherColumn } from "./watcher.tsx";
 
 // The commit the server runs, set when it bundles the page.
 declare const VERSION: string;
@@ -31,9 +30,8 @@ function Readout({ text }: { text: string }) {
 
 // The tabs of the console strip, each with its link.
 const TABS = [
-  ["inbox", "/", "Inbox"],
+  ["projects", "/", "Projects"],
   ["pulls", "/pulls", "Pulls"],
-  ["projects", "/projects", "Projects"],
   ["learnings", "/#learnings", "Learnings"],
 ] as const;
 
@@ -51,11 +49,11 @@ function ownLink(e: MouseEvent): URL | null {
 
 /** Returns the page's location as locationKey reads it, kept current,
  * following the page's own links without loading it again. A location
- * from a link made before a view moved to a path, however the page got
- * there, is replaced with the path. */
+ * from a link made before a view moved, however the page got there, is
+ * replaced with where it is now, as movedTo says. */
 function useLocation(): string {
   const read = () => {
-    const moved = location.pathname === "/" ? movedTo(location.hash) : null;
+    const moved = movedTo(location.pathname, location.hash);
     if (moved) history.replaceState(null, "", moved);
     return locationKey(location.pathname, location.hash);
   };
@@ -123,8 +121,7 @@ function App() {
   }, []);
 
   const q = query.trim().toLowerCase();
-  const waiting = [...(state?.projects ?? []).flatMap((p) => p.items), ...(state?.unowned ?? [])]
-    .filter(pressing).length;
+  const waiting = (state?.projects ?? []).flatMap((p) => p.items).filter(pressing).length;
 
   useEffect(() => {
     document.title = title;
@@ -178,13 +175,8 @@ function App() {
           <p class="empty">Loading…</p>
         ) : at.view === "pulls" ? (
           <BoardView state={state} query={q} />
-        ) : at.view === "projects" ? (
-          <ProjectList state={state} query={q} />
         ) : (
-          <main>
-            <ProjectsColumn state={state} query={q} waiting={waiting} />
-            <WatcherColumn state={state} query={q} now={now} />
-          </main>
+          <ProjectList state={state} query={q} />
         )}
       </div>
     </Links.Provider>

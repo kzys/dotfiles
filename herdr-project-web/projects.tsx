@@ -1,7 +1,7 @@
 // The page's view of the open projects and what waits on the user in
 // them.
 
-import { useMemo, useState } from "preact/hooks";
+import { useState } from "preact/hooks";
 import { FileSection } from "./files.tsx";
 import { FULL_AT, type Item, uniqueKeys } from "./inbox.ts";
 import { diffHref, fileHref, projectHref } from "./pages.ts";
@@ -294,7 +294,7 @@ export function ProjectView({ dir, state, query, now }: { dir: string; state: St
   return (
     <div class="diffs">
       <h2>
-        <a href="/projects">Projects</a> / {project?.name ?? baseName(dir)}
+        <a href="/">Projects</a> / {project?.name ?? baseName(dir)}
         {project && <DirName dir={dir} name={project.name} />}
       </h2>
       {!state ? (
@@ -314,73 +314,6 @@ export function ProjectView({ dir, state, query, now }: { dir: string; state: St
   );
 }
 
-/** Returns messages left for agents that are gone, to copy elsewhere or
- * drop: nothing will deliver them. */
-function Undelivered({ state }: { state: State }) {
-  const left = (state.undelivered ?? []).flatMap((u) => u.messages.map((m) => ({ pane: u.pane, message: m })));
-  if (!left.length) return null;
-  return (
-    <section class="card">
-      <header>
-        <span class="name">undelivered</span>
-        <span class="title">the agents they were for are gone</span>
-      </header>
-      {left.map(({ pane, message }) => (
-        <div key={message.id} class="agent-queued undelivered">
-          <span class="text">{message.text.split("\n")[0]}</span>
-          <button class="copy" onClick={() => navigator.clipboard.writeText(message.text).catch(() => {})}>
-            copy
-          </button>
-          <button class="copy" onClick={() => send("DELETE", agentUrl(pane, `messages/${message.id}`)).catch(() => {})}>
-            drop
-          </button>
-        </div>
-      ))}
-    </section>
-  );
-}
-
 /** Reports whether item surely waits on the user: tagged [you] or
  * found by the watcher, not guessed or suggested. */
 export const pressing = (item: Item) => !["?", "maybe", "close"].includes(item.mark);
-
-/** Returns the projects in state matching query, with what waits on
- * the user in them and elsewhere, waiting being how many items surely
- * do. */
-export function ProjectsColumn({ state, query, waiting }: { state: State; query: string; waiting: number }) {
-  const projects = useMemo(
-    () =>
-      state.projects.flatMap((p) => {
-        if (matches(query, ...projectTexts(p))) return [p];
-        const items = p.items.filter((i) => matches(query, i.text, i.role));
-        return items.length ? [{ ...p, items }] : [];
-      }),
-    [state, query],
-  );
-  const unowned = state.unowned.filter((i) => matches(query, i.text));
-  return (
-    <div class="column">
-      <h2>
-        Inbox <span class="count">{waiting}</span>
-      </h2>
-      <Undelivered state={state} />
-      {unowned.length > 0 && (
-        <section class="card">
-          <header>
-            <span class="name">elsewhere</span>
-          </header>
-          <ul>
-            {uniqueKeys(unowned.map((i) => `:${i.mark}:${i.text}`)).map((id, n) => (
-              <ItemRow key={id} item={unowned[n]} />
-            ))}
-          </ul>
-        </section>
-      )}
-      {!query && !unowned.length && !projects.some((p) => p.items.length) && <p class="empty">Nothing waiting.</p>}
-      {projects.map((p) => (
-        <ProjectCard key={p.dir} project={p} agents={state.controls ?? {}} />
-      ))}
-      {query && !projects.length && !unowned.length && <p class="empty">No match.</p>}
-    </div>
-  );
-}

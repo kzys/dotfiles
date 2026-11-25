@@ -174,7 +174,6 @@ main {
 .agent-queued .text, .agent-permission code { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .agent-permission code { color: var(--red); font: var(--normal) var(--mono); }
 .agent-error { margin: 0; color: var(--red); }
-.undelivered { padding: var(--space-2) var(--space-5); }
 
 /* A project's worktrees, each linked to its diff. */
 .wt-links {

@@ -19,14 +19,14 @@ test("routes to the page of a project", () => {
 test("routes each view of the page", () => {
   const hashes = ["", "projects", "diffs", `diffs/${encodeURIComponent("/p/x/wt/")}`, "diffs/%E0", "diffs/", "learnings", "pulls", "nope"];
   assert.deepEqual(hashes.map(route), [
-    { view: "inbox" }, { view: "projects" }, { view: "projects" }, { view: "diff", dir: "/p/x/wt/", project: null },
-    { view: "diff", dir: "%E0", project: null }, { view: "diff", dir: "", project: null }, { view: "learnings" }, { view: "pulls" }, { view: "inbox" },
+    { view: "projects" }, { view: "projects" }, { view: "projects" }, { view: "diff", dir: "/p/x/wt/", project: null },
+    { view: "diff", dir: "%E0", project: null }, { view: "diff", dir: "", project: null }, { view: "learnings" }, { view: "pulls" }, { view: "projects" },
   ]);
   assert.deepEqual(hashes.map((h) => pageTitle(route(h))), [
-    "Inbox", "Projects", "Projects", "wt · Diff", "%E0 · Diff", "Worktree · Diff", "Learnings", "Pull requests", "Inbox",
+    "Projects", "Projects", "Projects", "wt · Diff", "%E0 · Diff", "Worktree · Diff", "Learnings", "Pull requests", "Projects",
   ]);
   assert.deepEqual(hashes.map((h) => tab(route(h))), [
-    "inbox", "projects", "projects", "projects", "projects", "projects", "learnings", "pulls", "inbox",
+    "projects", "projects", "projects", "projects", "projects", "projects", "learnings", "pulls", "projects",
   ]);
 });
 
@@ -34,14 +34,21 @@ test("reads views from the path or the hash", () => {
   assert.deepEqual(route(locationKey("/pulls", "")), { view: "pulls" });
   assert.deepEqual(route(locationKey("/", "#projects")), { view: "projects" });
   assert.deepEqual(route(locationKey("/pulls", "#projects")), { view: "projects" });
-  assert.deepEqual(route(locationKey("/", "")), { view: "inbox" });
-  assert.equal(movedTo("#pulls"), "/pulls");
-  assert.equal(movedTo("#projects"), "/projects");
-  assert.equal(movedTo("#projects/%2Fp%2Fa"), "/projects/%2Fp%2Fa");
-  assert.equal(movedTo("#learnings"), null);
-  assert.equal(movedTo("#pullsx"), null);
-  assert.equal(movedTo("#pulls/x"), null);
-  assert.equal(movedTo(""), null);
+  assert.deepEqual(route(locationKey("/", "")), { view: "projects" });
+  assert.equal(movedTo("/", "#pulls"), "/pulls");
+  assert.equal(movedTo("/", "#projects"), "/");
+  assert.equal(movedTo("/", "#projects/%2Fp%2Fa"), "/projects/%2Fp%2Fa");
+  assert.equal(movedTo("/", "#learnings"), null);
+  assert.equal(movedTo("/", "#pullsx"), null);
+  assert.equal(movedTo("/", "#pulls/x"), null);
+  assert.equal(movedTo("/", ""), null);
+  // The projects moved from /projects to /, but not the views under it.
+  assert.equal(movedTo("/projects", ""), "/");
+  assert.equal(movedTo("/projects", "#learnings"), "/#learnings");
+  assert.equal(movedTo("/projects", "#pulls"), "/pulls");
+  assert.equal(movedTo("/projects", "#projects/%2Fp%2Fa"), "/projects/%2Fp%2Fa");
+  assert.equal(movedTo("/projects/%2Fp%2Fa", ""), null);
+  assert.equal(movedTo("/pulls", ""), null);
   assert.ok(isPagePath("/") && isPagePath("/pulls") && isPagePath("/projects") && isPagePath("/projects/%2Fp%2Fa"));
   assert.ok(!isPagePath("/api/state") && !isPagePath("/projectsx") && !isPagePath("/pulls/x"));
   assert.deepEqual(route(locationKey("/projects/%2Fp%2Fa", "")), { view: "project", dir: "/p/a" });

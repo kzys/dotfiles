@@ -2,7 +2,8 @@
 
 import { baseName } from "./paths.ts";
 
-// The paths the page is served at besides /, each a view.
+// The paths the page is served at besides /: /pulls, a view, and
+// /projects, which moved to / but holds the views of each project.
 export const PAGE_PATHS = ["/pulls", "/projects"];
 // Those of them with more views under them, as /projects/<dir>.
 export const NESTED_PATHS = ["/projects"];
@@ -21,15 +22,18 @@ export function locationKey(pathname: string, hash: string): string {
   return hash.replace(/^#/, "") || pathname.slice(1);
 }
 
-/** Returns where the view of hash, from a link made before it moved to a
- * path, is now, or null if it hasn't moved. */
-export function movedTo(hash: string): string | null {
+/** Returns where the view at pathname and hash, from a link made before
+ * it moved, is now, or null if it hasn't moved: the views after a # at /
+ * moved to paths, and the projects from /projects to /. */
+export function movedTo(pathname: string, hash: string): string | null {
+  if (pathname === "/projects") return movedTo("/", hash) ?? `/${hash}`;
+  if (pathname !== "/") return null;
   const path = `/${hash.replace(/^#/, "")}`;
+  if (path === "/projects") return "/";
   return path !== "/" && pagePathOf(path) ? path : null;
 }
 
 export type Route =
-  | { view: "inbox" }
   | { view: "projects" }
   | { view: "project"; dir: string }
   // project is the project it was opened from, if known.
@@ -48,9 +52,8 @@ export function decodeHash(s: string): string {
 }
 
 /** Returns the view at hash, the page's location as locationKey reads it.
- * Any location the page doesn't know shows the inbox. */
+ * Any location the page doesn't know shows the projects. */
 export function route(hash: string): Route {
-  if (hash === "projects") return { view: "projects" };
   if (hash.startsWith("projects/")) {
     // Directories are encoded, so a / only separates.
     const rest = hash.slice("projects/".length);
@@ -58,8 +61,6 @@ export function route(hash: string): Route {
     if (at < 0) return { view: "project", dir: decodeHash(rest) };
     return { view: "diff", dir: decodeHash(rest.slice(at + "/diffs/".length)), project: decodeHash(rest.slice(0, at)) };
   }
-  // The list of every worktree is gone; its links go to the projects.
-  if (hash === "diffs") return { view: "projects" };
   if (hash.startsWith("diffs/")) return { view: "diff", dir: decodeHash(hash.slice("diffs/".length)), project: null };
   if (hash.startsWith("files/")) {
     const [dir = "", name = ""] = hash.slice("files/".length).split("/");
@@ -67,11 +68,11 @@ export function route(hash: string): Route {
   }
   if (hash === "learnings") return { view: "learnings" };
   if (hash === "pulls") return { view: "pulls" };
-  return { view: "inbox" };
+  return { view: "projects" };
 }
 
 /** Returns the tab of the page's console strip that r is under. */
-export function tab(r: Route): "inbox" | "pulls" | "projects" | "learnings" {
+export function tab(r: Route): "pulls" | "projects" | "learnings" {
   return r.view === "diff" || r.view === "file" || r.view === "project" ? "projects" : r.view;
 }
 
@@ -101,8 +102,6 @@ export function pageTitle(r: Route): string {
       return "Learnings";
     case "pulls":
       return "Pull requests";
-    case "inbox":
-      return "Inbox";
     case "projects":
       return "Projects";
   }
