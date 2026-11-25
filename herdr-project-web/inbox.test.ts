@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { projectItems, uniqueKeys, waiting, watchedItems } from "./inbox.ts";
+import { projectItems, uniqueKeys, waiting } from "./inbox.ts";
 
 test("guesses what waits on me", () => {
   assert.deepEqual(
@@ -68,15 +68,6 @@ test("closes roles and then the project", () => {
   // Notes with CRLF line ends read the same.
   const crlf: [string, string][] = notes.map(([r, t]) => [r, t.replaceAll("\n", "\r\n")]);
   assert.deepEqual(projectItems("/p", false, crlf), projectItems("/p", false, notes));
-});
-
-test("skips watched items not in the watcher's form", () => {
-  assert.deepEqual(
-    watchedItems({
-      Panes: [{ project: null, role: null, mark: "idle", text: "idle" }, { mark: "x" }, 3],
-      Slack: "junk",
-    }), [{ project: null, role: null, mark: "idle", text: "idle" }]);
-  assert.deepEqual(watchedItems([]), []);
 });
 
 test("numbers repeated keys", () => {

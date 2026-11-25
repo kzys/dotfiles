@@ -271,7 +271,6 @@ main {
 @keyframes pulse { 50% { opacity: 0.25; box-shadow: none; } }
 .agent-blocked { color: var(--red); font-weight: 600; }
 @media (prefers-reduced-motion: reduce) { .agent-working::before { animation: none; } }
-.pr-failed { color: var(--red); }
 .entry-note { margin: var(--space-2) 0 0; font-size: var(--normal); color: var(--muted); }
 .entry-done .pr-main { opacity: 0.6; }
 

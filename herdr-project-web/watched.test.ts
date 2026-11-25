@@ -24,9 +24,9 @@ test("puts what the checks found together", () => {
 });
 
 test("titles the watch workspace", () => {
-  assert.equal(title({ "Pull requests": [{}, {}], Panes: [], Slack: [{}] }), "Pull requests: 2 · Slack: 1");
-  assert.equal(title({ Panes: [], x: "junk" }), "Nothing waiting");
-  assert.equal(title(null), "Nothing waiting");
+  const item = { project: null, role: null, mark: "pr", text: "x" };
+  assert.equal(title({ "Pull requests": [item, item], Panes: [], Slack: [item] }), "Pull requests: 2 · Slack: 1");
+  assert.equal(title({ Panes: [] }), "Nothing waiting");
 
   const herdr: Herdr = {
     workspaces: [{ workspace_id: "w1", label: "watch" }, { workspace_id: "w2", label: "proj" }],

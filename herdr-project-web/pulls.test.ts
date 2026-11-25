@@ -13,7 +13,7 @@ test("keeps what the watcher found for one project", () => {
   // Projects can share a name, so only the directory tells them apart.
   const pr = (number: number, projectDir: string | null): PullRequest => ({
     url: `u${number}`, repo: "o/r", number, label: `r#${number}`, title: "t", draft: false,
-    checks: null, failed: [], review: null, project: "same", projectDir, agent: false,
+    checks: null, failed: [], runs: [], review: null, project: "same", projectDir, agent: false, pane: null,
   });
   const entry = (label: string, projectDir: string | null): Entry =>
     ({ label, title: "t", url: null, waiting: false, project: "same", projectDir });
@@ -32,7 +32,7 @@ test("keeps what the watcher found for one project", () => {
 test("says where a pull request stands", () => {
   const pr: PullRequest = {
     url: "u", repo: "o/r", number: 1, label: "r#1", title: "t", draft: false,
-    checks: "SUCCESS", failed: [], review: null, project: null, agent: false,
+    checks: "SUCCESS", failed: [], review: null, project: null, projectDir: null, agent: false, pane: null,
     runs: [{ name: "a", state: "passed", url: null }, { name: "b", state: "skipped", url: null }],
   };
   const running = [...pr.runs!, { name: "c", state: "running" as const, url: null }];
@@ -47,14 +47,12 @@ test("says where a pull request stands", () => {
   // A cancelled check fails GitHub's rollup but isn't failing here.
   const cancelled = [...pr.runs!, { name: "c", state: "cancelled" as const, url: null }];
   assert.deepEqual(readiness({ ...pr, runs: cancelled, checks: "FAILURE" }), ["ready for review", "ok"]);
-  // Watchers that don't keep each check still give their rollup.
-  assert.deepEqual(readiness({ ...pr, runs: undefined, checks: "PENDING" }), ["checks running", "wait"]);
 });
 
 test("tells a pull request still worked on from one that is ready", () => {
   const pr: PullRequest = {
     url: "u", repo: "o/r", number: 1, label: "r#1", title: "t", draft: false,
-    checks: "SUCCESS", failed: [], review: null, project: null, agent: true, pane: "w1:p1",
+    checks: "SUCCESS", failed: [], review: null, project: null, projectDir: null, agent: true, pane: "w1:p1",
     runs: [{ name: "a", state: "passed", url: null }],
   };
   assert.equal(agentState(pr, { "w1:p1": "working" }), "working");
@@ -80,7 +78,7 @@ test("tells a pull request still worked on from one that is ready", () => {
   assert.deepEqual(readiness(pr, "idle"), ["ready for review", "ok"]);
   assert.deepEqual(readiness({ ...pr, review: "APPROVED" }, "working"), ["agent working", "wait"]);
   // Failing checks matter more than the agent being at work on them.
-  assert.deepEqual(readiness({ ...pr, checks: "FAILURE", runs: undefined }, "working"),
+  assert.deepEqual(readiness({ ...pr, checks: "FAILURE", runs: [{ name: "a", state: "failed", url: null }] }, "working"),
                    ["checks failing", "bad"]);
   // An agent waiting on the user matters most.
   assert.deepEqual(readiness({ ...pr, draft: true }, "blocked"), ["agent needs you", "bad"]);

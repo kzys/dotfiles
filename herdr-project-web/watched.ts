@@ -23,9 +23,9 @@ export function watchedFrom(found: Found[], urls: string[]): Watched {
 
 /** Returns the title for the watcher's workspace from inbox, the inbox
  * items by source: how many wait on the user from each. */
-export function title(inbox: unknown): string {
-  const counts = Object.entries(inbox && typeof inbox === "object" ? inbox : {})
-    .filter(([, found]) => Array.isArray(found) && found.length)
+export function title(inbox: Record<string, Item[]>): string {
+  const counts = Object.entries(inbox)
+    .filter(([, found]) => found.length)
     .map(([source, found]) => `${source}: ${found.length}`);
   return counts.join(" · ") || "Nothing waiting";
 }

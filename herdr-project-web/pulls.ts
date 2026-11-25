@@ -39,17 +39,16 @@ export function agentCounts(panes: { status: string | null }[]): [AgentState, nu
  * run, its agent works or it is a draft, "ok" when it is ready for
  * review, or "done" ready to merge. agent is what its agent is doing,
  * as agentState returns it.
- * It goes by each check, as the page shows them, or by the rollup from
- * watchers that don't keep them; GitHub's rollup fails on cancelled
- * checks, which the page doesn't count as failing. */
+ * It goes by each check, as the page shows them, not by GitHub's rollup,
+ * which fails on cancelled checks, which the page doesn't count as
+ * failing. */
 export function readiness(pr: PullRequest, agent: AgentState | null = null): [string, string] {
-  const has = (state: Run["state"], ...rollup: string[]) =>
-    pr.runs ? pr.runs.some((r) => r.state === state) : rollup.includes(pr.checks ?? "");
+  const has = (state: Run["state"]) => pr.runs.some((r) => r.state === state);
   if (agent === "blocked") return ["agent needs you", "bad"];
   if (pr.draft) return ["draft", "wait"];
   if (pr.review === "CHANGES_REQUESTED") return ["changes requested", "bad"];
-  if (has("failed", "FAILURE", "ERROR")) return ["checks failing", "bad"];
-  if (has("running", "PENDING", "EXPECTED")) return ["checks running", "wait"];
+  if (has("failed")) return ["checks failing", "bad"];
+  if (has("running")) return ["checks running", "wait"];
   if (agent === "working") return ["agent working", "wait"];
   if (pr.review === "APPROVED") return ["ready to merge", "done"];
   return ["ready for review", "ok"];
@@ -70,6 +69,6 @@ export function runsByState(pr: PullRequest): Record<Run["state"], Run[]> {
   const out: Record<Run["state"], Run[]> = {
     failed: [], running: [], passed: [], skipped: [], cancelled: [],
   };
-  for (const r of pr.runs ?? []) out[r.state]?.push(r);
+  for (const r of pr.runs) out[r.state]?.push(r);
   return out;
 }
