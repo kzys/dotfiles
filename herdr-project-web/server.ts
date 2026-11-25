@@ -3,7 +3,7 @@
 // change.
 
 import { execFile } from "node:child_process";
-import { type FSWatcher, openSync, readFileSync, watch, writeFileSync, writeSync } from "node:fs";
+import { type FSWatcher, openSync, readFileSync, watch, writeSync } from "node:fs";
 import { createServer } from "node:http";
 import { homedir } from "node:os";
 import { dirname, extname, join, relative } from "node:path";
@@ -23,9 +23,8 @@ import { BoardStore } from "./board-store.ts";
 import { type Herdr, isFree } from "./herdr/backend.ts";
 import { HerdrEvents } from "./herdr/events.ts";
 import { herdrClient, herdrSocket, readHerdr, tuiBackend } from "./herdr/tui.ts";
-import { type HookEvent, type HookHandler, hookServer, listenOn, speaker } from "./hooks.ts";
+import { type HookEvent, hookServer, listenOn, speaker } from "./hooks.ts";
 import { jsonBody, limit } from "./http.ts";
-import { agentCommand, instructions, launchDirectory, launchScript, parseAgent, projectDir } from "./launch.ts";
 import { connectors } from "./headless.ts";
 import * as linear from "./linear.ts";
 import { notesTexts } from "./owners.ts";
@@ -34,22 +33,21 @@ import { type PaneHerdr, checkPanes } from "./panes.ts";
 import { type Checked, checkQueue } from "./queues.ts";
 import { Schedule } from "./schedule.ts";
 import { AGAIN, Store, effect } from "./store.ts";
+import { AgentReports } from "./agent-reports.ts";
+import { Namer, reportTitle } from "./naming.ts";
 import { everyPane, pageState } from "./page-state.ts";
-import {
-  codexTokens, lastPrompt, percent, resumedText, roleToReport, sessionCwd, sessionReport, statusLine, statusTokens, usageFile,
-} from "./report.ts";
-import { appBackend, appCommand, appHerdrPanes, appSpaces, claudeSessions, spaceNames } from "./herdr/app.ts";
+import { appBackend, appCommand, appHerdrPanes, appSpaces, claudeSessions } from "./herdr/app.ts";
 import { CoreFeed } from "./herdr/core.ts";
-import { background, workspacesToName } from "./rows.ts";
+import { background } from "./rows.ts";
 import { routeDiff } from "./diff/routes.ts";
 import { routeFiles } from "./project/routes.ts";
 import { routeLearnings } from "./learnings/routes.ts";
 import { routePulls } from "./pulls/routes.ts";
 import { type PickerServer, routePicker } from "./picker/routes.ts";
-import { claudeSessionDirs, codexContext, codexSessionDirs, codexSessions, reportedRole } from "./sessions.ts";
+import { claudeSessionDirs, codexSessionDirs, codexSessions } from "./sessions.ts";
 import * as slack from "./slack.ts";
 import { loadState, saveState } from "./statefile.ts";
-import { type ProjectRead, checkoutOf, linkCheckout, projectDirs, projectLabels, readProjects, readReadme, readmeName } from "./project/project.ts";
+import { type ProjectRead, checkoutOf, linkCheckout, projectDirs, readProjects } from "./project/project.ts";
 import { type Watched, agentStates } from "./state.ts";
 import { type Found, title, watchWorkspace, watchedFrom } from "./watched.ts";
 import { type Wait, readProcesses, runningSubagents, sessionFolder, waitsByPid } from "./waits.ts";
@@ -156,7 +154,7 @@ const boardStore = new BoardStore(stateDir, logError);
 const hookEvents = new Map<string, HookEvent>();
 const herdrTui = tuiBackend(ask, {
   asking: (pane) => hookEvents.get(pane)?.event === "PermissionRequest",
-  title: async (workspace, directory) => reportTitle(workspace, directory),
+  title: async (workspace, directory) => reportTitle(tryAsk, workspace, directory),
 });
 const herdrApp = appBackend();
 /** Returns the Backend that pane, as last read, is in. */
@@ -197,13 +195,6 @@ new CoreFeed({
   subscribed: () => store.set({ appSpacesChanged: store.get().appSpacesChanged + 1 }),
   onError: logError,
 });
-
-// The names the Herdr app's spaces were last given after their projects,
-// by space, so that a name the user gives a space stays until its
-// project's name changes. Null until the first naming, which takes the
-// spaces open then as named already, as for Herdr's workspaces.
-const spaceNamesPath = join(stateDir, "space-names.json");
-let spaceNamesGiven = loadState(spaceNamesPath) as Record<string, string> | null;
 
 // Where Claude Code keeps each session's files, once found.
 const sessionFolders = new Map<string, string>();
@@ -438,29 +429,6 @@ store.set({ projects: readProjects(projectRoot, null, home, links) });
 last = JSON.stringify(pageOf(store.get()));
 server.listen(pageFd ? { fd: pageFd } : { port, host: "127.0.0.1" }, () => console.log(`herdr-project-web on http://127.0.0.1:${port}/`));
 
-/** Reports the title in the front matter of the project in directory to
- * Herdr workspace, for the Spaces panel, if it has one. */
-function reportTitle(workspace: string, directory: string) {
-  const title = projectLabels(directory, readReadme(directory)).title;
-  if (title !== "(no title)") return tryAsk("workspace.report_metadata", { workspace_id: workspace, source: "readme-title", tokens: { title } });
-}
-
-/** Returns the script that starts the agent herdr-project asks for, in
- * form, what it posted, creating its project if it needs one. */
-function launch(form: URLSearchParams): string {
-  const { agent, argv } = parseAgent(form.getAll("arg"));
-  const now = new Date();
-  const [directory, origin] = launchDirectory(form.get("cwd") ?? home, projectRoot, home, argv, now);
-  const pid = Number(form.get("pid"));
-  const command = agentCommand(agent, argv, directory, origin, { dotfiles, stateDir, pid });
-  // Herdr already tracks sessions, so keep them out of the background.
-  if (form.get("herdr") === "1" && agent === "claude") command.env.CLAUDE_CODE_DISABLE_AGENT_VIEW = "1";
-  if (origin) noteCheckout(directory, origin);
-  const workspace = form.get("workspace");
-  if (workspace) reportTitle(workspace, directory);
-  return launchScript(directory, command);
-}
-
 /** Remembers that the project in dir, if any, works in the checkout holding
  * cwd, if any, so that the page links its diff. */
 function noteCheckout(dir: string | null, cwd: string) {
@@ -474,87 +442,8 @@ function noteCheckout(dir: string | null, cwd: string) {
   projectsChanged();
 }
 
-/** Returns the current git branch of directory, or "". */
-const gitBranch = (directory: string) => promisify(execFile)("git", ["-C", directory, "branch", "--show-current"], { timeout: 5000 })
-  .then(({ stdout }) => stdout.trim(), () => "");
-
-const clock = (seconds: number) => new Date(seconds * 1000).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-
-/** Returns the status line for data, the status Claude Code posted, leaving
- * its usage for the picker and reporting it to who's pane for the sidebar
- * afterwards: a slow Herdr mustn't blank the line. */
-function statusReport(data: any, who: { pane: string; own: boolean } | null): string {
-  const pct = percent(data);
-  if (pct === null) return "";
-  noteCheckout(projectDir(data.workspace?.project_dir || data.cwd || "", projectRoot), sessionCwd(data));
-  const usage = usageFile(data, projectRoot);
-  if (usage) {
-    try {
-      writeFileSync(usage[0], `${usage[1]}\n`);
-    } catch {}
-  }
-  if (who) {
-    gitBranch(sessionCwd(data)).then((branch) => {
-      const tokens = statusTokens(data, pct, lastPrompt(data.transcript_path), branch, home, who.own);
-      return tryAsk("pane.report_metadata", { pane_id: who.pane, source: "claude-statusline", tokens });
-    });
-  }
-  return `${statusLine(data, pct, Date.now() / 1000, clock)}\n`;
-}
-
-// The projects whose workspace has been named, so that a name the user
-// gives one afterwards stays. Those open when this first runs count: their
-// workspaces have their names already.
-const namedPath = join(stateDir, "named.json");
-const named = new Set((loadState(namedPath) as string[] | null) ?? projectDirs(projectRoot));
-saveState(namedPath, [...named]);
-
-/** Names agents' workspaces in herdr after their projects, once, as soon
- * as a project has a name, returning whether Herdr renamed each it was
- * asked to. */
-async function nameWorkspaces(herdr: Herdr | null): Promise<boolean> {
-  let all = true;
-  const nameOf = (dir: string) => readmeName(dir) ?? "";
-  for (const { dir, workspace, name } of workspacesToName(herdr, named, (cwd) => projectDir(cwd, projectRoot), nameOf)) {
-    if (!(await tryAsk("workspace.rename", { workspace_id: workspace, label: name }))) {
-      all = false;
-      continue;
-    }
-    named.add(dir);
-    saveState(namedPath, [...named]);
-    await reportTitle(workspace, dir);
-  }
-  return all;
-}
-
-/** Returns the projects in ~/project, each with the name its README.md
- * gives it, or null. */
-const projectNames = () => projectDirs(projectRoot).map((dir) => [dir, readmeName(dir)]);
-
-/** Names each Herdr app space after its project once its README.md names
- * it, and again when that name changes. */
-async function nameAppSpaces() {
-  const nameOf = (folder: string) => {
-    const dir = projectDir(folder, projectRoot);
-    return dir && readmeName(dir);
-  };
-  const spaces = await appSpaces();
-  const first = spaceNamesGiven === null;
-  // Only the spaces there are.
-  const given: Record<string, string> = Object.fromEntries(
-    Object.entries(spaceNamesGiven ?? {}).filter(([id]) => spaces.some((s) => s.id === id)),
-  );
-  for (const { id, name, rename } of spaceNames(spaces, given, nameOf)) {
-    try {
-      if (rename && !first) await appCommand("space.rename", { id, name });
-      given[id] = name;
-    } catch (e) {
-      logError(e);
-    }
-  }
-  if (JSON.stringify(given) !== JSON.stringify(spaceNamesGiven)) saveState(spaceNamesPath, given);
-  spaceNamesGiven = given;
-}
+const namer = new Namer({ stateDir, projectRoot, tryAsk, spaces: () => appSpaces(), command: appCommand, onError: logError });
+const reports = new AgentReports({ home, projectRoot, dotfiles, stateDir, tryAsk, noteCheckout, projectsChanged, onError: logError });
 
 // What follows from the facts, each when what it depends on changes.
 
@@ -601,71 +490,22 @@ if (orgs) {
   // Herdr's workspaces, after their projects' names, and again on the next
   // change of anything while one couldn't be renamed.
   effect(store, (facts) => [
-    (facts.herdr?.panes ?? []).map((p) => [p.workspace_id, p.agent, p.tokens?.cwd || p.cwd]), projectNames(),
+    (facts.herdr?.panes ?? []).map((p) => [p.workspace_id, p.agent, p.tokens?.cwd || p.cwd]), namer.names(),
   ], async ({ herdr }) => {
-    if (!(await nameWorkspaces(herdr))) throw AGAIN;
+    if (!(await namer.workspaces(herdr))) throw AGAIN;
   }, { retry: true, onError: logError });
   // The Herdr app's spaces, after their projects' names.
-  effect(store, (facts) => [facts.appSpacesChanged, projectNames()], () => nameAppSpaces(), { onError: logError });
+  effect(store, (facts) => [facts.appSpacesChanged, namer.names()], () => namer.appSpaces(), { onError: logError });
 }
-
-/** Reports a starting session's role to pane: see roleToReport. A resumed
- * session may run in a new pane, or in one that had another's role. */
-async function reportRole(pane: string, data: any) {
-  const got = await tryAsk("pane.get", { pane_id: pane });
-  // Herdr not answering says nothing about the role the pane has.
-  if (!got) return;
-  const resuming = data.source === "resume";
-  const reported = resuming && typeof data.transcript_path === "string" ? reportedRole(data.transcript_path) : null;
-  const role = roleToReport(got.pane?.tokens?.role || null, resuming, reported);
-  if (role) await tryAsk("pane.report_metadata", { pane_id: pane, source: "agent-notes", tokens: { role } });
-}
-
-/** Reports what the Codex hook in data says to pane, leaving the context
- * usage in the project for the picker. */
-async function codexReport(pane: string, event: string, data: any) {
-  if (!data.session_id || !data.cwd) return;
-  const session = codexSessions().find((s) => s.id === data.session_id);
-  const pct = codexContext(data.transcript_path || session?.rollout_path || "");
-  if (pct !== null) {
-    try {
-      writeFileSync(join(session?.cwd ?? data.cwd, `codex-${data.session_id}.json`), JSON.stringify({ used_percentage: pct }));
-    } catch {}
-  }
-  const tokens = codexTokens(event, data, session, pct, await gitBranch(data.cwd));
-  await tryAsk("pane.report_metadata", { pane_id: pane, source: "codex-hook", tokens });
-}
-
-/** Reports a hook event to Herdr. */
-async function reportHook(pane: string, agent: string, event: string, data: any) {
-  if (event === "SessionStart") await reportRole(pane, data);
-  if (agent === "claude" && event === "SessionStart") {
-    const report = sessionReport(data, pane, Date.now() * 1_000_000);
-    if (report) await tryAsk("pane.report_agent_session", report);
-  }
-  if (agent === "codex") await codexReport(pane, event, data);
-}
-
-/** Acts on a hook event, returning what to add to the agent's context
- * first: the agent is waiting, and gives up on a slow reply. */
-const onHook: HookHandler = async (pane, { agent, event }, data) => {
-  if (pane) reportHook(pane, agent, event, data).catch(logError);
-  // An agent may have committed or gone into a checkout, which the watches
-  // don't see.
-  projectsChanged();
-  if (agent !== "claude" || event !== "SessionStart" || data.source !== "resume" || typeof data.cwd !== "string") return "";
-  const dir = projectDir(data.cwd, projectRoot);
-  return dir ? resumedText(dir, instructions(dotfiles)) : "";
-};
 
 // What herdr-project and the picker ask for on the socket.
 const socket = new Hono();
 socket.onError((e, c) => (e instanceof HTTPException ? e.getResponse() : c.text(e.message, 500)));
 socket.post("/launch", limit((c) => c.text("arguments too long", 413)), async (c) =>
-  c.text(launch(new URLSearchParams(await c.req.text())))
+  c.text(reports.launch(new URLSearchParams(await c.req.text())))
 );
 socket.post("/statusline", limit(), async (c) =>
-  c.text(statusReport(await jsonBody(c), await speaker(c.req.raw.headers)))
+  c.text(reports.statusReport(await jsonBody(c), await speaker(c.req.raw.headers)))
 );
 socket.get("/sessions", (c) =>
   // Codex's, with what opening one needs, or the directories they ran in.
@@ -683,7 +523,7 @@ routePicker(socket, picker, () => true);
 
 // Only the watcher's server: hooks reach one server, like the checks.
 if (orgs) {
-  const hookListener = hookServer(hookEvents, undefined, onHook, socket);
+  const hookListener = hookServer(hookEvents, undefined, reports.onHook, socket);
   if (socketFd) hookListener.listen({ fd: socketFd });
   // Run alone, as with npm start.
   else await listenOn(hookListener, join(stateDir, "run/server.sock"));
