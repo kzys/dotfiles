@@ -60,7 +60,7 @@ export type Entry = {
 
 // What the watcher found: its sections, its inbox items by source, the
 // URLs of the open pull requests it last found, and when, in ISO 8601.
-export type Watched = { sections: Section[]; inbox: Record<string, Item[]>; urls: string[]; at: string };
+export type Watched = { sections: Section[]; inbox: Record<string, Item[]>; urls: string[]; at: string | null };
 
 export type State = {
   // What the page shows of each agent besides what Herdr says, by pane.

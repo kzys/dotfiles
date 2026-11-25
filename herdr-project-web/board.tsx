@@ -1,7 +1,7 @@
 // The page's board of the user's pull requests.
 
 import { useState } from "preact/hooks";
-import { type Card, MINE, MINE_MAX, STAGES, type Stage, canAskCopilot, moveTo } from "./board.ts";
+import { type Card, MINE, MINE_MAX, STAGES, type Stage, canAskCopilot, moveTo, recent } from "./board.ts";
 import { projectHref } from "./pages.ts";
 import type { State } from "./state.ts";
 import { matches } from "./ui.tsx";
@@ -121,12 +121,12 @@ function BoardCard({ card }: { card: Card }) {
 }
 
 /** Returns the board of the user's pull requests in state matching
- * query, a column for each stage. */
-export function BoardView({ state, query }: { state: State; query: string }) {
+ * query, as of now, a column for each stage. */
+export function BoardView({ state, query, now }: { state: State; query: string; now: number }) {
   if (!state.board) {
     return <p class="empty">The board needs the watcher. Run <code>herdr-project --watch</code>.</p>;
   }
-  const cards = state.board.filter((c) => matches(query, c.title, c.label, c.project));
+  const cards = state.board.filter((c) => recent(c, now) && matches(query, c.title, c.label, c.project));
   return (
     <main class="board">
       {STAGES.map(([stage, title]) => {

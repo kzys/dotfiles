@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { askCopilot, canAskCopilot, cards, isOpen, moveTo, stage, stillAsked, stillMoved, withMove } from "./board.ts";
+import { askCopilot, canAskCopilot, cards, isOpen, moveTo, recent, stage, stillAsked, stillMoved, withMove } from "./board.ts";
 import type { PullRequest as Pull } from "./github/pullrequest.ts";
 
 function pull(number: number, over: Partial<Pull> = {}): Pull {
@@ -42,7 +42,7 @@ test("shows open pull requests and those merged within a day", () => {
     pull(4, { state: "CLOSED" }),
   ];
   const owners = { [prs[0].url]: { project: "/p/20261101-a", dir: null, role: null } };
-  const shown = cards(prs, owners, (d) => `name of ${d}`, { [prs[0].url]: "reviewed" }, now);
+  const shown = cards(prs, owners, (d) => `name of ${d}`, { [prs[0].url]: "reviewed" }).filter((c) => recent(c, now.getTime()));
   assert.deepEqual(shown.map((c) => [c.label, c.stage, c.moved, c.found, c.project, c.projectDir]), [
     ["app#1", "reviewed", "reviewed", "copilot", "name of /p/20261101-a", "/p/20261101-a"],
     ["app#2", "merged", null, "merged", null, null],
@@ -66,7 +66,7 @@ test("lets the user ask Copilot once checks pass and until its review lets a car
     pull(5, { state: "MERGED" }),
     pull(6),
   ];
-  const all = cards(prs, {}, (d) => d, { [prs[5].url]: "copilot" }, new Date(), {});
+  const all = cards(prs, {}, (d) => d, { [prs[5].url]: "copilot" }, {});
   assert.deepEqual(all.filter(canAskCopilot).map((c) => c.label), ["app#2"]);
 });
 
@@ -78,7 +78,7 @@ test("keeps what came of each request to Copilot", async () => {
   let asks = await askCopilot(prs[0].url, {}, request);
   asks = await askCopilot(prs[1].url, asks, request);
   assert.deepEqual(asks, { [prs[0].url]: "requested", [prs[1].url]: "could not request Copilot" });
-  assert.equal(cards(prs, {}, (d) => d, {}, new Date(), asks)[1].copilotAsk, "could not request Copilot");
+  assert.equal(cards(prs, {}, (d) => d, {}, asks)[1].copilotAsk, "could not request Copilot");
 });
 
 test("forgets requests to Copilot for pull requests no longer open", () => {

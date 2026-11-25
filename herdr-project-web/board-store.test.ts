@@ -23,12 +23,11 @@ test("keeps the user's moves and requests to Copilot across restarts, until thei
   assert.notEqual(store.state().moves, before.moves);
   assert.equal(await store.askCopilot(two, async () => {}), true);
   assert.equal(await store.askCopilot(one, async () => { throw new Error("no\nmore"); }), false);
-  const now = new Date();
-  assert.deepEqual(boardCards(check, new BoardStore(dir).state(), now).map((c) => [c.stage, c.moved, c.copilotAsk]),
+  assert.deepEqual(boardCards(check, new BoardStore(dir).state()).map((c) => [c.stage, c.moved, c.copilotAsk]),
                    [["reviewed", "reviewed", "no"], ["draft", null, "requested"]]);
   // The second merged, and the first went out of sight.
   store.forget({ ...check, pulls: [pulls[0], { ...pulls[1], state: "MERGED" }], urls: [one] } as PullCheck);
   assert.deepEqual(JSON.parse(readFileSync(join(dir, "copilot.json"), "utf8")), { [one]: "no" });
   assert.deepEqual(JSON.parse(readFileSync(join(dir, "moves.json"), "utf8")), { [one]: "reviewed" });
-  assert.deepEqual(boardCards(null, store.state(), now), []);
+  assert.deepEqual(boardCards(null, store.state()), []);
 });

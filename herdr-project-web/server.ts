@@ -169,7 +169,7 @@ const pageOf = (facts: FactValues) => pageState({
   ...facts,
   watched: watched(facts),
   acting: orgs
-    ? { queued: facts.queued, hooks: facts.hooks, board: boardCards(facts.pulls, facts.board, new Date()), asks: facts.asks }
+    ? { queued: facts.queued, hooks: facts.hooks, board: boardCards(facts.pulls, facts.board), asks: facts.asks }
     : null,
 });
 

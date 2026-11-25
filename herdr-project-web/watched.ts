@@ -10,14 +10,15 @@ import type { Section, Watched } from "./state.ts";
 export type Found = { title: string; section: Section | null; items: Item[] };
 
 /** Returns what the checks found, found, in that order, with urls, those
- * of the open pull requests. It is when the first section was checked. */
+ * of the open pull requests. It is when the first section was checked, or
+ * null if there is none, which the page shows as stale. */
 export function watchedFrom(found: Found[], urls: string[]): Watched {
   const sections = found.flatMap((f) => (f.section ? [f.section] : []));
   return {
     sections,
     inbox: Object.fromEntries(found.map((f) => [f.title, f.items])),
     urls,
-    at: sections[0]?.at ?? new Date().toISOString(),
+    at: sections[0]?.at ?? null,
   };
 }
 

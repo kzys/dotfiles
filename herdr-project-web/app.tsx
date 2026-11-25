@@ -170,7 +170,7 @@ function App() {
         ) : !state ? (
           <p class="empty">Loading…</p>
         ) : at.view === "pulls" ? (
-          <BoardView state={state} query={q} />
+          <BoardView state={state} query={q} now={now} />
         ) : at.view === "projects" ? (
           <ProjectList state={state} query={q} />
         ) : (

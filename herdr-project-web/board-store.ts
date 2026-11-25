@@ -16,11 +16,10 @@ function loadRecord<T extends object>(path: string): T {
 /** What the user did with their pull requests on the board. */
 export type BoardState = { moves: board.Moves; asks: board.CopilotAsks };
 
-/** Returns the board's cards at now from what check found, if any, and
- * state. */
-export function boardCards(check: PullCheck | null, state: BoardState, now: Date): board.Card[] {
+/** Returns the board's cards from what check found, if any, and state. */
+export function boardCards(check: PullCheck | null, state: BoardState): board.Card[] {
   if (!check) return [];
-  return board.cards(check.pulls, check.owners, (d) => check.names[d] ?? d, state.moves, now, state.asks);
+  return board.cards(check.pulls, check.owners, (d) => check.names[d] ?? d, state.moves, state.asks);
 }
 
 /** The board's state, kept in stateDir. A save that fails goes to

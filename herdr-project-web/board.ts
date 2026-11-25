@@ -53,6 +53,8 @@ export type Card = {
   // The name and directory of its project, or null.
   project: string | null;
   projectDir: string | null;
+  // When it merged, in ISO 8601, or null if it hasn't.
+  mergedAt: string | null;
 };
 
 /** Returns the column of pr: the furthest it has come, whether or not
@@ -76,16 +78,14 @@ export function moveTo(from: Stage, step: 1 | -1): Stage | null | undefined {
   return to && MOVABLE.includes(to) ? to : null;
 }
 
-/** Returns the cards of prs for the board at now: the open ones and those
- * merged within MERGED_MS, with their projects from owners (by url),
+/** Returns the cards of prs for the board: the open ones and the merged
+ * ones, with their projects from owners (by url),
  * named by name, in the columns the user moved them to in moves, with
  * what came of asking Copilot from asks. */
 export function cards(
-  prs: Pull[], owners: Record<string, Owner | null>, name: (dir: string) => string, moves: Moves, now: Date,
-  asks: CopilotAsks = {},
+  prs: Pull[], owners: Record<string, Owner | null>, name: (dir: string) => string, moves: Moves, asks: CopilotAsks = {},
 ): Card[] {
-  const shown = (pr: Pull) =>
-    pr.state === "OPEN" || (pr.state === "MERGED" && !!pr.mergedAt && now.getTime() - Date.parse(pr.mergedAt) < MERGED_MS);
+  const shown = (pr: Pull) => pr.state === "OPEN" || (pr.state === "MERGED" && !!pr.mergedAt);
   return prs.filter(shown).map((pr) => {
     const dir = owners[pr.url]?.project ?? null;
     return {
@@ -101,8 +101,15 @@ export function cards(
       copilotAsk: asks[pr.url] ?? null,
       project: dir ? name(dir) : null,
       projectDir: dir,
+      mergedAt: pr.state === "MERGED" ? pr.mergedAt : null,
     };
   });
+}
+
+/** Reports whether the board shows card at now, in milliseconds since the
+ * epoch: while it is open, and for MERGED_MS after it merged. */
+export function recent(card: Card, now: number): boolean {
+  return card.mergedAt === null || now - Date.parse(card.mergedAt) < MERGED_MS;
 }
 
 /** Returns moves without those of pull requests prs has as closed or
