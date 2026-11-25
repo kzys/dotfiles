@@ -74,8 +74,9 @@ to load them.
 `config/herdr-app` holds the Herdr app's `mine` layout, a copy of `main`
 with a toolbar at the top of the sidebar: Start sends what you type to the
 router, `herdr-router`, which gives it to an open project or starts a new
-one (see `ROUTER.md`); Projects and Inbox open `herdr-project-picker --app`,
-which opens rows in the app instead of Herdr.
+one (see `ROUTER.md`); Projects and Inbox open the `project-picker` mod,
+the picker drawn by the app, which reads rows from the server on
+127.0.0.1:9000 and opens them in the app instead of Herdr.
 
 The app doesn't notice edits made through those links, so after editing a
 mod here, switch layouts away and back (Ctrl+Shift+L) to reload it.

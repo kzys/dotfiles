@@ -47,6 +47,10 @@ test("lists running projects first, then open ones, newest first, with their ses
   assert.match(rows[1][3], /^20260102-b {2}Busy$/);
   assert.equal(rows[2][2], "claude:s1");
   assert.match(rows[2][3], /^ {2}● claude +\d\d-\d\d \d\d:\d\d +12% {2}Work$/);
+  const [mark, agent, at, used, heading] = rows[2][4] ?? [];
+  assert.deepEqual([mark, agent, used, heading], ["●", "claude", "12%", "Work"]);
+  assert.match(at, /^\d\d-\d\d \d\d:\d\d$/);
+  assert.deepEqual(rows[1][4], ["20260102-b", "Busy"]);
   assert.match(rows[3][3], /codex .*Codex work$/);
   assert.match(rows[4][3], /Old$/);
   assert.equal(rows[5][1], closed);
@@ -84,7 +88,8 @@ test("lists what waits on the user with the session it belongs to", () => {
   assert.equal(rows.length, 4);
   assert.equal(rows[1][2], "claude:s1");
   assert.match(rows[1][3], /^ {4}claude +you +decide$/);
-  assert.deepEqual(rows[3], ["new", "", "", "+ pr     fix"]);
+  assert.deepEqual(rows[1][4], ["", "claude", "you", "decide"]);
+  assert.deepEqual(rows[3], ["new", "", "", "+ pr     fix", ["+", "pr", "fix"]]);
 });
 
 test("shows a session's role's notes, or all of them", () => {

@@ -494,6 +494,9 @@ page.get("/api/file", (c) => {
 });
 // They are small and change rarely, so they are read each time.
 page.get("/api/learnings", (c) => c.json(readLearnings(reposRoot)));
+// Also on the page's port, for the Herdr app's picker, which can't reach
+// the socket. Only requests from the page's origin may open a row.
+routePicker(page, (headers) => fromPage(headers, hosts));
 for (const [path, [type, body]] of Object.entries(assets)) page.get(path, (c) => c.body(body, 200, { "Content-Type": type }));
 // The views under the paths that nest, as /projects/<dir>.
 for (const path of NESTED_PATHS) page.get(`${path}/*`, (c) => c.body(assets["/"][1], 200, { "Content-Type": assets["/"][0] }));
@@ -680,25 +683,32 @@ socket.get("/sessions", (c) =>
     ? c.json(codexSessions())
     : c.json(c.req.query("agent") === "codex" ? codexSessionDirs(codexSessions()) : claudeSessionDirs())
 );
-socket.get("/picker", async (c) => {
-  const app = c.req.query("app") !== undefined;
-  return c.json(c.req.query("inbox") !== undefined
-    ? inboxChoices(await pickerPanes(app), codexSessions(), JSON.parse(last))
-    : choices(await pickerPanes(app), projectRoot, codexSessions()));
-});
 // From an agent that opened or changed a pull request, for the board.
 socket.post("/pulls/check", (c) => {
   checkPullRequestsSoon();
   return c.body(null, 202);
 });
-socket.get("/picker/notes", (c) => c.text(rowNotes(c.req.query("kind") ?? "", c.req.query("dir") ?? "", c.req.query("session") ?? "")));
-socket.post("/picker/open", limit(), async (c) => {
-  const { row, agent, app } = JSON.parse((await c.req.text()) || "{}");
-  // Panes as they are now, not as last read: going by old ones could
-  // resume a session that already runs.
-  await open(await plan(row, agent, await pickerPanes(app), projectRoot, launcher, planDeps), pickerBackend(app).opener());
-  return c.body(null, 204);
-});
+
+/** Adds the picker's routes to routes: its rows, a row's notes and opening
+ * a row, which only requests that allowed lets through may do. */
+function routePicker(routes: Hono, allowed: (headers: Headers) => boolean) {
+  routes.get("/picker", async (c) => {
+    const app = c.req.query("app") !== undefined;
+    return c.json(c.req.query("inbox") !== undefined
+      ? inboxChoices(await pickerPanes(app), codexSessions(), JSON.parse(last))
+      : choices(await pickerPanes(app), projectRoot, codexSessions()));
+  });
+  routes.get("/picker/notes", (c) => c.text(rowNotes(c.req.query("kind") ?? "", c.req.query("dir") ?? "", c.req.query("session") ?? "")));
+  routes.post("/picker/open", limit(), async (c) => {
+    if (!allowed(c.req.raw.headers)) return c.body(null, 403);
+    const { row, agent, app } = JSON.parse((await c.req.text()) || "{}");
+    // Panes as they are now, not as last read: going by old ones could
+    // resume a session that already runs.
+    await open(await plan(row, agent, await pickerPanes(app), projectRoot, launcher, planDeps), pickerBackend(app).opener());
+    return c.body(null, 204);
+  });
+}
+routePicker(socket, () => true);
 
 // Only the watcher's server: hooks reach one server, like the checks.
 if (orgs) {
