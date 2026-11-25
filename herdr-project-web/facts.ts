@@ -2,10 +2,10 @@
 // what the server does derive: a signal for each fact, and the ways its
 // sources change them.
 
-import { type Signal, computed, createModel, signal } from "@preact/signals-core";
+import { type ReadonlySignal, type Signal, computed, createModel, signal } from "@preact/signals-core";
 import { type Queued, forgetAnswered } from "./agents.ts";
 import type { Ask } from "./ask/ask.ts";
-import type { BoardState } from "./board-store.ts";
+import type { BoardState } from "./pulls/board-store.ts";
 import type { PullCheck } from "./github/poll.ts";
 import type { Herdr } from "./herdr/backend.ts";
 import type { HookEvent } from "./hooks.ts";
@@ -57,8 +57,9 @@ function put<T>(s: Signal<T>, value: T) {
 }
 
 /** The facts, each a signal, changed only through its methods, each of
- * which changes them together. */
-export const Facts = createModel(() => {
+ * which changes them together, with board, the board's state, which the
+ * board changes. */
+export const Facts = createModel((board: ReadonlySignal<BoardState>) => {
   const herdr = signal<Herdr | null>(null);
   const herdrReads = signal(0);
   const appPanes = signal<Herdr["panes"]>([]);
@@ -71,7 +72,6 @@ export const Facts = createModel(() => {
   const pulls = signal<PullCheck | null>(null);
   const hooks = signal<ReadonlyMap<string, HookEvent>>(new Map());
   const queued = signal<Record<string, Queued[]>>({});
-  const board = signal<BoardState>({ moves: {}, asks: {} });
   const asks = signal<Ask[]>([]);
   return {
     herdr, herdrReads, appPanes, appRead, appSpacesChanged, found, projectsChanged, projects, names, pulls, hooks, queued, board, asks,
@@ -128,10 +128,6 @@ export const Facts = createModel(() => {
     /** Sets what the outbox holds. */
     setQueued(next: Record<string, Queued[]>) {
       queued.value = next;
-    },
-    /** Sets the board's state. */
-    setBoard(next: BoardState) {
-      board.value = next;
     },
     /** Sets the questions asked. */
     setAsks(next: Ask[]) {

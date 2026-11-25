@@ -21,6 +21,7 @@ test("puts what the checks found together", () => {
       at: prs.at,
     },
   );
+  assert.equal(watchedFrom([{ title: "Slack", section: null, items: [] }], []).at, null);
 });
 
 test("titles the watch workspace", () => {
