@@ -42,14 +42,14 @@ import { appBackend, appCommand, appHerdrPanes, appSpaces, claudeSessions, space
 import { CoreFeed } from "./herdr/core.ts";
 import { background, workspacesToName } from "./rows.ts";
 import { routeDiff } from "./diff/routes.ts";
+import { routeFiles } from "./files/routes.ts";
 import { routePulls } from "./pulls/routes.ts";
 import { type PickerServer, routePicker } from "./picker/routes.ts";
 import { claudeSessionDirs, codexContext, codexSessionDirs, codexSessions, reportedRole } from "./sessions.ts";
 import * as slack from "./slack.ts";
 import { loadState, saveState } from "./statefile.ts";
 import {
-  type ProjectRead, type Watched, agentStates, checkoutOf, linkCheckout, openProjects, projectDirs, projectLabels, readProjectFile,
-  readProjects,
+  type ProjectRead, type Watched, agentStates, checkoutOf, linkCheckout, projectDirs, projectLabels, readProjects,
 } from "./state.ts";
 import { type Found, title, watchWorkspace, watchedFrom } from "./watched.ts";
 import { type Wait, readProcesses, runningSubagents, sessionFolder, waitsByPid } from "./waits.ts";
@@ -413,14 +413,8 @@ page.get("/api/events", (c) => streamSSE(c, async (stream) => {
   await closed;
   clients.delete(stream);
 }));
-page.get("/api/file", (c) => {
-  // Only the files of the projects the page lists, not any file asked for.
-  const dir = c.req.query("dir");
-  const file = openProjects(projectRoot, store.get().herdr).some(([d]) => d === dir)
-    ? readProjectFile(dir!, c.req.query("name") ?? "")
-    : null;
-  return file === null ? c.json({ error: "no such file" }, 404) : c.json(file);
-});
+// The files of the projects the page lists.
+routeFiles(page, { projectRoot, herdr: () => store.get().herdr });
 // They are small and change rarely, so they are read each time.
 page.get("/api/learnings", (c) => c.json(readLearnings(reposRoot)));
 // The page's diffs. Only requests from the page's origin may set a base.
