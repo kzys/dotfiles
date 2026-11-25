@@ -5,6 +5,7 @@ import { useMemo, useState } from "preact/hooks";
 import { FileSection } from "./files.tsx";
 import { FULL_AT, type Item, uniqueKeys } from "./inbox.ts";
 import { diffHref, fileHref, projectHref } from "./pages.ts";
+import { baseName } from "./paths.ts";
 import { agentCounts, projectSections, statusState } from "./pulls.ts";
 import type { AgentView } from "./agents.ts";
 import type { Pane, ProjectView } from "./project/project.ts";
@@ -115,7 +116,7 @@ function FileLinks({ project }: { project: ProjectView }) {
     <nav class="wt-links" aria-label="Files">
       {project.worktrees.map((w) => (
         <a key={w.dir} href={diffHref(project.dir, w.dir)}>
-          <span class="wt-link-name">{w.dir.split("/").pop()}/</span>
+          <span class="wt-link-name">{baseName(w.dir)}/</span>
           <span class="wt-subject">{w.subject}</span>
         </a>
       ))}
@@ -171,20 +172,17 @@ function ProjectCard({ project, agents }: { project: ProjectView; agents: Record
   );
 }
 
-/** Returns the name of dir, a project's directory. */
-const dirName = (dir: string) => dir.split("/").filter(Boolean).pop() ?? dir;
-
 /** Returns the name of dir, the project's directory, where it isn't name,
  * the project's own name. */
 function DirName({ dir, name }: { dir: string; name: string }) {
-  const base = dirName(dir);
+  const base = baseName(dir);
   return base === name ? null : <span class="dir-name">{base}</span>;
 }
 
 /** Returns what the filter looks for in project p itself. */
 function projectTexts(p: ProjectView): (string | null)[] {
-  const wts = p.worktrees.flatMap((w) => [w.dir.split("/").pop()!, w.subject]);
-  return [p.name, dirName(p.dir), p.title, ...p.workspaces, ...wts, ...p.files.map((f) => f.name), ...p.panes.map((a) => a.title ?? null)];
+  const wts = p.worktrees.flatMap((w) => [baseName(w.dir), w.subject]);
+  return [p.name, baseName(p.dir), p.title, ...p.workspaces, ...wts, ...p.files.map((f) => f.name), ...p.panes.map((a) => a.title ?? null)];
 }
 
 /** Returns the agents among panes that wait on what their Bash tool or
@@ -296,7 +294,7 @@ export function ProjectView({ dir, state, query, now }: { dir: string; state: St
   return (
     <div class="diffs">
       <h2>
-        <a href="/projects">Projects</a> / {project?.name ?? dir.split("/").pop()}
+        <a href="/projects">Projects</a> / {project?.name ?? baseName(dir)}
         {project && <DirName dir={dir} name={project.name} />}
       </h2>
       {!state ? (
