@@ -15,8 +15,26 @@ const STATUS: Record<AskStatus, [string, string]> = {
 
 const clock = (at: number) => new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-/** Returns a question and each agent's reply, or where its question
- * stands. */
+/** Returns one answer from ask's replies, or that one is being made. */
+function Summary({ ask, replied }: { ask: AskView; replied: number }) {
+  const { summary } = ask;
+  if (!replied) return null;
+  if (!summary) return <p class="ask-summary empty">Putting the replies together…</p>;
+  return (
+    <div class="ask-summary">
+      <p class="ask-reply">
+        <Linked text={summary.text} />
+      </p>
+      <span class="empty">
+        From {summary.replies} {summary.replies === 1 ? "reply" : "replies"} · {clock(summary.at)}
+        {ask.stale && " · adding the newer ones…"}
+      </span>
+    </div>
+  );
+}
+
+/** Returns a question, one answer from the replies, and each agent's
+ * reply, or where its question stands. */
 function AskCard({ ask }: { ask: AskView }) {
   const replied = ask.agents.filter((a) => a.reply).length;
   return (
@@ -27,6 +45,7 @@ function AskCard({ ask }: { ask: AskView }) {
           {replied}/{ask.agents.length} replied · <time dateTime={new Date(ask.at).toISOString()}>{clock(ask.at)}</time>
         </span>
       </header>
+      <Summary ask={ask} replied={replied} />
       <ul class="wts">
         {ask.agents.map((a, i) => (
           <li key={i} class="wt">

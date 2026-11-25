@@ -25,7 +25,7 @@ import { HerdrEvents } from "./herdr/events.ts";
 import { herdrClient, herdrSocket, readHerdr, tuiBackend } from "./herdr/tui.ts";
 import { type HookEvent, hookServer, listenOn, speaker } from "./hooks.ts";
 import { jsonBody, limit } from "./http.ts";
-import { connectors } from "./headless.ts";
+import { ask as headlessAsk, connectors } from "./headless.ts";
 import * as linear from "./linear.ts";
 import { notesTexts } from "./owners.ts";
 import { NESTED_PATHS, PAGE_PATHS } from "./pages.ts";
@@ -34,7 +34,7 @@ import { type Checked, checkQueue } from "./queues.ts";
 import { Schedule } from "./schedule.ts";
 import { AGAIN, Store, effect } from "./store.ts";
 import { AgentReports } from "./agent-reports.ts";
-import { Asks, askees } from "./ask/ask.ts";
+import { Asks, askees, summarizeAll } from "./ask/ask.ts";
 import { type AsksServer, routeAsks, routeReplies } from "./ask/routes.ts";
 import { Namer, reportTitle } from "./naming.ts";
 import { everyPane, pageState } from "./page-state.ts";
@@ -151,6 +151,13 @@ const ORDER = ["Pull requests", "Panes", "Slack", "Linear"];
 const boardStore = new BoardStore(stateDir, logError);
 // The questions asked of every agent from the page, and their replies.
 const asks = new Asks(join(stateDir, "asks.json"));
+// One answer to each question from its replies, made by a headless Claude
+// soon after replies come in, so that those close together go in one.
+const SUMMARY_SCHEMA = { type: "object", required: ["answer"], properties: { answer: { type: "string" } } };
+const summaries = new Schedule(
+  () => summarizeAll(asks, (prompt) => headlessAsk(stateDir, prompt, SUMMARY_SCHEMA, [], "answer"), () => store.tell()),
+  { every: 3_600_000, start: !!orgs, onError: logError },
+);
 // Each pane's last hook event.
 const hookEvents = new Map<string, HookEvent>();
 const herdrTui = tuiBackend(ask, {
@@ -372,7 +379,10 @@ const asksServer: AsksServer = {
   asks,
   askees: () => askees(everyPane(store.get()), (JSON.parse(last) as State).projects),
   queue: (pane, text, session) => outbox.add(pane, text, session),
-  changed: () => store.tell(),
+  changed: () => {
+    store.tell();
+    summaries.refresh(10_000);
+  },
 };
 routeAsks(page, asksServer, (headers) => !!orgs && fromPage(headers, hosts));
 page.get("/api/state", (c) => c.body(last, 200, { "Content-Type": "application/json" }));

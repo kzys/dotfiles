@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Asks, askMessage, askViews, askees } from "./ask.ts";
+import { Asks, askMessage, askViews, askees, summarizeAll } from "./ask.ts";
 
 const path = () => join(mkdtempSync(join(tmpdir(), "asks-")), "asks.json");
 
@@ -64,4 +64,38 @@ test("names each agent after its project and role", () => {
     { pane: "w1:p2", label: "r · w1:p2" },
   ]);
   assert.deepEqual(askees(null, []), []);
+});
+
+test("makes one answer from the replies, again when more come", async () => {
+  const asks = new Asks(path(), () => `t${Math.random()}`);
+  let n = 0;
+  asks.ask("Waiting on?", [{ pane: "w1:p1", label: "a · main" }, { pane: "w1:p2", label: "b · main" }], () => `m${++n}`, 1);
+  const [first, second] = asks.all()[0].agents;
+  const prompts: string[] = [];
+  let made = 0;
+  const answer = async (prompt: string) => (prompts.push(prompt), `answer ${prompts.length}`);
+  // Nothing to make an answer from yet.
+  await summarizeAll(asks, answer, () => made++);
+  assert.deepEqual([prompts, made], [[], 0]);
+
+  asks.reply(first.token, "CI on #12", 2);
+  await summarizeAll(asks, answer, () => made++);
+  assert.match(prompts[0], /Waiting on\?/);
+  assert.match(prompts[0], /a · main:\nCI on #12/);
+  assert.equal(made, 1);
+  assert.deepEqual(asks.all()[0].summary?.text, "answer 1");
+  // Made already from every reply there is.
+  await summarizeAll(asks, answer, () => made++);
+  assert.equal(prompts.length, 1);
+
+  asks.reply(second.token, "nothing", 3);
+  let view = askViews(asks.all(), {}, new Set(), () => true)[0];
+  assert.deepEqual([view.summary?.replies, view.stale], [1, true]);
+  await summarizeAll(asks, answer, () => made++);
+  assert.match(prompts[1], /b · main:\nnothing/);
+  view = askViews(asks.all(), {}, new Set(), () => true)[0];
+  assert.deepEqual([view.summary?.text, view.summary?.replies, view.stale], ["answer 2", 2, false]);
+  // One made from fewer replies, finishing late, doesn't replace it.
+  asks.summarize(asks.all()[0].id, "late", 1);
+  assert.equal(asks.all()[0].summary?.text, "answer 2");
 });

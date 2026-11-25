@@ -41,7 +41,7 @@ export async function ask(
   const out = await run(
     command,
     ["-p", "--no-session-persistence", "--model", "sonnet", "--output-format", "json", "--max-budget-usd", "2",
-     "--json-schema", JSON.stringify(schema), "--allowedTools", ...tools, "--", prompt],
+     "--json-schema", JSON.stringify(schema), ...(tools.length ? ["--allowedTools", ...tools] : []), "--", prompt],
     900_000,
     stateDir,
   );

@@ -11,8 +11,13 @@ import { loadState, saveState } from "../statefile.ts";
 // queued for it, the token its reply carries, and its reply, if any.
 export type Asked = { pane: string; label: string; message: string; token: string; reply: { text: string; at: number } | null };
 
-// A question and the agents it went to.
-export type Ask = { id: string; text: string; at: number; agents: Asked[] };
+// One answer made from the replies to a question: its text, how many
+// replies it was made from, and when.
+export type Summary = { text: string; replies: number; at: number };
+
+// A question, the agents it went to, and one answer from their replies,
+// once made.
+export type Ask = { id: string; text: string; at: number; agents: Asked[]; summary?: Summary | null };
 
 // Where the question to an agent stands: waiting in the outbox, typed in
 // and not answered, answered, or not answered by an agent that is gone.
@@ -24,6 +29,10 @@ export type AskView = {
   text: string;
   at: number;
   agents: { label: string; status: AskStatus; reply: { text: string; at: number } | null }[];
+  // One answer from the replies, if made, and whether it is made from
+  // fewer replies than there are.
+  summary: Summary | null;
+  stale: boolean;
 };
 
 // An agent to ask: its pane, its label, and its session, if known.
@@ -46,8 +55,8 @@ export function askMessage(text: string, token: string): string {
 export function askViews(
   asks: Ask[], queued: Record<string, Queued[]>, lost: Set<string>, present: (pane: string) => boolean,
 ): AskView[] {
-  return [...asks].reverse().map(({ id, text, at, agents: asked }) => ({
-    id, text, at,
+  return [...asks].reverse().map(({ id, text, at, agents: asked, summary }) => ({
+    id, text, at, summary: summary ?? null, stale: !!summary && summary.replies < replies({ agents: asked }),
     agents: asked.map((a) => {
       const status: AskStatus = a.reply ? "replied"
         : lost.has(a.message) || !present(a.pane) ? "gone"
@@ -56,6 +65,31 @@ export function askViews(
       return { label: a.label, status, reply: a.reply };
     }),
   }));
+}
+
+/** Returns how many agents replied to ask. */
+export const replies = (ask: Pick<Ask, "agents">) => ask.agents.filter((a) => a.reply).length;
+
+/** Returns what a headless Claude is asked to make one answer to ask's
+ * question from its replies. */
+export function summaryPrompt(ask: Ask): string {
+  const answered = ask.agents.filter((a) => a.reply).map((a) => `${a.label}:\n${a.reply!.text}`);
+  return `The user asked each of their coding agents this question:\n\n${ask.text}\n\n` +
+    `These are the agents' replies, each after the agent's project and role:\n\n${answered.join("\n\n")}\n\n` +
+    "Answer the user's question in one reply, from these alone: say what they add up to, " +
+    "naming the agents where it matters, in a few short sentences or a short list. Use no tools.";
+}
+
+/** Makes an answer with answer, which returns what a headless Claude
+ * answers a prompt, for each of the latest few of asks' questions whose
+ * replies have none made from all of them yet, one at a time, calling
+ * made after each. */
+export async function summarizeAll(asks: Asks, answer: (prompt: string) => Promise<string>, made: () => void) {
+  for (const ask of asks.unsummarized().slice(-3)) {
+    const n = replies(ask);
+    asks.summarize(ask.id, await answer(summaryPrompt(ask)), n);
+    made();
+  }
 }
 
 /** The questions asked, kept in path. */
@@ -88,6 +122,21 @@ export class Asks {
     this.asks = [...this.asks, ask].slice(-KEPT);
     saveState(this.path, this.asks);
     return ask;
+  }
+
+  /** Returns the questions whose replies have no answer made from all of
+   * them yet. */
+  unsummarized(): Ask[] {
+    return this.asks.filter((a) => replies(a) > (a.summary?.replies ?? 0));
+  }
+
+  /** Records text, made from replies of the replies, as the answer to the
+   * question with id, unless one from more replies is there already. */
+  summarize(id: string, text: string, replies: number, at = Date.now()) {
+    const ask = this.asks.find((a) => a.id === id);
+    if (!ask || (ask.summary?.replies ?? 0) > replies) return;
+    ask.summary = { text, replies, at };
+    saveState(this.path, this.asks);
   }
 
   /** Records text as the reply of the agent asked with token, replacing

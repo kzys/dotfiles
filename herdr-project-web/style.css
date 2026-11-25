@@ -619,3 +619,4 @@ main.board { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--space-
 .ask-box textarea { width: 100%; box-sizing: border-box; font: inherit; padding: var(--space-2); }
 .ask-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .ask-reply { flex-basis: 100%; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ask-summary { margin: 0; padding: var(--space-3) var(--space-5); border-bottom: 1px solid var(--panel-edge); background: var(--well); }
