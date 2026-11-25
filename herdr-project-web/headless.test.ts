@@ -23,7 +23,7 @@ test("checks only sources with connectors", async () => {
   const item = { project: null, role: null, mark: "linear", text: "an item" };
   const check = async () => {
     checked++;
-    return { lines: ["a conversation"], rows: [{ label: "a" }], items: [item] };
+    return { rows: [{ label: "a" }], items: [item] };
   };
   const now = () => new Date("2026-10-16T09:00:00Z");
   const last = { title: "Slack", section: null, items: [item] };
@@ -31,7 +31,7 @@ test("checks only sources with connectors", async () => {
   assert.deepEqual(await checkQueue("Linear", "Linear", names, check, null, now, 60_000), {
     title: "Linear",
     section: { title: "Linear", at: "2026-10-16T09:00:00.000Z", next: "2026-10-16T09:01:00.000Z",
-               lines: ["a conversation"], entries: [{ label: "a" }] },
+               lines: [], entries: [{ label: "a" }] },
     items: [item],
   });
   // Without the connector, nothing runs, and its section and items go.

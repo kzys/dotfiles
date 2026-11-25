@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import type { NotesText, Owner } from "./owners.ts";
-import { type Conversation, entries, events, owner, poll, remember, table } from "./slack.ts";
+import { type Conversation, entries, events, owner, poll, remember } from "./slack.ts";
 
 function conversation(channel_id: string, thread_ts: string, last_ts: string,
                       { waiting = false, links = [] as string[], done = false } = {}): Conversation {
@@ -63,11 +63,13 @@ test("polls Slack", async () => {
   const state = join(dir, "state/slack.json");
   const fetch = async () => runs.shift()!;
 
-  assert.deepEqual((await poll(notify, texts, state, {}, fetch)).lines, ["  #C1 alpha about 1.5"]);
+  const first = await poll(notify, texts, state, {}, fetch);
+  assert.deepEqual(first.items, []);
+  assert.deepEqual((first.rows as { label: string; waiting: boolean; project: string | null }[])
+    .map((r) => [r.label, r.waiting, r.project]), [["#C1", false, "alpha"]]);
   assert.deepEqual(calls, []);
-  const { lines, rows, items } = await poll(notify, texts, state, {}, fetch);
+  const { rows, items } = await poll(notify, texts, state, {}, fetch);
   assert.deepEqual(items, [{ project: join(dir, "a"), role: null, mark: "slack", text: "Slack #C1: about 1.5" }]);
-  assert.deepEqual(lines, ["* #C1 alpha about 1.5", "#C2", "    about "]);
   assert.deepEqual(rows, [
     { label: "#C1", title: "about 1.5", url: "https://x.slack.com/archives/C1/p15",
       waiting: true, done: false, project: "alpha", projectDir: join(dir, "a") },
@@ -80,13 +82,12 @@ test("polls Slack", async () => {
 test("keeps done Slack conversations out of the way", () => {
   const found = [conversation("C1", "1.5", "1", { waiting: true, done: true }),
                  conversation("C2", "2.5", "1"), conversation("C3", "3.5", "1", { waiting: true })];
-  assert.deepEqual(table(found, {}), ["#C3", "  * about 3.5", "#C2", "    about 2.5", "#C1", "  ✓ about 1.5"]);
   assert.deepEqual(entries(found, {}).map((r) => [r.label, r.waiting, r.done]), [
     ["#C3", true, false], ["#C2", false, false], ["#C1", false, true]]);
   assert.deepEqual(events(remember(null, [], 0), found).map((c) => c.channel_id), ["C3"]);
 });
 
-test("groups Slack conversations without a project by channel", () => {
+test("lists Slack conversations of a project after those waiting", () => {
   const dir = mkdtempSync(join(tmpdir(), "slack-"));
   mkdirSync(join(dir, "a"));
   writeFileSync(join(dir, "a/README.md"), "---\nname: alpha\n---\n");
@@ -94,8 +95,6 @@ test("groups Slack conversations without a project by channel", () => {
   const found = [conversation("C1", "1.5", "1"), conversation("C2", "2.5", "1"),
                  conversation("C3", "3.5", "1", { waiting: true }), conversation("C2", "4.5", "1", { waiting: true })];
   [found[1].channel, found[2].channel, found[3].channel] = ["#general", "", "general"];
-  assert.deepEqual(table(found, owners), [
-    "  #C1 alpha about 1.5", "C3", "  * about 3.5", "general", "  * about 4.5", "    about 2.5"]);
   delete found[1].permalink;
   assert.deepEqual(entries(found, owners).map((r) => [r.label, r.title, r.url, r.project]), [
     ["C3", "about 3.5", "https://x.slack.com/archives/C3/p35", null],

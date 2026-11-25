@@ -38,19 +38,11 @@ test("polls Linear", async () => {
   const state = join(dir, "state/linear.json");
   const now = new Date("2026-10-16T00:00:00Z");
   const fetch = async () => runs.shift()!;
-  const blank = " ".repeat(20);
 
-  assert.deepEqual((await poll(notify, texts, state, {}, fetch, now)).lines, [
-    `* ABC-1     Backlog     ${blank} about ABC-1`,
-    `  ABC-2     Backlog     ${"a".padEnd(20)} about ABC-2`,
-  ]);
+  assert.deepEqual(((await poll(notify, texts, state, {}, fetch, now)).rows as { label: string }[]).map((r) => r.label),
+                   ["ABC-1", "ABC-2"]);
   assert.deepEqual(calls, []);
-  const { lines, rows } = await poll(notify, texts, state, {}, fetch, now);
-  assert.deepEqual(lines, [
-    `* ABC-2     In Progress ${"a".padEnd(20)} about ABC-2`,
-    `* ABC-1     Backlog     ${blank} about ABC-1`,
-    `  ABC-3     Backlog     ${blank} about ABC-3`,
-  ]);
+  const { rows } = await poll(notify, texts, state, {}, fetch, now);
   assert.deepEqual(rows[0], { label: "ABC-2", title: "Title ABC-2", note: "about ABC-2", detail: "In Progress",
                               url: "https://linear.app/x/issue/ABC-2", waiting: true, project: "a",
                               projectDir: join(dir, "a") });

@@ -7,7 +7,7 @@ import { basename, dirname } from "node:path";
 import * as headless from "./headless.ts";
 import type { Item } from "./inbox.ts";
 import {
-  type NotesText, type Owner, cut, escapeRegExp, ownedItem, pad, projectName, projectOf,
+  type NotesText, type Owner, escapeRegExp, ownedItem, projectName, projectOf,
 } from "./owners.ts";
 import { loadState, saveState } from "./statefile.ts";
 import { day } from "./day.ts";
@@ -135,46 +135,9 @@ export function remember(
   return Object.fromEntries(Object.entries(state).filter(([, ts]) => recent(ts)));
 }
 
-const mark = (c: Conversation) => (waiting(c) ? "*" : c.done ? "✓" : " ");
-
-/** Returns conversations, those waiting on the user first and those done
- * last. */
-function ordered(conversations: Conversation[]): Conversation[] {
-  const rank = (c: Conversation) => (waiting(c) ? 0 : 1) * 2 + (c.done ? 1 : 0);
-  return [...conversations].sort((a, b) => rank(a) - rank(b));
-}
-
-/** Returns lines listing conversations, those waiting on the user first
- * and those done, marked with a check, last, within each group: those of
- * a project with its name, from owners (by key), then the others under a
- * line naming their channel, channels with a conversation waiting on the
- * user first. Columns are as wide as their longest entry, so empty ones
- * take no space. */
-export function table(conversations: Conversation[], owners: Record<string, Owner | null>): string[] {
-  const sorted = ordered(conversations);
-  const ours = sorted.filter((c) => owners[key(c)]);
-  const names = Object.fromEntries(ours.map((c) => [key(c), projectName(owners[key(c)]!.project)]));
-  const width = (texts: string[]) => Math.max(0, ...texts.map((t) => Array.from(t).length));
-  const channelWidth = width(ours.map((c) => cut(c.channel, 26)));
-  const nameWidth = width(Object.values(names));
-  const lines = ours.map(
-    (c) => `${mark(c)} ${pad(cut(c.channel, 26), channelWidth)} ${pad(names[key(c)], nameWidth)} ${c.summary}`,
-  );
-  // Group by ID, which Claude can't spell two ways, under the first name.
-  const channels = new Map<string, Conversation[]>();
-  for (const c of sorted)
-    if (!owners[key(c)]) channels.set(c.channel_id, [...(channels.get(c.channel_id) ?? []), c]);
-  for (const found of channels.values()) {
-    lines.push(found[0].channel || found[0].channel_id);
-    lines.push(...found.map((c) => `  ${mark(c)} ${c.summary}`));
-  }
-  return lines;
-}
-
 /** Returns conversations as rows for other viewers, with the name of
  * their project from owners (by key): those waiting on the user first and
- * those done last, then those of a project. Unlike table, it doesn't
- * group them by project and channel. */
+ * those done last, then those of a project. */
 export function entries(conversations: Conversation[], owners: Record<string, Owner | null>) {
   const rows = conversations.map((c) => ({
     label: c.channel || c.channel_id,
@@ -191,7 +154,7 @@ export function entries(conversations: Conversation[], owners: Record<string, Ow
 
 /** Checks the Slack conversations once with fetch: tells the user with
  * notify about those newly waiting on them since the state in path,
- * saves the new state there, and returns the lines of table, the rows of
+ * saves the new state there, and returns the rows of
  * entries and inbox items for the conversations waiting on the user.
  * texts are the projects' notes, and prOwners the projects of pull
  * requests by url. */
@@ -201,7 +164,7 @@ export async function poll(
   path: string,
   prOwners: Record<string, Owner | null>,
   fetchConversations: (stateDir: string) => Promise<Conversation[]> = fetch,
-): Promise<{ lines: string[]; rows: unknown[]; items: Item[] }> {
+): Promise<{ rows: unknown[]; items: Item[] }> {
   const old = loadState(path) as Record<string, string> | null;
   mkdirSync(dirname(path), { recursive: true });
   const found = await fetchConversations(dirname(path));
@@ -215,5 +178,5 @@ export async function poll(
   const items = found
     .filter(waiting)
     .map((c) => ownedItem(owners[key(c)], "slack", `Slack ${c.channel}: ${c.summary}`));
-  return { lines: table(found, owners), rows: entries(found, owners), items };
+  return { rows: entries(found, owners), items };
 }
