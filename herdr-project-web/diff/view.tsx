@@ -2,14 +2,14 @@
 
 import { Fragment } from "preact";
 import { useRef, useState } from "preact/hooks";
-import { type DiffLine, type FileDiff, type Gap, type Hunk, expandHunks, filePath, gapAt, splitRows } from "./diff.ts";
-import type { HighlightedDiff } from "./diff/highlight.ts";
-import { type Comment, commentKey, displaced } from "./review.ts";
-import { CommentAt, type Review, SendReview, type Sender, SentNote, useReview, useSender } from "./review.tsx";
-import { projectHref } from "./pages.ts";
-import { baseName } from "./paths.ts";
-import type { State } from "./state.ts";
-import { Refresh, matches, send as post, useFetched } from "./ui.tsx";
+import { type DiffLine, type FileDiff, type Gap, type Hunk, expandHunks, filePath, gapAt, splitRows } from "../diff.ts";
+import type { HighlightedDiff } from "./highlight.ts";
+import { type Comment, commentKey, displaced } from "../review.ts";
+import { CommentAt, type Review, SendReview, type Sender, SentNote, useReview, useSender } from "../review.tsx";
+import { projectHref } from "../pages.ts";
+import { baseName } from "../paths.ts";
+import type { State } from "../state.ts";
+import { Refresh, matches, send as post, useFetched } from "../ui.tsx";
 
 // Files with more lines than this start folded.
 const FOLD_LINES = 400;

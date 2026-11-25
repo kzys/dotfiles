@@ -1,7 +1,7 @@
 import "./style.css";
 import { render } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
-import { WorktreeDiffView } from "./diffs.tsx";
+import { WorktreeDiffView } from "./diff/view.tsx";
 import { FileView } from "./files.tsx";
 import { halMessage } from "./hal.ts";
 import { LearningsView } from "./learnings.tsx";
