@@ -13,7 +13,7 @@ import { getRequestListener } from "@hono/node-server";
 import { Hono } from "hono";
 import { type SSEStreamingApi, streamSSE } from "hono/streaming";
 import {
-  type AgentActions, type AgentView, Outbox, forgetAnswered, fromPage, permission, routeAgents, undelivered,
+  type AgentActions, type Queued, Outbox, forgetAnswered, fromPage, permission, routeAgents, undelivered,
 } from "./agents.ts";
 import * as board from "./board.ts";
 import { requestCopilot } from "./github/api.ts";
@@ -37,6 +37,7 @@ import { type PaneHerdr, checkPanes } from "./panes.ts";
 import { type Checked, checkQueue } from "./queues.ts";
 import { Schedule } from "./schedule.ts";
 import { AGAIN, Store, effect } from "./store.ts";
+import { everyPane, pageState } from "./page-state.ts";
 import {
   codexTokens, lastPrompt, percent, resumedText, roleToReport, sessionCwd, sessionReport, statusLine, statusTokens, usageFile,
 } from "./report.ts";
@@ -47,7 +48,8 @@ import { claudeSessionDirs, codexContext, codexSessionDirs, codexSessions, repor
 import * as slack from "./slack.ts";
 import { loadState, saveState } from "./statefile.ts";
 import {
-  type Watched, agentStates, checkoutOf, linkCheckout, openProjects, projectDirs, projectLabels, readProjectFile, readState,
+  type ProjectRead, type Watched, agentStates, checkoutOf, linkCheckout, openProjects, projectDirs, projectLabels, readProjectFile,
+  readProjects,
 } from "./state.ts";
 import { type Found, title, watchWorkspace, watchedFrom } from "./watched.ts";
 import { type Wait, readProcesses, runningSubagents, sessionFolder, waitsByPid } from "./waits.ts";
@@ -103,8 +105,7 @@ const { ask, tryAsk } = herdrClient();
 
 // What the server knows from outside, which its sources set and from which
 // the page and what the server does derive. What other objects keep, such
-// as the outbox and the board, and the files in ~/project, are told of
-// with store.tell().
+// as the outbox and the board, are told of with store.tell().
 type Facts = {
   // Herdr's panes and workspaces, null while it can't be asked.
   herdr: Herdr | null;
@@ -119,9 +120,13 @@ type Facts = {
   waits: Map<string, Wait[]>;
   // What the checks found, by title, once they have checked.
   found: ReadonlyMap<string, Found>;
+  // How many times ~/project, a project in it or what its projects work
+  // in may have changed, and the projects shown, read since.
+  projectsChanged: number;
+  projects: ProjectRead[];
 };
 const store = new Store<Facts>({
-  herdr: null, appPanes: [], appRead: false, appSpacesChanged: 0, waits: new Map(), found: new Map(),
+  herdr: null, appPanes: [], appRead: false, appSpacesChanged: 0, waits: new Map(), found: new Map(), projectsChanged: 0, projects: [],
 });
 
 /** Sets what the check titled title found. */
@@ -166,39 +171,12 @@ const links = (loadState(linksPath) as Record<string, string[]> | null) ?? {};
 // The page's state as last sent, set before the server listens.
 let last = "";
 
-/** Returns what the page shows of each agent besides what Herdr says. */
-function agentViews(facts: Facts): Record<string, AgentView> {
-  const views: Record<string, AgentView> = {};
-  for (const [pane, status] of Object.entries(agentStates(everyPane(facts)) ?? {}))
-    views[pane] = { queued: outbox.queued(pane), permission: permission(hookEvents.get(pane), status) };
-  return views;
-}
-
-/** Returns Herdr's panes with the Herdr app's agents among them, or those
- * alone while Herdr can't be asked, or null if neither is known. */
-function everyPane({ herdr, appPanes }: Facts): Herdr | null {
-  if (!herdr && !appPanes.length) return null;
-  return { workspaces: herdr?.workspaces ?? [], panes: [...(herdr?.panes ?? []), ...appPanes] };
-}
-
-/** Returns the state for the page. Only the watcher's server can act. */
-function pageState(facts: Facts) {
-  const all = everyPane(facts);
-  const sessions = Object.fromEntries((all?.panes ?? []).filter((p) => p.agent).map((p) => [p.pane_id, p.agent_session?.value ?? ""]));
-  // Only messages for panes of what has been read can be told undelivered:
-  // Herdr's panes are named like w1:p2, the app's terminals like t3.
-  const readable = Object.fromEntries(
-    Object.entries(outbox.all()).filter(([pane]) => pane.includes(":") ? facts.herdr !== null : facts.appRead),
-  );
-  const left = undelivered(readable, sessions);
-  const state = readState(watched(facts), projectRoot, all, home, links);
-  for (const project of state.projects)
-    for (const pane of project.panes) pane.waits = (sessions[pane.id] && facts.waits.get(sessions[pane.id])) || [];
-  return {
-    ...state,
-    ...(orgs ? { controls: agentViews(facts), undelivered: left, board: boardStore.cards(pulls.latest(), new Date()) } : {}),
-  };
-}
+/** Returns the page's state from facts. */
+const pageOf = (facts: Facts) => pageState({
+  ...facts,
+  watched: watched(facts),
+  acting: orgs ? { queued: outbox.all(), hooks: hookEvents, board: boardStore.cards(pulls.latest(), new Date()) } : null,
+});
 
 /** Returns what the checks found, or null before any has. */
 function watched({ found }: Facts): Watched | null {
@@ -351,12 +329,14 @@ function checkPullRequestsSoon() {
   const shown = store.get().found.get("Pull requests");
   if (shown?.section && next) setFound(shown.title, { ...shown, section: { ...shown.section, next: next.toISOString() } });
 }
+/** Tells that the projects shown may have changed. */
+const projectsChanged = () => store.set({ projectsChanged: store.get().projectsChanged + 1 });
 let timer: ReturnType<typeof setTimeout> | undefined;
 function changed() {
   clearTimeout(timer);
   timer = setTimeout(() => {
     rewatch();
-    store.tell();
+    projectsChanged();
   }, 100);
 }
 
@@ -378,8 +358,12 @@ function rewatch() {
   }
 }
 rewatch();
-// Catch what the watches miss, such as ~/project appearing.
-setInterval(changed, 30_000);
+// Catch what the watches miss, such as ~/project appearing, even while
+// changes keep putting the debounced read off.
+setInterval(() => {
+  rewatch();
+  projectsChanged();
+}, 30_000);
 
 /** Returns the projects that are open or still have a workspace in
  * Herdr, with worktrees in them, each with their directories, followed
@@ -502,7 +486,8 @@ const pageFd = Number(process.env.HERDR_PROJECT_PAGE_FD) || null;
 const socketFd = Number(process.env.HERDR_PROJECT_SOCKET_FD) || null;
 
 // Only this machine: the page shows private work.
-last = JSON.stringify(pageState(store.get()));
+store.set({ projects: readProjects(projectRoot, null, home, links) });
+last = JSON.stringify(pageOf(store.get()));
 server.listen(pageFd ? { fd: pageFd } : { port, host: "127.0.0.1" }, () => console.log(`herdr-project-web on http://127.0.0.1:${port}/`));
 
 const dotfiles = dirname(here);
@@ -556,7 +541,7 @@ function noteCheckout(dir: string | null, cwd: string) {
   } catch (e) {
     console.error("herdr-project-web:", e);
   }
-  store.tell();
+  projectsChanged();
 }
 
 /** Returns the current git branch of directory, or "". */
@@ -652,11 +637,17 @@ async function nameAppSpaces() {
 
 // What follows from the facts, each when what it depends on changes.
 
+// The projects shown, read again when they may have changed, and when the
+// panes, whose workspaces keep closed ones shown, do.
+effect(store, (facts) => [
+  facts.projectsChanged, (everyPane(facts)?.panes ?? []).map((p) => [p.workspace_id, p.cwd, p.foreground_cwd]),
+], (facts) => store.set({ projects: readProjects(projectRoot, everyPane(facts), home, links) }), { onError: logError });
+
 // The page, sent to it as it changes.
-effect(store, (facts) => JSON.stringify(pageState(facts)), (_facts, next) => {
+effect(store, (facts) => JSON.stringify(pageOf(facts)), (_facts, next) => {
   last = next;
   for (const stream of clients) stream.writeSSE({ data: next }).catch(() => {});
-});
+}, { onError: logError });
 
 // How much waits on the user, told to Herdr as it changes, and again on the
 // next change of anything when telling fails.
@@ -668,15 +659,23 @@ effect(store, (facts) => {
   if (!told) return;
   const tokens = { title: told.text };
   if (!(await tryAsk("workspace.report_metadata", { workspace_id: told.workspace, source: "watch", tokens }))) throw AGAIN;
-}, { retry: true });
+}, { retry: true, onError: logError });
 
 // Only the watcher's server acts on agents and names their places.
 if (orgs) {
   // What waits for each agent, sent once it is free, and again on the next
-  // change of anything while some for a free one is left.
-  effect(store, (facts) => ({ states: agentStates(everyPane(facts)) ?? {}, queued: outbox.all() }), async (_facts, { states }) => {
+  // change of anything while some a free one could take is left: not those
+  // for another session, which wait for the user.
+  effect(store, (facts) => {
+    const all = everyPane(facts);
+    const sessions = Object.fromEntries((all?.panes ?? []).map((p) => [p.pane_id, p.agent_session?.value ?? ""]));
+    return { states: agentStates(all) ?? {}, sessions, queued: outbox.all() };
+  }, async (_facts, { states, sessions }) => {
     if (await outbox.deliver(states)) store.tell();
-    if (Object.keys(outbox.all()).some((pane) => ["idle", "done"].includes(states[pane]))) throw AGAIN;
+    const takes = (pane: string) => (m: Queued) => !m.session || !sessions[pane] || m.session === sessions[pane];
+    if (Object.entries(outbox.all()).some(([pane, queued]) => ["idle", "done"].includes(states[pane]) && queued.some(takes(pane)))) {
+      throw AGAIN;
+    }
   }, { retry: true, onError: logError });
   // Herdr's workspaces, after their projects' names, and again on the next
   // change of anything while one couldn't be renamed.
@@ -730,7 +729,9 @@ async function reportHook(pane: string, agent: string, event: string, data: any)
  * first: the agent is waiting, and gives up on a slow reply. */
 const onHook: HookHandler = async (pane, { agent, event }, data) => {
   if (pane) reportHook(pane, agent, event, data).catch((e) => console.error("herdr-project-web:", e));
-  store.tell();
+  // An agent may have committed or gone into a checkout, which the watches
+  // don't see.
+  projectsChanged();
   if (agent !== "claude" || event !== "SessionStart" || data.source !== "resume" || typeof data.cwd !== "string") return "";
   const dir = projectDir(data.cwd, projectRoot);
   return dir ? resumedText(dir, instructions(dotfiles)) : "";

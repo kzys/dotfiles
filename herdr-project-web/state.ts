@@ -362,31 +362,48 @@ export function agentStates(herdr: Herdr | null): Record<string, string> | null 
   return agents;
 }
 
-/** Returns the state for the page from watched, what the watcher
- * found, and the projects under projectRoot that are open or still have a
- * workspace in herdr, naming their workspaces, if known. Projects with an agent whose context is at least
- * FULL_AT percent full come first, then those with a workspace or
- * something waiting on the user, newest first within each group. The
- * watcher's Panes section keeps only panes outside the listed projects,
- * and goes if none are left. checkouts holds the checkouts agents went
- * into, by project, which it lists too. The others a project works in are those
- * in home's ~/repos that the "repositories" field of its README.md
- * names, or else that it or its notes name. */
-export function readState(
-  watched: Watched | null,
-  projectRoot: string,
-  herdr: Herdr | null = null,
-  home: string = homedir(),
-  checkouts: Record<string, string[]> = {},
-): State {
+/** What the page shows of a project from its files: its README.md, if
+ * any, its agents' notes, the worktrees and checkouts it works in, with
+ * their last commits' subjects, and its other files. */
+export type ProjectRead = {
+  dir: string;
+  readme: string | null;
+  notes: [string, string][];
+  worktrees: { dir: string; subject: string | null }[];
+  files: ProjectFile[];
+};
+
+/** Reads the project in dir, whose README.md says readme. checkouts are
+ * the checkouts its agents went into, which it lists. The others it works
+ * in are those in home's ~/repos that the "repositories" field of its
+ * README.md names, or else that it or its notes name. */
+export function readProject(dir: string, readme: string | null, home: string, checkouts: string[] = []): ProjectRead {
+  const notes = roleNotes(dir);
+  const named = (readme && frontMatter(readme, "repositories")) || [readme ?? "", ...notes.map(([, t]) => t)].join("\n");
+  const others = new Set([...namedCheckouts(named, home), ...checkouts].filter(isCheckout));
+  return {
+    dir,
+    readme,
+    notes,
+    worktrees: [...worktreeDirs(dir), ...others].map((d) => ({ dir: d, subject: lastSubject(d) })),
+    files: projectFiles(dir),
+  };
+}
+
+/** Returns the state for the page from watched, what the watcher found,
+ * projects, the projects that are open or still have a workspace in herdr
+ * as readProject read them, and herdr, naming their workspaces, if known.
+ * Projects with an agent whose context is at least FULL_AT percent full
+ * come first, then those with a workspace or something waiting on the
+ * user, in the order given within each group. The watcher's Panes section
+ * keeps only panes outside the listed projects, and goes if none are
+ * left. */
+export function stateOf(watched: Watched | null, projects: ProjectRead[], herdr: Herdr | null): State {
   // Copies, since the Panes section is trimmed below.
   const sections = Array.isArray(watched?.sections) ? (watched.sections as Section[]).map((s) => ({ ...s })) : null;
   const watchedAt = watched?.at ?? null;
 
-  const open = openProjects(projectRoot, herdr);
-  const known = new Set(
-    open.filter(([, readme]) => !(readme && frontMatter(readme, "closed"))).map(([dir]) => dir),
-  );
+  const known = new Set(projects.filter(({ readme }) => !(readme && frontMatter(readme, "closed"))).map(({ dir }) => dir));
   const byProject = new Map<string, Item[]>();
   const unowned: Item[] = [];
   for (const item of watchedItems(watched?.inbox)) {
@@ -395,35 +412,46 @@ export function readState(
     else byProject.set(item.project, [...(byProject.get(item.project) ?? []), item]);
   }
 
-  const projects: Project[] = [];
-  for (const [dir, readme] of open) {
-    const notes = roleNotes(dir);
-    const items = projectItems(dir, Boolean(readme && frontMatter(readme, "closed")), notes, byProject.get(dir) ?? []);
-    const named =
-      (readme && frontMatter(readme, "repositories")) || [readme ?? "", ...notes.map(([, t]) => t)].join("\n");
-    projects.push({
-      dir,
-      ...projectLabels(dir, readme),
-      workspaces: workspaceLabels(dir, herdr),
-      panes: projectPanes(dir, herdr),
-      tabs: projectTabs(dir, herdr),
-      worktrees: [...worktreeDirs(dir), ...new Set([...namedCheckouts(named, home), ...(checkouts[dir] ?? [])].filter(isCheckout))].map((d) => ({
-        dir: d,
-        subject: lastSubject(d),
-      })),
-      items,
-      files: projectFiles(dir),
-    });
-  }
+  const shownProjects: Project[] = projects.map(({ dir, readme, notes, worktrees, files }) => ({
+    dir,
+    ...projectLabels(dir, readme),
+    workspaces: workspaceLabels(dir, herdr),
+    panes: projectPanes(dir, herdr),
+    tabs: projectTabs(dir, herdr),
+    worktrees,
+    items: projectItems(dir, Boolean(readme && frontMatter(readme, "closed")), notes, byProject.get(dir) ?? []),
+    files,
+  }));
   const rank = (p: Project) =>
     p.panes.some((pane) => (pane.ctx ?? 0) >= FULL_AT) ? 0 : p.workspaces.length || p.items.length ? 1 : 2;
-  projects.sort((a, b) => rank(a) - rank(b));
+  shownProjects.sort((a, b) => rank(a) - rank(b));
   // The panes in projects show with them, and the section only when
   // others are left.
-  const ids = new Set(projects.flatMap((p) => panesIn(p.dir, herdr).map((pane) => pane.pane_id)));
+  const ids = new Set(shownProjects.flatMap((p) => panesIn(p.dir, herdr).map((pane) => pane.pane_id)));
   for (const section of sections ?? [])
     if (section.title === "Panes") section.lines = panesElsewhere(section.lines, ids);
   const shown = sections?.filter((s) => s.title !== "Panes" || s.lines.length) ?? null;
   const links = pullRequestLinks(watched?.urls);
-  return { sections: shown, watchedAt, projects, unowned, links, agents: agentStates(herdr) };
+  return { sections: shown, watchedAt, projects: shownProjects, unowned, links, agents: agentStates(herdr) };
+}
+
+/** Reads the projects under projectRoot that are open or still have a
+ * workspace in herdr, newest first, as readProject does with checkouts by
+ * project. */
+export function readProjects(
+  projectRoot: string, herdr: Herdr | null, home: string, checkouts: Record<string, string[]>,
+): ProjectRead[] {
+  return openProjects(projectRoot, herdr).map(([dir, readme]) => readProject(dir, readme, home, checkouts[dir]));
+}
+
+/** Returns the state for the page as stateOf does, for the projects under
+ * projectRoot as readProjects reads them. */
+export function readState(
+  watched: Watched | null,
+  projectRoot: string,
+  herdr: Herdr | null = null,
+  home: string = homedir(),
+  checkouts: Record<string, string[]> = {},
+): State {
+  return stateOf(watched, readProjects(projectRoot, herdr, home, checkouts), herdr);
 }
