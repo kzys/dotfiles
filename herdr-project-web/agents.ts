@@ -32,6 +32,7 @@ export class Outbox {
   private queues: Record<string, Queued[]>;
   private sending = new Set<string>();
   private next = 0;
+  private listeners: (() => void)[] = [];
 
   constructor(
     path: string,
@@ -49,9 +50,15 @@ export class Outbox {
     return this.queues[pane] ?? [];
   }
 
-  /** Returns all the messages waiting, by pane. */
+  /** Returns all the messages waiting, by pane, as a new object after each
+   * change. */
   all(): Record<string, Queued[]> {
     return this.queues;
+  }
+
+  /** Calls listener after each change to what waits. */
+  subscribe(listener: () => void) {
+    this.listeners.push(listener);
   }
 
   /** Queues text for session, if known, in pane, and returns its id. */
@@ -101,9 +108,10 @@ export class Outbox {
   }
 
   private set(pane: string, messages: Queued[]) {
-    if (messages.length) this.queues[pane] = messages;
-    else delete this.queues[pane];
+    const { [pane]: _, ...others } = this.queues;
+    this.queues = messages.length ? { ...others, [pane]: messages } : others;
     saveState(this.path, this.queues);
+    for (const listener of this.listeners) listener();
   }
 }
 
@@ -124,12 +132,15 @@ export function permission(event: HookEvent | undefined, status: string | undefi
   return { detail: event.detail, at: event.at };
 }
 
-/** Forgets, in latest, the permission requests of panes that stopped
+/** Returns latest without the permission requests of panes that stopped
  * being blocked between statuses before and after: they were answered,
  * so a later prompt that blocks the agent is another one. */
-export function forgetAnswered(latest: Map<string, HookEvent>, before: Record<string, string>, after: Record<string, string>) {
-  for (const [pane, event] of latest)
-    if (event.event === "PermissionRequest" && before[pane] === "blocked" && after[pane] !== "blocked") latest.delete(pane);
+export function forgetAnswered(
+  latest: ReadonlyMap<string, HookEvent>, before: Record<string, string>, after: Record<string, string>,
+): ReadonlyMap<string, HookEvent> {
+  const kept = [...latest].filter(([pane, event]) =>
+    !(event.event === "PermissionRequest" && before[pane] === "blocked" && after[pane] !== "blocked"));
+  return kept.length === latest.size ? latest : new Map(kept);
 }
 
 /** Reports whether a request with these headers comes from the page
@@ -148,8 +159,6 @@ export type AgentActions = {
   // The session of the agent in pane, if known.
   session: (pane: string) => string | undefined;
   focus: (pane: string) => Promise<unknown>;
-  // Called after anything the page shows changed.
-  changed: () => void;
 };
 
 /** Adds to app the requests to act on an agent, under /api/agents. Those
@@ -168,14 +177,12 @@ export function routeAgents(app: Hono, actions: AgentActions, allowed: (headers:
     const { text } = await jsonBody(c);
     if (typeof text !== "string" || !text.trim()) return c.json({ error: "no text" }, 400);
     actions.outbox.add(pane, text.trim(), actions.session(pane));
-    actions.changed();
     return c.body(null, 204);
   });
 
   // Cancels a queued message, even for a pane that is gone.
   agents.delete("/:pane/messages/:id", (c) => {
     if (!actions.outbox.cancel(c.req.param("pane"), c.req.param("id"))) return c.json({ error: "already sent" }, 404);
-    actions.changed();
     return c.body(null, 204);
   });
 

@@ -98,10 +98,9 @@ export function summaryPrompt(ask: Ask): string {
 
 /** Makes an answer with answer, which returns what a headless Claude
  * answers a prompt, for each of asks' questions whose replies have none
- * made from all of them yet, newest first, one at a time, calling made
- * after each. One that fails is recorded, and isn't tried again until
+ * made from all of them yet, newest first, one at a time. One that fails is recorded, and isn't tried again until
  * another reply comes. */
-export async function summarizeAll(asks: Asks, answer: (prompt: string) => Promise<string>, made: () => void) {
+export async function summarizeAll(asks: Asks, answer: (prompt: string) => Promise<string>) {
   for (const ask of [...asks.unsummarized()].reverse()) {
     const [n, upTo] = [replies(ask), newest(ask)];
     try {
@@ -109,7 +108,6 @@ export async function summarizeAll(asks: Asks, answer: (prompt: string) => Promi
     } catch (e) {
       asks.fail(ask.id, upTo, String((e as Error)?.message ?? e).split("\n")[0]);
     }
-    made();
   }
 }
 
@@ -119,6 +117,7 @@ export class Asks {
   private asks: Ask[];
   private token: () => string;
   private next = 0;
+  private listeners: (() => void)[] = [];
 
   constructor(path: string, token = () => randomBytes(6).toString("hex")) {
     this.path = path;
@@ -127,9 +126,15 @@ export class Asks {
     this.asks = Array.isArray(kept) ? (kept as Ask[]) : [];
   }
 
-  /** Returns the questions, oldest first. */
+  /** Returns the questions, oldest first, as a new array after each
+   * change. */
   all(): Ask[] {
     return this.asks;
+  }
+
+  /** Calls listener after each change to the questions. */
+  subscribe(listener: () => void) {
+    this.listeners.push(listener);
   }
 
   /** Asks each of agents text, queueing the message to each with queue,
@@ -140,8 +145,7 @@ export class Asks {
       return { pane, label, token, message: queue(pane, askMessage(text, token), session), reply: null };
     });
     const ask = { id: `${at}-${this.next++}`, text, at, agents: asked };
-    this.asks = [...this.asks, ask].slice(-KEPT);
-    saveState(this.path, this.asks);
+    this.save([...this.asks, ask].slice(-KEPT));
     return ask;
   }
 
@@ -160,28 +164,30 @@ export class Asks {
   summarize(id: string, text: string, replies: number, upTo: number, at = Date.now()) {
     const ask = this.asks.find((a) => a.id === id);
     if (!ask || (ask.summary?.upTo ?? 0) > upTo) return;
-    ask.summary = { text, replies, upTo, at };
-    ask.failed = null;
-    saveState(this.path, this.asks);
+    this.save(this.asks.map((a) => (a === ask ? { ...a, summary: { text, replies, upTo, at }, failed: null } : a)));
   }
 
   /** Records that making an answer to the question with id from replies
    * the newest of which came at upTo failed, with error. */
   fail(id: string, upTo: number, error: string) {
-    const ask = this.asks.find((a) => a.id === id);
-    if (!ask) return;
-    ask.failed = { upTo, error };
-    saveState(this.path, this.asks);
+    if (!this.asks.some((a) => a.id === id)) return;
+    this.save(this.asks.map((a) => (a.id === id ? { ...a, failed: { upTo, error } } : a)));
   }
 
   /** Records text as the reply of the agent asked with token, replacing
    * an earlier one, and returns whether token was one. */
   reply(token: string, text: string, at = Date.now()): boolean {
-    const found = this.asks.flatMap((a) => a.agents).find((a) => a.token === token);
-    if (!found) return false;
-    found.reply = { text, at };
-    saveState(this.path, this.asks);
+    if (!this.asks.some((a) => a.agents.some((b) => b.token === token))) return false;
+    this.save(this.asks.map((a) => a.agents.some((b) => b.token === token)
+      ? { ...a, agents: a.agents.map((b) => (b.token === token ? { ...b, reply: { text, at } } : b)) }
+      : a));
     return true;
+  }
+
+  private save(asks: Ask[]) {
+    this.asks = asks;
+    saveState(this.path, asks);
+    for (const listener of this.listeners) listener();
   }
 }
 

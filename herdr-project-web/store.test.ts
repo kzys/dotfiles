@@ -1,44 +1,34 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AGAIN, Store, effect } from "./store.ts";
+import { type Signal, computed, signal } from "@preact/signals-core";
+import { AGAIN, effect } from "./store.ts";
+
+/** Returns a signal for each field of initial. */
+const signals = <T extends object>(initial: T) =>
+  Object.fromEntries(Object.entries(initial).map(([k, v]) => [k, signal(v)])) as { [K in keyof T]: Signal<T[K]> };
+/** Returns a signal that changes whenever any of all does. */
+const anyOf = (all: Record<string, Signal>) => computed(() => Object.values(all).map((s) => s.value));
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
-test("tells its listeners once for the changes made together, and not for none", async () => {
-  const store = new Store({ a: 1, b: "x" });
-  const told: object[] = [];
-  store.listen((s) => told.push(s));
-  store.set({ a: 2 });
-  store.set({ b: "y" });
-  store.set({ a: 2 });
-  await settle();
-  assert.deepEqual(told, [{ a: 2, b: "y" }]);
-  store.set({ a: 2, b: "y" });
-  await settle();
-  assert.equal(told.length, 1);
-  store.tell();
-  await settle();
-  assert.equal(told.length, 2);
-});
-
-test("runs an effect when its key changes, one run at a time, with the latest state", async () => {
-  const store = new Store({ n: 0, other: 0 });
+test("runs an effect when its key changes, one run at a time, with the latest value", async () => {
+  const facts = signals({ n: 0, other: 0 });
   const runs: number[] = [];
   let release = () => {};
-  effect(store, (s) => s.n, async (_s, n) => {
+  effect(() => facts.n.value, async (n) => {
     runs.push(n);
     if (n === 1) await new Promise<void>((resolve) => (release = resolve));
   });
   await settle();
   assert.deepEqual(runs, [0]);
-  store.set({ other: 1 }); // Not in the key.
+  facts.other.value = 1; // Not in the key.
   await settle();
   assert.deepEqual(runs, [0]);
-  store.set({ n: 1 });
+  facts.n.value = 1;
   await settle();
-  store.set({ n: 2 });
+  facts.n.value = 2;
   await settle();
-  store.set({ n: 3 });
+  facts.n.value = 3;
   await settle();
   assert.deepEqual(runs, [0, 1]);
   release();
@@ -46,48 +36,87 @@ test("runs an effect when its key changes, one run at a time, with the latest st
   assert.deepEqual(runs, [0, 1, 3]);
 });
 
-test("runs a failed effect again only when its key changes, or on any change with retry", async () => {
-  const store = new Store({ n: 0, other: 0 });
+test("runs once for the changes made together, and not for a key equal as JSON", async () => {
+  const facts = signals({ a: 0, b: 0 });
+  const runs: number[][] = [];
+  effect(() => [facts.a.value, facts.b.value], (key) => void runs.push(key));
+  await settle();
+  facts.a.value = 1;
+  facts.b.value = 1;
+  await settle();
+  facts.a.value = 2;
+  facts.a.value = 1;
+  await settle();
+  assert.deepEqual(runs, [[0, 0], [1, 1]]);
+});
+
+test("doesn't follow what a run reads", async () => {
+  const n = signal(0);
+  const other = signal(0);
+  const runs: number[] = [];
+  effect(() => n.value, () => void runs.push(other.value));
+  await settle();
+  other.value = 1;
+  await settle();
+  assert.deepEqual(runs, [0]);
+});
+
+test("runs a failed effect again only when its key changes, or when retry changes", async () => {
+  const facts = signals({ n: 0, other: 0 });
+  const any = anyOf(facts);
   const runs: string[] = [];
   const errors: unknown[] = [];
-  effect(store, (s) => s.n, (_s, n) => {
+  effect(() => facts.n.value, (n) => {
     runs.push(`once ${n}`);
     throw new Error("no");
   }, { onError: (e) => errors.push(e) });
-  effect(store, (s) => s.n, (_s, n) => {
+  effect(() => facts.n.value, (n) => {
     runs.push(`retry ${n}`);
     throw new Error("no");
-  }, { retry: true });
+  }, { retry: any });
   await settle();
-  store.set({ other: 1 });
+  facts.other.value = 1;
   await settle();
-  store.set({ n: 1 });
+  facts.n.value = 1;
   await settle();
   assert.deepEqual(runs, ["once 0", "retry 0", "retry 0", "once 1", "retry 1"]);
   assert.equal(errors.length, 2);
 });
 
 test("tells of a key that raises instead of raising, and runs a retry with what changed meanwhile", async () => {
-  const store = new Store({ n: 0 });
+  const facts = signals({ n: 0 });
   const errors: unknown[] = [];
-  effect(store, (s) => {
-    if (s.n === 1) throw new Error("bad key");
-    return s.n;
+  effect(() => {
+    if (facts.n.value === 1) throw new Error("bad key");
+    return facts.n.value;
   }, () => {}, { onError: (e) => errors.push(e) });
-  store.set({ n: 1 });
+  facts.n.value = 1;
   await settle();
   assert.deepEqual(errors.map((e) => (e as Error).message), ["bad key"]);
 
   const runs: number[] = [];
-  effect(store, (s) => s.n, (_s, n) => {
+  effect(() => facts.n.value, (n) => {
     runs.push(n);
     if (n === 1) {
-      store.set({ n: 2 });
+      facts.n.value = 2;
       throw AGAIN;
     }
-  }, { retry: true, onError: (e) => errors.push(e) });
+  }, { retry: anyOf(facts), onError: (e) => errors.push(e) });
   await settle();
   await settle();
   assert.deepEqual(runs, [1, 2]);
-  assert.equal(errors.length, 2); // The key raising again for n = 1, but not AGAIN.
+  assert.equal(errors.length, 1); // Not AGAIN.
+});
+
+test("runs a failed retry again at once if retry changed during the run", async () => {
+  const facts = signals({ n: 0, other: 0 });
+  const runs: number[] = [];
+  effect(() => facts.n.value, () => {
+    runs.push(facts.other.value);
+    if (facts.other.value === 0) facts.other.value = 1;
+    throw AGAIN;
+  }, { retry: anyOf(facts) });
+  await settle();
+  await settle();
+  assert.deepEqual(runs, [0, 1]);
 });

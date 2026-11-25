@@ -12,7 +12,7 @@ export type AsksServer = {
   askees: () => Askee[];
   // Queues text for session, if known, in pane, returning its id.
   queue: (pane: string, text: string, session?: string) => string;
-  // Called after what the page shows changed.
+  // Called after a question is asked or replied to.
   changed: () => void;
 };
 

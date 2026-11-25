@@ -13,6 +13,16 @@ function loadRecord<T extends object>(path: string): T {
   return (typeof loaded === "object" && loaded !== null && !Array.isArray(loaded) ? loaded : {}) as T;
 }
 
+/** What the user did with their pull requests on the board. */
+export type BoardState = { moves: board.Moves; asks: board.CopilotAsks };
+
+/** Returns the board's cards at now from what check found, if any, and
+ * state. */
+export function boardCards(check: PullCheck | null, state: BoardState, now: Date): board.Card[] {
+  if (!check) return [];
+  return board.cards(check.pulls, check.owners, (d) => check.names[d] ?? d, state.moves, now, state.asks);
+}
+
 /** The board's state, kept in stateDir. A save that fails goes to
  * onError, and the board goes on with what it has. */
 export class BoardStore {
@@ -23,6 +33,7 @@ export class BoardStore {
   // What was last saved or loaded at each path, as JSON.
   private saved = new Map<string, string>();
   private onError: (error: unknown) => void;
+  private listeners: (() => void)[] = [];
 
   constructor(stateDir: string, onError: (error: unknown) => void = () => {}) {
     this.movesPath = join(stateDir, "moves.json");
@@ -34,10 +45,14 @@ export class BoardStore {
     this.onError = onError;
   }
 
-  /** Returns the board's cards at now from what check found, if any. */
-  cards(check: PullCheck | null, now: Date): board.Card[] {
-    if (!check) return [];
-    return board.cards(check.pulls, check.owners, (d) => check.names[d] ?? d, this.moves, now, this.asks);
+  /** Returns the board's state, as a new object after each change. */
+  state(): BoardState {
+    return { moves: this.moves, asks: this.asks };
+  }
+
+  /** Calls listener after each change to the board's state. */
+  subscribe(listener: () => void) {
+    this.listeners.push(listener);
   }
 
   /** Forgets what was done with the pull requests check found gone. */
@@ -77,6 +92,7 @@ export class BoardStore {
     } catch (e) {
       this.onError(e);
     }
+    for (const listener of this.listeners) listener();
     return true;
   }
 }

@@ -15,8 +15,6 @@ export type PullsServer = {
   // The columns the user moved pull requests to, and what came of asking
   // Copilot to review each.
   board: BoardStore;
-  // Called after the board changes.
-  changed: () => void;
 };
 
 /** Adds the board's routes to routes, for server, which only requests that
@@ -28,14 +26,13 @@ export function routePulls(routes: Hono, server: PullsServer, allowed: (headers:
     const { url, stage } = await jsonBody(c);
     if (!(stage === null || board.MOVABLE.includes(stage))) return c.body(null, 400);
     if (!isOpen(url)) return c.body(null, 404);
-    if (server.board.move(url, stage)) server.changed();
+    server.board.move(url, stage);
     return c.body(null, 204);
   });
   routes.post("/pulls/copilot", limit(), only(allowed), async (c) => {
     const { url } = await jsonBody(c);
     if (!isOpen(url)) return c.body(null, 404);
     const asked = await server.board.askCopilot(url, (u) => requestCopilot(u));
-    server.changed();
     return c.body(null, asked ? 204 : 502);
   });
 }
