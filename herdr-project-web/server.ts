@@ -25,7 +25,6 @@ import type { Herdr } from "./herdr/backend.ts";
 import { HerdrEvents } from "./herdr/events.ts";
 import { herdrClient, herdrSocket, readHerdr, tuiBackend } from "./herdr/tui.ts";
 import { type HookEvent, type HookHandler, hookServer, limit, listenOn, speaker } from "./hooks.ts";
-import { highlightDiff, highlightLines } from "./highlight.ts";
 import { frontMatter } from "./frontmatter.ts";
 import { agentCommand, instructions, launchDirectory, launchScript, parseAgent, projectDir } from "./launch.ts";
 import { readLearnings } from "./learnings.ts";
@@ -44,6 +43,7 @@ import {
 import { appBackend, appCommand, appHerdrPanes, appSpaces, claudeSessions, spaceNames } from "./herdr/app.ts";
 import { CoreFeed } from "./herdr/core.ts";
 import { background, workspacesToName } from "./rows.ts";
+import { routeDiff } from "./diff/routes.ts";
 import { type PickerServer, routePicker } from "./picker/routes.ts";
 import { claudeSessionDirs, codexContext, codexSessionDirs, codexSessions, reportedRole } from "./sessions.ts";
 import * as slack from "./slack.ts";
@@ -54,7 +54,6 @@ import {
 } from "./state.ts";
 import { type Found, title, watchWorkspace, watchedFrom } from "./watched.ts";
 import { type Wait, readProcesses, runningSubagents, sessionFolder, waitsByPid } from "./waits.ts";
-import { changedSince, checkoutDirs, fileLines, setBase, worktreeDiff, worktreeDirs } from "./worktrees.ts";
 
 const here = import.meta.dirname;
 const home = homedir();
@@ -366,32 +365,9 @@ setInterval(() => {
   projectsChanged();
 }, 30_000);
 
-/** Returns the projects that are open or still have a workspace in
- * Herdr, with worktrees in them, each with their directories, followed
- * by the checkouts in ~/repos, where some tasks work on their branches. */
-function projectWorktrees() {
-  return [
-    ...openProjects(projectRoot, store.get().herdr).map(([dir, readme]) => ({
-      dir,
-      ...projectLabels(dir, readme),
-      worktrees: worktreeDirs(dir),
-    })),
-    { dir: reposRoot, name: "repos", title: "Checkouts in ~/repos", worktrees: checkoutDirs(reposRoot) },
-  ].filter((p) => p.worktrees.length);
-}
-
 // Other names for this address come from DNS rebinding, which would let
 // any site read the page.
 const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
-
-/** Sets the base that body, a request's, asks for, of a worktree the page
- * lists, and returns the status to answer with. */
-async function setBaseFrom(body: string | null): Promise<number> {
-  const { dir, branch, base } = JSON.parse(body ?? "{}");
-  if (!projectWorktrees().some((p) => p.worktrees.includes(dir))) return 404;
-  if (typeof branch !== "string" || !(base === null || typeof base === "string")) return 400;
-  return (await setBase(dir, branch, base)) ? 204 : 409;
-}
 
 /** Asks Copilot to review the open pull request that body, a request's,
  * names, keeping what came of it, and returns the HTTP status. */
@@ -444,7 +420,6 @@ const picker: PickerServer = {
 const page = new Hono();
 page.use(async (c, next) => (hosts.has(c.req.header("host") ?? "") ? next() : c.body(null, 403)));
 page.onError((e, c) => c.json({ error: e.message }, 500));
-page.post("/api/base", limit(), async (c) => done(fromPage(c.req.raw.headers, hosts) ? await setBaseFrom(await c.req.text()) : 403));
 page.post("/api/stage", limit(), async (c) => done(orgs && fromPage(c.req.raw.headers, hosts) ? await setStageFrom(await c.req.text()) : 403));
 page.post("/api/copilot", limit(), async (c) => done(orgs && fromPage(c.req.raw.headers, hosts) ? await askCopilotFrom(await c.req.text()) : 403));
 // Only the watcher's server, which delivers them, and only the page.
@@ -462,22 +437,6 @@ page.get("/api/events", (c) => streamSSE(c, async (stream) => {
   await closed;
   clients.delete(stream);
 }));
-page.get("/api/diff", async (c) => {
-  // Only the worktrees the page lists, not any directory asked for.
-  const dir = c.req.query("dir") ?? "";
-  if (!projectWorktrees().some((p) => p.worktrees.includes(dir))) return c.json({ error: "no such worktree" }, 404);
-  return c.json(await highlightDiff(await worktreeDiff(dir, pulls.latest()?.bases ?? {})));
-});
-page.get("/api/lines", async (c) => {
-  // More context for a diff: only the worktrees the page lists, like it.
-  const dir = c.req.query("dir") ?? "";
-  const path = c.req.query("path") ?? "";
-  const listed = projectWorktrees().some((p) => p.worktrees.includes(dir));
-  // Newer lines would pass for unchanged ones in the diff taken then.
-  if (listed && changedSince(dir, path, Number(c.req.query("at")))) return c.json({ error: "the file changed" }, 409);
-  const lines = listed ? fileLines(dir, path, Number(c.req.query("from")), Number(c.req.query("to"))) : null;
-  return lines === null ? c.json({ error: "no such file" }, 404) : c.json(await highlightLines(path, lines));
-});
 page.get("/api/file", (c) => {
   // Only the files of the projects the page lists, not any file asked for.
   const dir = c.req.query("dir");
@@ -488,6 +447,10 @@ page.get("/api/file", (c) => {
 });
 // They are small and change rarely, so they are read each time.
 page.get("/api/learnings", (c) => c.json(readLearnings(reposRoot)));
+// The page's diffs. Only requests from the page's origin may set a base.
+routeDiff(page, {
+  projectRoot, reposRoot, herdr: () => store.get().herdr, bases: () => pulls.latest()?.bases ?? {},
+}, (headers) => fromPage(headers, hosts));
 // Also on the page's port, for the Herdr app's picker, which can't reach
 // the socket. Only requests from the page's origin may open a row.
 routePicker(page, picker, (headers) => fromPage(headers, hosts));

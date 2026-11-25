@@ -490,7 +490,7 @@ function BasePicker({ wt, refresh }: { wt: HighlightedDiff; refresh: () => void 
   if (!wt.branch || wt.source === "pull request" || !wt.baseOptions.length) return null;
   const choose = async (base: string) => {
     try {
-      await post("POST", "/api/base", { dir: wt.dir, branch: wt.branch, base: base || null });
+      await post("POST", "/diff/base", { dir: wt.dir, branch: wt.branch, base: base || null });
       setError(null);
       refresh();
     } catch (e) {
@@ -530,7 +530,7 @@ export function WorktreeDiffView({ dir, project, query, state }: { dir: string; 
   const ownerName = state?.projects.find((p) => p.dir === owner)?.name ?? owner?.split("/").pop();
   const [layout, setLayout] = useLayout();
   const review = useReview(dir);
-  const [fetched, error, at, refresh] = useFetched<HighlightedDiff>(`/api/diff?dir=${encodeURIComponent(dir)}`);
+  const [fetched, error, at, refresh] = useFetched<HighlightedDiff>(`/diff?dir=${encodeURIComponent(dir)}`);
   const [more, setMore] = useState<Record<string, Expanded>>({});
   const [lineError, setLineError] = useState<string | null>(null);
   const expanding = useRef(new Set<string>());
@@ -555,7 +555,7 @@ export function WorktreeDiffView({ dir, project, query, state }: { dir: string; 
     if (expanding.current.has(fileKey(original))) return;
     expanding.current.add(fileKey(original));
     try {
-      const res = await fetch(`/api/lines?${query}`);
+      const res = await fetch(`/diff/lines?${query}`);
       const stale = () => {
         refresh();
         return new Error("the file changed, so its diff was read again");
