@@ -21,21 +21,12 @@ export function locationKey(pathname: string, hash: string): string {
   return hash.replace(/^#/, "") || pathname.slice(1);
 }
 
-/** Returns where the view at pathname and hash, from a link made before
- * it moved to a path, is now, or null if it hasn't moved: the views after
- * a # at /. */
-export function movedTo(pathname: string, hash: string): string | null {
-  if (pathname !== "/") return null;
-  const path = `/${hash.replace(/^#/, "")}`;
-  return path !== "/" && pagePathOf(path) ? path : null;
-}
-
 export type Route =
   | { view: "ask" }
   | { view: "projects" }
   | { view: "project"; dir: string }
-  // project is the project it was opened from, if known.
-  | { view: "diff"; dir: string; project: string | null }
+  // project is the project it was opened from.
+  | { view: "diff"; dir: string; project: string }
   | { view: "file"; dir: string; name: string }
   | { view: "learnings" }
   | { view: "pulls" };
@@ -60,9 +51,6 @@ export function route(hash: string): Route {
     if (at < 0) return { view: "project", dir: decodeHash(rest) };
     return { view: "diff", dir: decodeHash(rest.slice(at + "/diffs/".length)), project: decodeHash(rest.slice(0, at)) };
   }
-  // The list of every worktree is gone; its links go to the projects.
-  if (hash === "diffs") return { view: "projects" };
-  if (hash.startsWith("diffs/")) return { view: "diff", dir: decodeHash(hash.slice("diffs/".length)), project: null };
   if (hash.startsWith("files/")) {
     const [dir = "", name = ""] = hash.slice("files/".length).split("/");
     return { view: "file", dir: decodeHash(dir), name: decodeHash(name) };

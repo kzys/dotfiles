@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { diffHref, fileHref, isPagePath, locationKey, movedTo, pageTitle, projectHref, route, tab } from "./pages.ts";
+import { diffHref, fileHref, isPagePath, locationKey, pageTitle, projectHref, route, tab } from "./pages.ts";
 
 test("routes to the page of a project's file", () => {
   const dir = "/p/20261026-a b";
@@ -17,16 +17,18 @@ test("routes to the page of a project", () => {
 });
 
 test("routes each view of the page", () => {
-  const hashes = ["", "projects", "diffs", `diffs/${encodeURIComponent("/p/x/wt/")}`, "diffs/%E0", "diffs/", "learnings", "pulls", "nope"];
+  const diffs = "projects/%2Fp%2Fx/diffs/";
+  const hashes = ["", "projects", `${diffs}${encodeURIComponent("/p/x/wt/")}`, `${diffs}%E0`, diffs, "learnings", "pulls", "diffs", "nope"];
   assert.deepEqual(hashes.map(route), [
-    { view: "ask" }, { view: "projects" }, { view: "projects" }, { view: "diff", dir: "/p/x/wt/", project: null },
-    { view: "diff", dir: "%E0", project: null }, { view: "diff", dir: "", project: null }, { view: "learnings" }, { view: "pulls" }, { view: "ask" },
+    { view: "ask" }, { view: "projects" }, { view: "diff", dir: "/p/x/wt/", project: "/p/x" },
+    { view: "diff", dir: "%E0", project: "/p/x" }, { view: "diff", dir: "", project: "/p/x" }, { view: "learnings" }, { view: "pulls" },
+    { view: "ask" }, { view: "ask" },
   ]);
   assert.deepEqual(hashes.map((h) => pageTitle(route(h))), [
-    "Ask agents", "Projects", "Projects", "wt · Diff", "%E0 · Diff", "Worktree · Diff", "Learnings", "Pull requests", "Ask agents",
+    "Ask agents", "Projects", "wt · Diff", "%E0 · Diff", "Worktree · Diff", "Learnings", "Pull requests", "Ask agents", "Ask agents",
   ]);
   assert.deepEqual(hashes.map((h) => tab(route(h))), [
-    "ask", "projects", "projects", "projects", "projects", "projects", "learnings", "pulls", "ask",
+    "ask", "projects", "projects", "projects", "projects", "learnings", "pulls", "ask", "ask",
   ]);
 });
 
@@ -36,15 +38,6 @@ test("reads views from the path or the hash", () => {
   assert.deepEqual(route(locationKey("/pulls", "#projects")), { view: "projects" });
   assert.deepEqual(route(locationKey("/", "")), { view: "ask" });
   assert.deepEqual(route(locationKey("/projects", "")), { view: "projects" });
-  assert.equal(movedTo("/", "#pulls"), "/pulls");
-  assert.equal(movedTo("/", "#projects"), "/projects");
-  assert.equal(movedTo("/", "#projects/%2Fp%2Fa"), "/projects/%2Fp%2Fa");
-  assert.equal(movedTo("/", "#learnings"), null);
-  assert.equal(movedTo("/", "#pullsx"), null);
-  assert.equal(movedTo("/", "#pulls/x"), null);
-  assert.equal(movedTo("/", ""), null);
-  assert.equal(movedTo("/projects", ""), null);
-  assert.equal(movedTo("/pulls", ""), null);
   assert.ok(isPagePath("/") && isPagePath("/pulls") && isPagePath("/projects") && isPagePath("/projects/%2Fp%2Fa"));
   assert.ok(!isPagePath("/api/state") && !isPagePath("/projectsx") && !isPagePath("/pulls/x"));
   assert.deepEqual(route(locationKey("/projects/%2Fp%2Fa", "")), { view: "project", dir: "/p/a" });

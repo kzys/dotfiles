@@ -6,7 +6,7 @@ import { WorktreeDiffView } from "./diff/view.tsx";
 import { FileView } from "./files.tsx";
 import { halMessage } from "./hal.ts";
 import { LearningsView } from "./learnings.tsx";
-import { isPagePath, locationKey, movedTo, pageTitle, route, tab } from "./pages.ts";
+import { isPagePath, locationKey, pageTitle, route, tab } from "./pages.ts";
 import { BoardView } from "./board.tsx";
 import { ProjectList, ProjectView, pressing } from "./projects.tsx";
 import type { State } from "./state.ts";
@@ -50,15 +50,9 @@ function ownLink(e: MouseEvent): URL | null {
 }
 
 /** Returns the page's location as locationKey reads it, kept current,
- * following the page's own links without loading it again. A location
- * from a link made before a view moved to a path, however the page got
- * there, is replaced with the path. */
+ * following the page's own links without loading it again. */
 function useLocation(): string {
-  const read = () => {
-    const moved = movedTo(location.pathname, location.hash);
-    if (moved) history.replaceState(null, "", moved);
-    return locationKey(location.pathname, location.hash);
-  };
+  const read = () => locationKey(location.pathname, location.hash);
   const [key, setKey] = useState(read);
   useEffect(() => {
     const changed = () => setKey(read());
