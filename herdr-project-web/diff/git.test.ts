@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, renameSync, symlinkSync, utimesSync, writeFileS
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseDiff } from "../diff.ts";
-import { lastSubject, worktreeDirs } from "../worktrees.ts";
+import { lastSubject, worktreeDirs } from "../project/worktrees.ts";
 import { changedSince, checkoutDirs, createdFrom, fileLines, setBase, summarize, worktreeDiff } from "./git.ts";
 
 test("diffs a worktree from where its branch left the remote's default", async () => {

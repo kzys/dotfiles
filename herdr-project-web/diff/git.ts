@@ -5,7 +5,7 @@ import { execFile } from "node:child_process";
 import { readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { repoName } from "../github/pullrequest.ts";
-import { worktreeDirs } from "../worktrees.ts";
+import { worktreeDirs } from "../project/worktrees.ts";
 
 // Untracked files past this many go unshown.
 const MAX_UNTRACKED = 100;

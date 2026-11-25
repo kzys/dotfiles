@@ -1,52 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Herdr } from "./herdr/backend.ts";
 import { linkParts } from "./inbox.ts";
-import {
-  type Watched, checkoutOf, linkCheckout, namedCheckouts, projectFiles, projectPanes, projectTabs, pullRequestLinks, readProjectFile, readState, workspaceLabels,
-} from "./state.ts";
-
-test("finds the checkout holding a directory", () => {
-  assert.equal(checkoutOf("/home/me/repos/o/r/sub/dir", "/home/me"), "/home/me/repos/o/r");
-  assert.equal(checkoutOf("/home/me/repos/o/r", "/home/me"), "/home/me/repos/o/r");
-  assert.equal(checkoutOf("/home/me/repos/o", "/home/me"), null);
-  assert.equal(checkoutOf("/home/me/project/p", "/home/me"), null);
-  assert.equal(checkoutOf("/elsewhere/a/b", "/home/me"), null);
-  assert.equal(checkoutOf("/home/me/repos/o/.cache/x", "/home/me"), null);
-});
-
-test("remembers each checkout a project works in once", () => {
-  const links = {};
-  assert.equal(linkCheckout(links, "/p", "/r1"), true);
-  assert.equal(linkCheckout(links, "/p", "/r1"), false);
-  assert.equal(linkCheckout(links, "/p", "/r2"), true);
-  assert.deepEqual(links, { "/p": ["/r1", "/r2"] });
-});
-
-test("lists a project's files and reads only those", () => {
-  const dir = mkdtempSync(join(tmpdir(), "herdr-project-web-"));
-  for (const n of ["notes.txt", "AGENT-z.md", "README.md", "AGENT-a.md", ".hidden", "bin", "claude-1.json", "codex-2.json"])
-    writeFileSync(join(dir, n), n);
-  writeFileSync(join(dir, "bin"), Buffer.from([1, 0, 2]));
-  writeFileSync(join(dir, "big.log"), "x".repeat((1 << 20) + 1));
-  mkdirSync(join(dir, "worktree"));
-  symlinkSync(join(dir, "notes.txt"), join(dir, "link"));
-  writeFileSync(join(dir, "locked"), "x", { mode: 0o000 });
-  assert.deepEqual(projectFiles(dir).map((f) => f.name), [
-    "README.md", "AGENT-a.md", "AGENT-z.md", "big.log", "bin", "locked", "notes.txt",
-  ]);
-  // Root reads any file.
-  if (process.getuid?.() !== 0) assert.deepEqual(readProjectFile(dir, "locked"), { error: "It can't be read." });
-  assert.deepEqual(readProjectFile(dir, "notes.txt"), { text: "notes.txt" });
-  assert.deepEqual(readProjectFile(dir, "bin"), { error: "It isn't text." });
-  assert.deepEqual(readProjectFile(dir, "big.log"), { error: "It is too large to show." });
-  for (const name of [".hidden", "claude-1.json", "link", "worktree", "../README.md", "", "gone"])
-    assert.equal(readProjectFile(dir, name), null, name);
-  assert.deepEqual(projectFiles(join(dir, "gone")), []);
-});
+import { type Watched, pullRequestLinks, readState } from "./state.ts";
 
 test("reads what the watcher found and the projects' notes", () => {
   const root = mkdtempSync(join(tmpdir(), "herdr-project-web-"));
@@ -136,17 +95,6 @@ test("reads what the watcher found and the projects' notes", () => {
   });
 });
 
-test("finds the checkouts that notes name", () => {
-  assert.deepEqual(
-    namedCheckouts(
-      "Work in ~/repos/kzys/dotfiles. See /home/u/repos/a/b-c/sub and ~/repos/kzys/dotfiles/x.\n" +
-        "Not ~/repos/<org>/<repo>, ~/repos/a/.. or /other/repos/x/y.",
-      "/home/u",
-    ),
-    ["/home/u/repos/kzys/dotfiles", "/home/u/repos/a/b-c"],
-  );
-});
-
 test("lists the checkouts a project works in after its worktrees", () => {
   const root = mkdtempSync(join(tmpdir(), "herdr-project-web-"));
   const projects = join(root, "project");
@@ -169,33 +117,6 @@ test("lists the checkouts a project works in after its worktrees", () => {
   const links = { [p2]: [join(root, "repos/o/r1"), join(root, "repos/o/r2"), join(root, "repos/o/gone")] };
   const linked = readState(null, projects, null, root, links);
   assert.deepEqual(linked.projects[1].worktrees.map((w) => w.dir), [join(root, "repos/o/r1"), join(root, "repos/o/r2")]);
-});
-
-test("gives each agent in a project the title its terminal shows", () => {
-  const pane = (pane_id: string, terminal_title?: string) =>
-    ({ pane_id, workspace_id: "w1", cwd: "/p/a", agent: "claude", agent_status: "idle", terminal_title });
-  const herdr = { workspaces: [], panes: [pane("t1", "Fix the board"), pane("t2", "")] };
-  assert.deepEqual(projectPanes("/p/a", herdr).map((p) => [p.id, p.title]), [["t1", "Fix the board"], ["t2", undefined]]);
-});
-
-test("counts the tabs with panes in a project", () => {
-  const pane = (tab_id: string, cwd: string) => ({ pane_id: `${tab_id}:${cwd}`, workspace_id: "w1", tab_id, cwd });
-  const herdr = { workspaces: [], panes: [pane("t1", "/p/a"), pane("t1", "/p/a/wt"), pane("t2", "/p/a"), pane("t3", "/p/b")] };
-  assert.equal(projectTabs("/p/a", herdr), 2);
-  assert.equal(projectTabs("/p/c", herdr), 0);
-  assert.equal(projectTabs("/p/a", null), 0);
-});
-
-test("names the workspaces with panes in a project", () => {
-  const herdr: Herdr = {
-    workspaces: [{ workspace_id: "w1", label: "custom" }, { workspace_id: "w2" },
-                 { workspace_id: "w3", label: "other" }],
-    panes: [{ pane_id: "w1:p1", workspace_id: "w1", cwd: "/p/a/wt" },
-            { pane_id: "w2:p1", workspace_id: "w2", cwd: "/home", foreground_cwd: "/p/a" },
-            { pane_id: "w3:p1", workspace_id: "w3", cwd: "/p/ab" }],
-  };
-  assert.deepEqual(workspaceLabels("/p/a", herdr), ["custom", "w2"]);
-  assert.deepEqual(workspaceLabels("/p/a", null), []);
 });
 
 test("links pull requests by their labels", () => {

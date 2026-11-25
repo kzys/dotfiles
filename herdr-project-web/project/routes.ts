@@ -2,7 +2,7 @@
 
 import type { Hono } from "hono";
 import type { Herdr } from "../herdr/backend.ts";
-import { openProjects, readProjectFile } from "../state.ts";
+import { openProjects, readProjectFile } from "./project.ts";
 
 /** What the file route needs of the server. */
 export type FilesServer = {
