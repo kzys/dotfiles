@@ -11,6 +11,7 @@ import { promisify } from "node:util";
 import { build } from "esbuild";
 import { getRequestListener } from "@hono/node-server";
 import { Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
 import { type SSEStreamingApi, streamSSE } from "hono/streaming";
 import {
   type AgentActions, type Queued, Outbox, forgetAnswered, fromPage, permission, routeAgents, undelivered,
@@ -22,7 +23,8 @@ import { BoardStore } from "./board-store.ts";
 import { type Herdr, isFree } from "./herdr/backend.ts";
 import { HerdrEvents } from "./herdr/events.ts";
 import { herdrClient, herdrSocket, readHerdr, tuiBackend } from "./herdr/tui.ts";
-import { type HookEvent, type HookHandler, hookServer, limit, listenOn, speaker } from "./hooks.ts";
+import { type HookEvent, type HookHandler, hookServer, listenOn, speaker } from "./hooks.ts";
+import { jsonBody, limit } from "./http.ts";
 import { agentCommand, instructions, launchDirectory, launchScript, parseAgent, projectDir } from "./launch.ts";
 import { connectors } from "./headless.ts";
 import * as linear from "./linear.ts";
@@ -390,7 +392,7 @@ const picker: PickerServer = {
 
 const page = new Hono();
 page.use(async (c, next) => (hosts.has(c.req.header("host") ?? "") ? next() : c.body(null, 403)));
-page.onError((e, c) => c.json({ error: e.message }, 500));
+page.onError((e, c) => (e instanceof HTTPException ? e.getResponse() : c.json({ error: e.message }, 500)));
 // The pull requests' board, which only the watcher's server keeps, and
 // only the page may change.
 routePulls(page, { latest: () => pulls.latest(), board: boardStore, changed: () => store.tell() },
@@ -658,12 +660,12 @@ const onHook: HookHandler = async (pane, { agent, event }, data) => {
 
 // What herdr-project and the picker ask for on the socket.
 const socket = new Hono();
-socket.onError((e, c) => c.text(e.message, 500));
+socket.onError((e, c) => (e instanceof HTTPException ? e.getResponse() : c.text(e.message, 500)));
 socket.post("/launch", limit((c) => c.text("arguments too long", 413)), async (c) =>
   c.text(launch(new URLSearchParams(await c.req.text())))
 );
 socket.post("/statusline", limit(), async (c) =>
-  c.text(statusReport(JSON.parse((await c.req.text()) || "{}"), await speaker(c.req.raw.headers)))
+  c.text(statusReport(await jsonBody(c), await speaker(c.req.raw.headers)))
 );
 socket.get("/sessions", (c) =>
   // Codex's, with what opening one needs, or the directories they ran in.
