@@ -39,7 +39,7 @@ import { Schedule } from "./schedule.ts";
 import {
   codexTokens, lastPrompt, percent, resumedText, roleToReport, sessionCwd, sessionReport, statusLine, statusTokens, usageFile,
 } from "./report.ts";
-import { appBackend, appHerdrPanes, appTerminals, claudeSessions } from "./herdr/app.ts";
+import { appBackend, appCommand, appHerdrPanes, appSpaces, appTerminals, claudeSessions, spaceNames } from "./herdr/app.ts";
 import { background, choices, inboxChoices, open, paneRecords, plan, rowNotes, workspacesToName } from "./rows.ts";
 import { claudeSessionDirs, codexContext, codexSessionDirs, codexSessions, reportedRole } from "./sessions.ts";
 import * as slack from "./slack.ts";
@@ -204,6 +204,19 @@ new Schedule(async () => {
   refresh();
 }, { every: 5_000, onError: logError });
 
+// The names the Herdr app's spaces were last given after their projects,
+// by space, so that a name the user gives a space stays until its
+// project's name changes. Null until the first naming, which takes the
+// spaces open then as named already, as for Herdr's workspaces.
+const spaceNamesPath = join(stateDir, "space-names.json");
+let spaceNamesGiven = loadState(spaceNamesPath) as Record<string, string> | null;
+
+// The Herdr app's spaces and the projects' names when the spaces were last
+// named, so that the app is asked only once either changes, even after a
+// failure, and the naming under way, which the next waits for.
+let spacesNamedFrom = "";
+let spacesNaming: Promise<void> = Promise.resolve();
+
 // Where Claude Code keeps each session's files, once found.
 const sessionFolders = new Map<string, string>();
 
@@ -236,6 +249,7 @@ new Schedule(async () => {
 let titled = "";
 function refresh() {
   if (orgs) nameWorkspaces().catch((e) => console.error("herdr-project-web:", e));
+  if (orgs) nameAppSpaces().catch((e) => console.error("herdr-project-web:", e));
   const found = watched();
   const next = JSON.stringify(pageState());
   // Tell Herdr how much waits on the user only as it changes.
@@ -614,6 +628,46 @@ async function nameWorkspaces() {
     saveState(namedPath, [...named]);
     await reportTitle(workspace, dir);
   }
+}
+
+/** Returns the name README.md gives the project in directory, or null. */
+function projectName(directory: string): string | null {
+  const text = readProjectReadme(directory);
+  return (text && frontMatter(text, "name")) || null;
+}
+
+/** Names each Herdr app space after its project once its README.md names
+ * it, and again when that name changes. */
+function nameAppSpaces(): Promise<void> {
+  // One at a time, so that one going by older names can't finish last.
+  return (spacesNaming = spacesNaming.then(nameAppSpacesNow, nameAppSpacesNow));
+}
+
+async function nameAppSpacesNow() {
+  const ids = [...new Set(appTerminalPanes.map((p) => p.workspace_id))].sort();
+  const from = JSON.stringify([ids, projectDirs(projectRoot).map((dir) => [dir, projectName(dir)])]);
+  if (from === spacesNamedFrom) return;
+  spacesNamedFrom = from;
+  const nameOf = (folder: string) => {
+    const dir = projectDir(folder, projectRoot);
+    return dir && projectName(dir);
+  };
+  const spaces = await appSpaces();
+  const first = spaceNamesGiven === null;
+  // Only the spaces there are.
+  const given: Record<string, string> = Object.fromEntries(
+    Object.entries(spaceNamesGiven ?? {}).filter(([id]) => spaces.some((s) => s.id === id)),
+  );
+  for (const { id, name, rename } of spaceNames(spaces, given, nameOf)) {
+    try {
+      if (rename && !first) await appCommand("space.rename", { id, name });
+      given[id] = name;
+    } catch (e) {
+      logError(e);
+    }
+  }
+  if (JSON.stringify(given) !== JSON.stringify(spaceNamesGiven)) saveState(spaceNamesPath, given);
+  spaceNamesGiven = given;
 }
 
 /** Reports a starting session's role to pane: see roleToReport. A resumed

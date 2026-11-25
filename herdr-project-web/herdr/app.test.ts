@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { appAgentFree, appHerdrPanes, appOpener, appListedPanes, appPanes, appTerminals, claudeSessions, procParent, psParents, terminalSession } from "./app.ts";
+import { appAgentFree, spaceNames, appHerdrPanes, appOpener, appListedPanes, appPanes, appTerminals, claudeSessions, procParent, psParents, terminalSession } from "./app.ts";
 import { open } from "../rows.ts";
 
 const terminal = (o: object) => ({
@@ -97,4 +97,24 @@ test("reads ps's parents", () => {
 test("reads a process's parent", () => {
   assert.equal(procParent(process.pid), process.ppid);
   assert.equal(procParent(2 ** 30), null);
+});
+
+test("names spaces after their folders until the name stays the same", () => {
+  const space = (id: string, name: string, folder: string, machine: string | null = null) => ({ id, name, folder, machine });
+  const names: Record<string, string> = { "/p/a": "alpha", "/p/b": "beta", "/p/c": "gamma" };
+  const spaces = [
+    space("s1", "20260101-a", "/p/a"), // Not named yet.
+    space("s2", "beta", "/p/b"), // Already has the name.
+    space("s3", "mine", "/p/c"), // Renamed by the user after gamma.
+    space("s4", "x", "/p/a", "vps"), // On another machine.
+    space("s5", "~", "/home"), // No name for its folder.
+  ];
+  assert.deepEqual(spaceNames(spaces, { s3: "gamma" }, (f) => names[f] ?? null), [
+    { id: "s1", name: "alpha", rename: true },
+    { id: "s2", name: "beta", rename: false },
+  ]);
+  names["/p/c"] = "gamma2";
+  assert.deepEqual(spaceNames(spaces, { s1: "alpha", s2: "beta", s3: "gamma" }, (f) => names[f] ?? null), [
+    { id: "s3", name: "gamma2", rename: true },
+  ]);
 });
