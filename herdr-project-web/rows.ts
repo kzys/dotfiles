@@ -13,8 +13,9 @@ import { type CodexSession, codexContext, reportedRole, title, transcriptDir, tr
 import type { Herdr, OpenHerdr } from "./herdr/backend.ts";
 import type { State } from "./state.ts";
 
-// Kind, directory, agent:session, and what the picker shows.
-export type Row = [string, string, string, string];
+// Kind, directory, agent:session, and what the picker shows: as one line,
+// and as columns, unpadded, for a picker that lays them out itself.
+export type Row = [string, string, string, string, string[]?];
 
 export type PaneRecord = { agent: string | null; workspace: string; cwd: string; pane: string; session: string; role: string };
 
@@ -105,7 +106,7 @@ function when(seconds: number): string {
 export function choices(panes: PaneRecord[], projects: string, codex: CodexSession[], home = homedir()): Row[] {
   const running = new Set(panes.filter((p) => p.session).map((p) => `${p.agent}:${p.session}`));
   const active = panes.filter((p) => AGENTS.includes(p.agent as Agent)).map((p) => p.cwd);
-  const rows: Row[] = [["new", "", "", "+ new project"]];
+  const rows: Row[] = [["new", "", "", "+ new project", ["+ new project"]]];
   mkdirSync(projects, { recursive: true });
   const dirs = readdirSync(projects).filter((name) => isProject(name) && isDir(join(projects, name))).map((name) => {
     const dir = join(projects, name);
@@ -116,11 +117,12 @@ export function choices(panes: PaneRecord[], projects: string, codex: CodexSessi
   for (const { dir, name, text, closed } of dirs) {
     let summary = text === null ? "(no notes)" : frontMatter(text, "title") || "(no title)";
     if (closed) summary += " (closed)";
-    rows.push(["project", dir, "", `${name}  ${summary}`]);
+    rows.push(["project", dir, "", `${name}  ${summary}`, [name, summary]]);
     for (const s of sessions(dir, codex, home)) {
       const mark = running.has(`${s.agent}:${s.id}`) ? "●" : " ";
+      const [at, used, heading] = [when(s.updatedAt), context(dir, s), sessionTitle(s)];
       rows.push(["session", dir, `${s.agent}:${s.id}`,
-                 `  ${mark} ${s.agent.padEnd(8)} ${when(s.updatedAt)} ${context(dir, s).padStart(4)}  ${sessionTitle(s)}`]);
+                 `  ${mark} ${s.agent.padEnd(8)} ${at} ${used.padStart(4)}  ${heading}`, [mark.trim(), s.agent, at, used, heading]]);
     }
   }
   return rows;
@@ -130,7 +132,7 @@ export function choices(panes: PaneRecord[], projects: string, codex: CodexSessi
 const SOURCES: Record<string, string> = {
   you: "you", "?": "you?", maybe: "maybe", close: "close?", pr: "pr", slack: "slack", linear: "linear", ctx: "ctx", idle: "idle",
 };
-const source = (mark: string) => (SOURCES[mark] ?? mark).padEnd(6);
+const source = (mark: string) => SOURCES[mark] ?? mark;
 
 /** Returns agent:session for role's running or saved session in directory,
  * else the newest, or "" if there is none. */
@@ -150,16 +152,21 @@ export function inboxChoices(panes: PaneRecord[], codex: CodexSession[], state: 
   const rows: Row[] = [];
   for (const project of [...state.projects].sort((a, b) => b.dir.localeCompare(a.dir))) {
     if (!project.items.length) continue;
-    rows.push(["project", project.dir, "", `${project.dir.split("/").pop()}  ${project.title}`]);
+    const name = project.dir.split("/").pop() ?? "";
+    rows.push(["project", project.dir, "", `${name}  ${project.title}`, [name, project.title]]);
     const sids = new Map<string | null, string>();
     for (const item of project.items) {
       if (!sids.has(item.role)) sids.set(item.role, sessionFor(project.dir, item.role, panes, codex, home));
       const sid = sids.get(item.role)!;
       const mark = running.has(sid) ? "●" : " ";
-      rows.push(["session", project.dir, sid, `  ${mark} ${sid.split(":")[0].padEnd(8)} ${source(item.mark)} ${item.text}`]);
+      const agent = sid.split(":")[0];
+      rows.push(["session", project.dir, sid, `  ${mark} ${agent.padEnd(8)} ${source(item.mark).padEnd(6)} ${item.text}`,
+                 [mark.trim(), agent, source(item.mark), item.text]]);
     }
   }
-  for (const item of state.unowned) rows.push(["new", "", "", `+ ${source(item.mark)} ${item.text}`]);
+  for (const item of state.unowned) {
+    rows.push(["new", "", "", `+ ${source(item.mark).padEnd(6)} ${item.text}`, ["+", source(item.mark), item.text]]);
+  }
   return rows;
 }
 
