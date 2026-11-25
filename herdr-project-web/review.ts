@@ -1,7 +1,7 @@
 // Comments on the lines of a diff or a Markdown file, kept in the browser
 // until they go to an agent as one message.
 
-import { type FileDiff, filePath } from "./diff.ts";
+import { type FileDiff, filePath } from "./diff/diff.ts";
 import { within } from "./paths.ts";
 import { type AgentState, statusState } from "./pulls.ts";
 import type { State } from "./state.ts";

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { FileDiff } from "./diff.ts";
+import type { FileDiff } from "./diff/diff.ts";
 import { type Comment, clearReviewer, commentKey, displaced, displacedFromBlocks, receiverStarted, receiverStatus, reviewMessage, reviewers, withComment } from "./review.ts";
 
 const comment = (path: string, line: number, body: string, side: "old" | "new" = "new"): Comment => ({ path, side, line, code: "x()", body });

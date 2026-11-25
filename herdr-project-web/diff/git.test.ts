@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, renameSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parseDiff } from "../diff.ts";
+import { parseDiff } from "./diff.ts";
 import { lastSubject, worktreeDirs } from "../project/worktrees.ts";
 import { changedSince, checkoutDirs, createdFrom, fileLines, setBase, summarize, worktreeDiff } from "./git.ts";
 
