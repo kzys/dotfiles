@@ -14,17 +14,16 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { type SSEStreamingApi, streamSSE } from "hono/streaming";
 import {
-  type AgentActions, type Queued, Outbox, forgetAnswered, fromPage, permission, routeAgents, undelivered,
+  type AgentActions, type Queued, Outbox, fromPage, permission, routeAgents, undelivered,
 } from "./agents.ts";
 import * as github from "./github/poll.ts";
-import type { PullCheck } from "./github/poll.ts";
 import * as pullSection from "./github-section.ts";
 import { type PullChecked, PullRequests } from "./github/watch.ts";
-import { type BoardState, BoardStore, boardCards } from "./board-store.ts";
+import { BoardStore, boardCards } from "./board-store.ts";
 import { type Herdr, canTake } from "./herdr/backend.ts";
 import { HerdrEvents } from "./herdr/events.ts";
 import { herdrClient, herdrSocket, readHerdr, tuiBackend } from "./herdr/tui.ts";
-import { type HookEvent, type HookLog, hookServer, listenOn, speaker } from "./hooks.ts";
+import { type HookLog, hookServer, listenOn, speaker } from "./hooks.ts";
 import { jsonBody, limit } from "./http.ts";
 import { ask as headlessAsk, connectors } from "./headless.ts";
 import * as linear from "./linear.ts";
@@ -34,9 +33,10 @@ import { type PaneHerdr, checkPanes } from "./panes.ts";
 import { type Checked, checkQueue } from "./queues.ts";
 import { Schedule } from "./schedule.ts";
 import { batch } from "@preact/signals-core";
-import { AGAIN, anyOf, effect, signals, values } from "./store.ts";
+import { AGAIN, effect } from "./store.ts";
+import { Facts, type FactValues } from "./facts.ts";
 import { AgentReports } from "./agent-reports.ts";
-import { type Ask, Asks, askees, summarizeAll } from "./ask/ask.ts";
+import { Asks, askees, summarizeAll } from "./ask/ask.ts";
 import { type AsksServer, routeAsks, routeReplies } from "./ask/routes.ts";
 import { Namer, reportTitle } from "./naming.ts";
 import { everyPane, pageState } from "./page-state.ts";
@@ -51,7 +51,7 @@ import { type PickerServer, routePicker } from "./picker/routes.ts";
 import { claudeSessionDirs, codexSessionDirs, codexSessions } from "./sessions.ts";
 import * as slack from "./slack.ts";
 import { loadState, saveState } from "./statefile.ts";
-import { type ProjectRead, checkoutOf, linkCheckout, projectDirs, readProjects } from "./project/project.ts";
+import { checkoutOf, linkCheckout, projectDirs, readProjects } from "./project/project.ts";
 import { type State, type Watched, agentStates } from "./state.ts";
 import { type Found, title, watchWorkspace, watchedFrom } from "./watched.ts";
 
@@ -104,74 +104,24 @@ const logError = (e: unknown) => console.error("herdr-project-web:", e);
 const { ask, tryAsk } = herdrClient();
 
 // What the server knows, which its sources set and from which the page and
-// what the server does derive, a signal for each. What other objects keep,
-// such as the outbox and the board, they tell of as it changes, with
-// follow.
-type Facts = {
-  // Herdr's panes and workspaces, null while it can't be asked.
-  herdr: Herdr | null;
-  // The terminals of the Herdr app's spaces, which herdr-core runs, as
-  // Herdr's panes, and whether they have been read yet.
-  appPanes: Herdr["panes"];
-  appRead: boolean;
-  // How many times the Herdr app's spaces have changed, which herdr-core
-  // tells as changes to the app's document.
-  appSpacesChanged: number;
-  // What the checks found, by title, once they have checked.
-  found: ReadonlyMap<string, Found>;
-  // How many times ~/project, a project in it or what its projects work
-  // in may have changed, and the projects shown, read since.
-  projectsChanged: number;
-  projects: ProjectRead[];
-  // What the last check of the pull requests that didn't fail found, or
-  // null before one.
-  pulls: PullCheck | null;
-  // Each pane's last hook event.
-  hooks: ReadonlyMap<string, HookEvent>;
-  // What the outbox holds, the board's state and the questions asked, as
-  // they keep them.
-  queued: Record<string, Queued[]>;
-  board: BoardState;
-  asks: Ask[];
-  // The projects in ~/project, each with the name its README.md gives it,
-  // read with the projects shown.
-  names: [string, string | null][];
-};
-const facts = signals<Facts>({
-  herdr: null, appPanes: [], appRead: false, appSpacesChanged: 0, found: new Map(), projectsChanged: 0, projects: [],
-  pulls: null, hooks: new Map(), queued: {}, board: { moves: {}, asks: {} }, asks: [], names: [],
-});
-// What changes whenever any fact does.
-const anyFact = anyOf(facts);
+// what the server does derive.
+const facts = new Facts();
 
-/** Keeps fact as what get returns, now and after each change that source
- * tells of. */
-function follow<K extends keyof Facts>(fact: K, source: { subscribe(listener: () => void): void }, get: () => Facts[K]) {
-  const set = () => void (facts[fact].value = get());
+/** Calls set now and after each change that source tells of. */
+function follow(source: { subscribe(listener: () => void): void }, set: () => void) {
   set();
   source.subscribe(set);
 }
-
-/** Sets what the check titled title found. */
-const setFound = (title: string, found: Found) => void (facts.found.value = new Map(facts.found.value).set(title, found));
 
 // Herdr's panes and workspaces, read when its events say something
 // changed, and every minute, since panes' directories change without
 // events.
 const herdrReads = new Schedule(async () => {
-  const before = facts.herdr.value;
   const next = await readHerdr(tryAsk);
   // Each agent's state is its own subscription, and a failed one
   // subscribes again.
   herdrEvents.update(next);
-  const states = agentStates(before) ?? {};
-  let hooks = forgetAnswered(facts.hooks.value, states, agentStates(next) ?? states);
-  if (next && [...hooks.keys()].some((pane) => !next.panes.some((q) => q.pane_id === pane)))
-    hooks = new Map([...hooks].filter(([pane]) => next.panes.some((q) => q.pane_id === pane)));
-  batch(() => {
-    facts.herdr.value = next;
-    facts.hooks.value = hooks;
-  });
+  facts.setHerdr(next);
 }, { every: 60_000, onError: logError });
 const herdrEvents = new HerdrEvents(herdrSocket, () => herdrReads.refresh());
 // The checks, in the order the page shows what they found.
@@ -180,10 +130,10 @@ const ORDER = ["Pull requests", "Panes", "Slack", "Linear"];
 // The columns the user moved pull requests to, and what came of asking
 // Copilot to review each.
 const boardStore = new BoardStore(stateDir, logError);
-follow("board", boardStore, () => boardStore.state());
+follow(boardStore, () => facts.setBoard(boardStore.state()));
 // The questions asked of every agent from the page, and their replies.
 const asks = new Asks(join(stateDir, "asks.json"));
-follow("asks", asks, () => asks.all());
+follow(asks, () => facts.setAsks(asks.all()));
 // One answer to each question from its replies, made by a headless Claude
 // soon after replies come in, so that those close together go in one.
 const SUMMARY_SCHEMA = { type: "object", required: ["answer"], properties: { answer: { type: "string" } } };
@@ -194,7 +144,7 @@ const summaries = new Schedule(
 // Each pane's last hook event, kept as a fact.
 const hookEvents: HookLog = {
   get: (pane) => facts.hooks.value.get(pane),
-  set: (pane, event) => void (facts.hooks.value = new Map(facts.hooks.value).set(pane, event)),
+  set: (pane, event) => facts.setHook(pane, event),
   entries: () => facts.hooks.value.entries(),
 };
 const herdrTui = tuiBackend(ask, {
@@ -207,7 +157,7 @@ const backendOf = (pane: string) => facts.appPanes.value.some((p) => p.pane_id =
 const outbox = new Outbox(
   join(stateDir, "outbox.json"), (pane, text) => backendOf(pane).send(pane, text), (pane) => backendOf(pane).ready(pane),
 );
-follow("queued", outbox, () => outbox.all());
+follow(outbox, () => facts.setQueued(outbox.all()));
 // The checkouts under ~/repos each project's agents went into, by project.
 const linksPath = join(stateDir, "checkouts.json");
 const links = (loadState(linksPath) as Record<string, string[]> | null) ?? {};
@@ -215,7 +165,7 @@ const links = (loadState(linksPath) as Record<string, string[]> | null) ?? {};
 let last = "";
 
 /** Returns the page's state from facts. */
-const pageOf = (facts: Facts) => pageState({
+const pageOf = (facts: FactValues) => pageState({
   ...facts,
   watched: watched(facts),
   acting: orgs
@@ -224,7 +174,7 @@ const pageOf = (facts: Facts) => pageState({
 });
 
 /** Returns what the checks found, or null before any has. */
-function watched({ found, pulls }: Facts): Watched | null {
+function watched({ found, pulls }: FactValues): Watched | null {
   const ours = ORDER.flatMap((t) => found.get(t) ?? []);
   return ours.length ? watchedFrom(ours, pulls?.urls ?? []) : null;
 }
@@ -233,18 +183,12 @@ function watched({ found, pulls }: Facts): Watched | null {
 // ones while hc fails.
 new CoreFeed({
   terminals: (terminals) => {
-    const next = appHerdrPanes(terminals, claudeSessions());
-    if (!facts.appRead.value || JSON.stringify(next) !== JSON.stringify(facts.appPanes.value)) {
-      batch(() => {
-        facts.appPanes.value = next;
-        facts.appRead.value = true;
-      });
-    }
+    facts.setAppPanes(appHerdrPanes(terminals, claudeSessions()));
   },
   doc: (name) => {
-    if (name === "herdr-app") facts.appSpacesChanged.value++;
+    if (name === "herdr-app") facts.spacesChanged();
   },
-  subscribed: () => void facts.appSpacesChanged.value++,
+  subscribed: () => facts.spacesChanged(),
   onError: logError,
 });
 
@@ -267,7 +211,7 @@ new Schedule(async () => {
     lines = [`Cannot check panes: ${String(e).split("\n")[0]}`];
   }
   const next = new Date(Date.now() + PANE_INTERVAL).toISOString();
-  setFound("Panes", { title: "Panes", section: { title: "Panes", at: at.toISOString(), next, lines }, items });
+  facts.setFound("Panes", { title: "Panes", section: { title: "Panes", at: at.toISOString(), next, lines }, items });
 }, { every: PANE_INTERVAL, start: !!orgs, onError: logError });
 
 // The connected claude.ai connectors; the queues start together, so one
@@ -291,7 +235,7 @@ const queues: [string, string, (texts: ReturnType<typeof notesTexts>) => Promise
 ];
 const queueChecks = queues.map(([title, connector, check]) => new Schedule(async () => {
   const names = await connected();
-  setFound(title, await checkQueue(title, connector, names, () => check(notesTexts(projectRoot)),
+  facts.setFound(title, await checkQueue(title, connector, names, () => check(notesTexts(projectRoot)),
                                    facts.found.value.get(title) ?? null, () => new Date(), QUEUE_INTERVAL));
 }, { every: QUEUE_INTERVAL, start: false, onError: logError }));
 
@@ -327,8 +271,8 @@ function showPullCheck({ at, error, last }: PullChecked) {
   const shown = pullSection.shown(at, new Date(Date.now() + PR_INTERVAL), check, error, before);
   batch(() => {
     if (check) boardStore.forget(check);
-    facts.pulls.value = last;
-    setFound(shown.title, shown);
+    facts.setPulls(last);
+    facts.setFound(shown.title, shown);
   });
   if (tty !== null)
     try {
@@ -343,10 +287,10 @@ function showPullCheck({ at, error, last }: PullChecked) {
 function checkPullRequestsSoon() {
   const next = pulls.checkSoon();
   const shown = facts.found.value.get("Pull requests");
-  if (shown?.section && next) setFound(shown.title, { ...shown, section: { ...shown.section, next: next.toISOString() } });
+  if (shown?.section && next) facts.setFound(shown.title, { ...shown, section: { ...shown.section, next: next.toISOString() } });
 }
 /** Tells that the projects shown may have changed. */
-const projectsChanged = () => void facts.projectsChanged.value++;
+const projectsChanged = () => facts.touchProjects();
 let timer: ReturnType<typeof setTimeout> | undefined;
 function changed() {
   clearTimeout(timer);
@@ -387,8 +331,8 @@ const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
 
 const agentActions: AgentActions = {
   outbox,
-  known: (pane) => Object.hasOwn(agentStates(everyPane(values(facts))) ?? {}, pane),
-  session: (pane) => everyPane(values(facts))?.panes.find((p) => p.pane_id === pane)?.agent_session?.value,
+  known: (pane) => Object.hasOwn(agentStates(everyPane(facts.all.value)) ?? {}, pane),
+  session: (pane) => everyPane(facts.all.value)?.panes.find((p) => p.pane_id === pane)?.agent_session?.value,
   focus: (pane) => backendOf(pane).focus(pane),
 };
 
@@ -421,7 +365,7 @@ routeAgents(page, agentActions, (headers) => !!orgs && fromPage(headers, hosts))
 // questions, does, and only from the page.
 const asksServer: AsksServer = {
   asks,
-  askees: () => askees(everyPane(values(facts)), (JSON.parse(last) as State).projects),
+  askees: () => askees(everyPane(facts.all.value), (JSON.parse(last) as State).projects),
   queue: (pane, text, session) => outbox.add(pane, text, session),
   changed: () => summaries.refresh(10_000),
 };
@@ -461,8 +405,9 @@ const pageFd = Number(process.env.HERDR_PROJECT_PAGE_FD) || null;
 const socketFd = Number(process.env.HERDR_PROJECT_SOCKET_FD) || null;
 
 // Only this machine: the page shows private work.
-facts.projects.value = readProjects(projectRoot, null, home, links);
-last = JSON.stringify(pageOf(values(facts)));
+const namer = new Namer({ stateDir, projectRoot, tryAsk, spaces: () => appSpaces(), command: appCommand, onError: logError });
+facts.setProjects(readProjects(projectRoot, null, home, links), namer.names());
+last = JSON.stringify(pageOf(facts.all.value));
 server.listen(pageFd ? { fd: pageFd } : { port, host: "127.0.0.1" }, () => console.log(`herdr-project-web on http://127.0.0.1:${port}/`));
 
 /** Remembers that the project in dir, if any, works in the checkout holding
@@ -478,8 +423,6 @@ function noteCheckout(dir: string | null, cwd: string) {
   projectsChanged();
 }
 
-const namer = new Namer({ stateDir, projectRoot, tryAsk, spaces: () => appSpaces(), command: appCommand, onError: logError });
-facts.names.value = namer.names();
 const reports = new AgentReports({ home, projectRoot, dotfiles, stateDir, tryAsk, noteCheckout, projectsChanged, onError: logError });
 
 // What follows from the facts, each when what it depends on changes.
@@ -487,14 +430,13 @@ const reports = new AgentReports({ home, projectRoot, dotfiles, stateDir, tryAsk
 // The projects shown, read again when they may have changed, and when the
 // panes, whose workspaces keep closed ones shown, do.
 effect(() => [
-  facts.projectsChanged.value, (everyPane(values(facts))?.panes ?? []).map((p) => [p.workspace_id, p.cwd, p.foreground_cwd]),
-], () => batch(() => {
-  facts.projects.value = readProjects(projectRoot, everyPane(values(facts)), home, links);
-  facts.names.value = namer.names();
-}), { onError: logError });
+  facts.projectsChanged.value, (everyPane(facts.all.value)?.panes ?? []).map((p) => [p.workspace_id, p.cwd, p.foreground_cwd]),
+], () => facts.setProjects(readProjects(projectRoot, everyPane(facts.all.value), home, links), namer.names()), {
+  onError: logError,
+});
 
 // The page, sent to it as it changes.
-effect(() => JSON.stringify(pageOf(values(facts))), (next) => {
+effect(() => JSON.stringify(pageOf(facts.all.value)), (next) => {
   last = next;
   for (const stream of clients) stream.writeSSE({ data: next }).catch(() => {});
 }, { onError: logError });
@@ -503,13 +445,13 @@ effect(() => JSON.stringify(pageOf(values(facts))), (next) => {
 // next change of anything when telling fails.
 effect(() => {
   const workspace = watchWorkspace(process.env, facts.herdr.value);
-  const found = watched(values(facts));
+  const found = watched(facts.all.value);
   return workspace && found ? { workspace, text: title(found.inbox) } : null;
 }, async (told) => {
   if (!told) return;
   const tokens = { title: told.text };
   if (!(await tryAsk("workspace.report_metadata", { workspace_id: told.workspace, source: "watch", tokens }))) throw AGAIN;
-}, { retry: anyFact, onError: logError });
+}, { retry: facts.all, onError: logError });
 
 // Only the watcher's server acts on agents and names their places.
 if (orgs) {
@@ -517,7 +459,7 @@ if (orgs) {
   // next change of anything while some one that can could take is left:
   // not those for another session, which wait for the user.
   effect(() => {
-    const all = everyPane(values(facts));
+    const all = everyPane(facts.all.value);
     const sessions = Object.fromEntries((all?.panes ?? []).map((p) => [p.pane_id, p.agent_session?.value ?? ""]));
     const agents = Object.fromEntries((all?.panes ?? []).map((p) => [p.pane_id, p.agent ?? ""]));
     return { states: agentStates(all) ?? {}, sessions, agents, queued: facts.queued.value };
@@ -527,14 +469,14 @@ if (orgs) {
     if (Object.entries(facts.queued.value).some(([pane, queued]) => canTake(states[pane], agents[pane]) && queued.some(takes(pane)))) {
       throw AGAIN;
     }
-  }, { retry: anyFact, onError: logError });
+  }, { retry: facts.all, onError: logError });
   // Herdr's workspaces, after their projects' names, and again on the next
   // change of anything while one couldn't be renamed.
   effect(() => [
     (facts.herdr.value?.panes ?? []).map((p) => [p.workspace_id, p.agent, p.tokens?.cwd || p.cwd]), facts.names.value,
   ], async () => {
     if (!(await namer.workspaces(facts.herdr.value))) throw AGAIN;
-  }, { retry: anyFact, onError: logError });
+  }, { retry: facts.all, onError: logError });
   // The Herdr app's spaces, after their projects' names.
   effect(() => [facts.appSpacesChanged.value, facts.names.value], () => namer.appSpaces(), { onError: logError });
 }

@@ -1,26 +1,7 @@
-// What the server knows, as a signal for each fact that its sources set
-// and its effects follow, as a page's state flows to what it renders.
+// What the server does as the signals it follows change, as a page's
+// state flows to what it renders.
 
-import { type ReadonlySignal, type Signal, computed, signal, effect as track } from "@preact/signals-core";
-
-/** A signal for each field of T. */
-export type Signals<T> = { readonly [K in keyof T]: Signal<T[K]> };
-
-/** Returns a signal for each field of initial, holding its value. */
-export function signals<T extends object>(initial: T): Signals<T> {
-  return Object.fromEntries(Object.entries(initial).map(([k, v]) => [k, signal(v)])) as Signals<T>;
-}
-
-/** Returns the values of all as they are now, reading each, so that what
- * reads them follows all of them. */
-export function values<T extends object>(all: Signals<T>): T {
-  return Object.fromEntries(Object.entries(all).map(([k, s]) => [k, (s as Signal).value])) as T;
-}
-
-/** Returns a signal that changes whenever any of all does. */
-export function anyOf<T extends object>(all: Signals<T>): ReadonlySignal<unknown> {
-  return computed(() => values(all));
-}
+import { type ReadonlySignal, effect as track } from "@preact/signals-core";
 
 /** What an effect's run raises to run again on its retry signal's next
  * change, without it counting as an error. */

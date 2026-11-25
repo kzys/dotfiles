@@ -1,28 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { signal } from "@preact/signals-core";
-import { AGAIN, anyOf, effect, signals, values } from "./store.ts";
+import { type Signal, computed, signal } from "@preact/signals-core";
+import { AGAIN, effect } from "./store.ts";
+
+/** Returns a signal for each field of initial. */
+const signals = <T extends object>(initial: T) =>
+  Object.fromEntries(Object.entries(initial).map(([k, v]) => [k, signal(v)])) as { [K in keyof T]: Signal<T[K]> };
+/** Returns a signal that changes whenever any of all does. */
+const anyOf = (all: Record<string, Signal>) => computed(() => Object.values(all).map((s) => s.value));
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
-
-test("gives a signal for each fact, and their values together", () => {
-  const facts = signals({ a: 1, b: "x" });
-  facts.b.value = "y";
-  assert.deepEqual(values(facts), { a: 1, b: "y" });
-});
-
-test("changes anyOf when any fact does, and not when none does", async () => {
-  const facts = signals({ a: 1, b: "x" });
-  const any = anyOf(facts);
-  const runs: number[] = [];
-  effect(() => any.value, () => void runs.push(facts.a.value));
-  await settle();
-  facts.b.value = "y";
-  await settle();
-  facts.b.value = "y";
-  await settle();
-  assert.deepEqual(runs, [1, 1]);
-});
 
 test("runs an effect when its key changes, one run at a time, with the latest value", async () => {
   const facts = signals({ n: 0, other: 0 });
