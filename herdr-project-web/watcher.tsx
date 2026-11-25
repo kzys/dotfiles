@@ -4,7 +4,7 @@
 import { uniqueKeys } from "./inbox.ts";
 import { type AgentState, agentState, readiness, runsByState } from "./pulls.ts";
 import type { Run } from "./github/pullrequest.ts";
-import type { Entry, PullRequest, Section, State } from "./state.ts";
+import type { Entry, PullRequest, Section } from "./state.ts";
 import { Linked, matches } from "./ui.tsx";
 
 /** Returns how the checks of a pull request went, for its status dot,
@@ -232,23 +232,5 @@ export function WatchSection({
         <p class="empty">Nothing.</p>
       )}
     </section>
-  );
-}
-
-/** Returns the watcher's sections in state, matching query. */
-export function WatcherColumn({ state, query, now }: { state: State; query: string; now: number }) {
-  return (
-    <div class="column">
-      <h2>Watcher</h2>
-      {state.sections ? (
-        state.sections.map((s) => (
-          <WatchSection key={s.title} section={s} query={query} agents={state.agents ?? null} now={now} />
-        ))
-      ) : (
-        <p class="empty">
-          Nothing from the watcher yet. Run <code>herdr-project --watch</code>.
-        </p>
-      )}
-    </div>
   );
 }
