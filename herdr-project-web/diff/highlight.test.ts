@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseDiff } from "./diff.ts";
+import { parseDiff } from "../diff.ts";
 import { highlight, language } from "./highlight.ts";
 
 test("highlights each side of a hunk as a whole", async () => {

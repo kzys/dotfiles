@@ -3,10 +3,11 @@
 
 import type { Hono } from "hono";
 import type { Herdr } from "../herdr/backend.ts";
-import { highlightDiff, highlightLines } from "../highlight.ts";
+import { highlightDiff, highlightLines } from "./highlight.ts";
 import { limit } from "../hooks.ts";
 import { openProjects } from "../state.ts";
-import { type PullBases, changedSince, checkoutDirs, fileLines, setBase, worktreeDiff, worktreeDirs } from "../worktrees.ts";
+import { worktreeDirs } from "../worktrees.ts";
+import { type PullBases, changedSince, checkoutDirs, fileLines, setBase, worktreeDiff } from "./git.ts";
 
 /** What the diff routes need of the server. */
 export type DiffServer = {

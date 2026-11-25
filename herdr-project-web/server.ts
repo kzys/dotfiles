@@ -374,7 +374,6 @@ const agentActions: AgentActions = {
   changed: () => store.tell(),
 };
 
-
 const dotfiles = dirname(here);
 const launcher = join(dotfiles, "bin/herdr-project");
 
@@ -438,7 +437,6 @@ const socketFd = Number(process.env.HERDR_PROJECT_SOCKET_FD) || null;
 store.set({ projects: readProjects(projectRoot, null, home, links) });
 last = JSON.stringify(pageOf(store.get()));
 server.listen(pageFd ? { fd: pageFd } : { port, host: "127.0.0.1" }, () => console.log(`herdr-project-web on http://127.0.0.1:${port}/`));
-
 
 /** Returns the README.md of the project in directory, or null. */
 function readProjectReadme(directory: string): string | null {
@@ -677,7 +675,6 @@ const onHook: HookHandler = async (pane, { agent, event }, data) => {
   const dir = projectDir(data.cwd, projectRoot);
   return dir ? resumedText(dir, instructions(dotfiles)) : "";
 };
-
 
 // What herdr-project and the picker ask for on the socket.
 const socket = new Hono();

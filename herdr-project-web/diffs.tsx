@@ -3,7 +3,7 @@
 import { Fragment } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { type DiffLine, type FileDiff, type Gap, type Hunk, expandHunks, filePath, gapAt, splitRows } from "./diff.ts";
-import type { HighlightedDiff } from "./highlight.ts";
+import type { HighlightedDiff } from "./diff/highlight.ts";
 import { type Comment, type Reviewer, clearReviewer, commentKey, displaced, receiverStarted, receiverStatus, reviewMessage, reviewers, withComment } from "./review.ts";
 import { projectHref } from "./pages.ts";
 import type { State } from "./state.ts";
