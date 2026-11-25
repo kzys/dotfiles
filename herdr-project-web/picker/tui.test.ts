@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { clip, columns, draw, found, hint, listLines, parseKeys, press, printable, spans, start, visible } from "./picker.ts";
-import type { Row } from "./rows.ts";
+import { clip, columns, draw, found, hint, listLines, parseKeys, press, printable, spans, start, visible } from "./tui.ts";
+import type { Row } from "../rows.ts";
 
 const agents = ["claude", "codex"];
 const rows: Row[] = [

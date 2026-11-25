@@ -1,7 +1,7 @@
 // The project picker's screen, as functions of its state: matching rows,
 // handling keys and drawing, with no terminal involved.
 
-import type { Row } from "./rows.ts";
+import type { Row } from "../rows.ts";
 
 /** Returns how many terminal columns the character c takes. */
 function width(c: string): number {

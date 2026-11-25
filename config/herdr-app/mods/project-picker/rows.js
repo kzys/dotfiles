@@ -1,4 +1,4 @@
-// Matching the picker's rows, as herdr-project-web's picker.ts does for the
+// Matching the picker's rows, as herdr-project-web's picker/tui.ts does for the
 // terminal picker, which this follows. A row is [kind, dir, session, text].
 
 /** Returns where word appears in text, or -1. A word with uppercase

@@ -1,16 +1,16 @@
 // The project picker: lists projects and their agents' sessions, or with
 // --inbox what waits on the user, from the server, and opens the row the
-// user picks, in the Herdr app with --app. Typing filters the list. See picker.ts for the keys.
+// user picks, in the Herdr app with --app. Typing filters the list. See tui.ts for the keys.
 
 import { execFileSync } from "node:child_process";
 import { request } from "node:http";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
-import { AGENTS } from "./launch.ts";
-import { columns, draw, listLines, parseKeys, press, start } from "./picker.ts";
-import type { Row } from "./rows.ts";
-import { answers } from "./watch.ts";
+import { AGENTS } from "../launch.ts";
+import { columns, draw, listLines, parseKeys, press, start } from "./tui.ts";
+import type { Row } from "../rows.ts";
+import { answers } from "../watch.ts";
 
 const stateHome = process.env.XDG_STATE_HOME || join(homedir(), ".local/state");
 const socketPath = join(stateHome, "herdr-project/run/server.sock");
@@ -37,7 +37,7 @@ async function startServerIfNeeded() {
   if (await answers(socketPath)) return;
   process.stdout.write("Starting the server…\r\n");
   try {
-    execFileSync(join(import.meta.dirname, "../bin/herdr-project"), ["--background"], { stdio: "ignore", timeout: 10_000 });
+    execFileSync(join(import.meta.dirname, "../../bin/herdr-project"), ["--background"], { stdio: "ignore", timeout: 10_000 });
   } catch {}
   for (let tries = 0; tries < 60 && !(await answers(socketPath)); tries++) await sleep(500);
 }

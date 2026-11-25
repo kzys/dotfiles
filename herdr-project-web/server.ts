@@ -43,7 +43,8 @@ import {
 } from "./report.ts";
 import { appBackend, appCommand, appHerdrPanes, appSpaces, claudeSessions, spaceNames } from "./herdr/app.ts";
 import { CoreFeed } from "./herdr/core.ts";
-import { background, choices, inboxChoices, open, paneRecords, plan, rowNotes, workspacesToName } from "./rows.ts";
+import { background, workspacesToName } from "./rows.ts";
+import { type PickerServer, routePicker } from "./picker/routes.ts";
 import { claudeSessionDirs, codexContext, codexSessionDirs, codexSessions, reportedRole } from "./sessions.ts";
 import * as slack from "./slack.ts";
 import { loadState, saveState } from "./statefile.ts";
@@ -424,6 +425,22 @@ const agentActions: AgentActions = {
 /** Returns the reply to a request that changed something, with status. */
 const done = (status: number) => new Response(null, { status });
 
+const dotfiles = dirname(here);
+const launcher = join(dotfiles, "bin/herdr-project");
+
+// What the picker's routes need.
+const picker: PickerServer = {
+  backend: (app) => app ? herdrApp : herdrTui,
+  page: () => JSON.parse(last),
+  projectRoot,
+  launcher,
+  planDeps: {
+    background,
+    stop: (id: string) => promisify(execFile)("claude", ["stop", id]).then(() => true, () => false),
+    now: () => new Date(),
+  },
+};
+
 const page = new Hono();
 page.use(async (c, next) => (hosts.has(c.req.header("host") ?? "") ? next() : c.body(null, 403)));
 page.onError((e, c) => c.json({ error: e.message }, 500));
@@ -473,7 +490,7 @@ page.get("/api/file", (c) => {
 page.get("/api/learnings", (c) => c.json(readLearnings(reposRoot)));
 // Also on the page's port, for the Herdr app's picker, which can't reach
 // the socket. Only requests from the page's origin may open a row.
-routePicker(page, (headers) => fromPage(headers, hosts));
+routePicker(page, picker, (headers) => fromPage(headers, hosts));
 for (const [path, [type, body]] of Object.entries(assets)) page.get(path, (c) => c.body(body, 200, { "Content-Type": type }));
 // The views under the paths that nest, as /projects/<dir>.
 for (const path of NESTED_PATHS) page.get(`${path}/*`, (c) => c.body(assets["/"][1], 200, { "Content-Type": assets["/"][0] }));
@@ -490,8 +507,6 @@ store.set({ projects: readProjects(projectRoot, null, home, links) });
 last = JSON.stringify(pageOf(store.get()));
 server.listen(pageFd ? { fd: pageFd } : { port, host: "127.0.0.1" }, () => console.log(`herdr-project-web on http://127.0.0.1:${port}/`));
 
-const dotfiles = dirname(here);
-const launcher = join(dotfiles, "bin/herdr-project");
 
 /** Returns the README.md of the project in directory, or null. */
 function readProjectReadme(directory: string): string | null {
@@ -524,12 +539,6 @@ function launch(form: URLSearchParams): string {
   if (workspace) reportTitle(workspace, directory);
   return launchScript(directory, command);
 }
-
-const planDeps = {
-  background,
-  stop: (id: string) => promisify(execFile)("claude", ["stop", id]).then(() => true, () => false),
-  now: () => new Date(),
-};
 
 /** Remembers that the project in dir, if any, works in the checkout holding
  * cwd, if any, so that the page links its diff. */
@@ -737,10 +746,6 @@ const onHook: HookHandler = async (pane, { agent, event }, data) => {
   return dir ? resumedText(dir, instructions(dotfiles)) : "";
 };
 
-// The Herdr app, for a picker that opens rows there, else the TUI.
-const pickerBackend = (app: unknown) => app ? herdrApp : herdrTui;
-/** Returns the panes of the picker's Backend as the picker uses them. */
-const pickerPanes = async (app: unknown) => paneRecords({ workspaces: [], panes: await pickerBackend(app).panes() });
 
 // What herdr-project and the picker ask for on the socket.
 const socket = new Hono();
@@ -763,26 +768,7 @@ socket.post("/pulls/check", (c) => {
   return c.body(null, 202);
 });
 
-/** Adds the picker's routes to routes: its rows, a row's notes and opening
- * a row, which only requests that allowed lets through may do. */
-function routePicker(routes: Hono, allowed: (headers: Headers) => boolean) {
-  routes.get("/picker", async (c) => {
-    const app = c.req.query("app") !== undefined;
-    return c.json(c.req.query("inbox") !== undefined
-      ? inboxChoices(await pickerPanes(app), codexSessions(), JSON.parse(last))
-      : choices(await pickerPanes(app), projectRoot, codexSessions()));
-  });
-  routes.get("/picker/notes", (c) => c.text(rowNotes(c.req.query("kind") ?? "", c.req.query("dir") ?? "", c.req.query("session") ?? "")));
-  routes.post("/picker/open", limit(), async (c) => {
-    if (!allowed(c.req.raw.headers)) return c.body(null, 403);
-    const { row, agent, app } = JSON.parse((await c.req.text()) || "{}");
-    // Panes as they are now, not as last read: going by old ones could
-    // resume a session that already runs.
-    await open(await plan(row, agent, await pickerPanes(app), projectRoot, launcher, planDeps), pickerBackend(app).opener());
-    return c.body(null, 204);
-  });
-}
-routePicker(socket, () => true);
+routePicker(socket, picker, () => true);
 
 // Only the watcher's server: hooks reach one server, like the checks.
 if (orgs) {
