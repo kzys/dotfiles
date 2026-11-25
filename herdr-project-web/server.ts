@@ -17,13 +17,14 @@ import {
   type AgentActions, type Queued, Outbox, forgetAnswered, fromPage, permission, routeAgents, undelivered,
 } from "./agents.ts";
 import * as github from "./github/poll.ts";
+import type { PullCheck } from "./github/poll.ts";
 import * as pullSection from "./github-section.ts";
 import { type PullChecked, PullRequests } from "./github/watch.ts";
-import { BoardStore } from "./board-store.ts";
+import { type BoardState, BoardStore, boardCards } from "./board-store.ts";
 import { type Herdr, canTake } from "./herdr/backend.ts";
 import { HerdrEvents } from "./herdr/events.ts";
 import { herdrClient, herdrSocket, readHerdr, tuiBackend } from "./herdr/tui.ts";
-import { type HookEvent, hookServer, listenOn, speaker } from "./hooks.ts";
+import { type HookEvent, type HookLog, hookServer, listenOn, speaker } from "./hooks.ts";
 import { jsonBody, limit } from "./http.ts";
 import { ask as headlessAsk, connectors } from "./headless.ts";
 import * as linear from "./linear.ts";
@@ -34,7 +35,7 @@ import { type Checked, checkQueue } from "./queues.ts";
 import { Schedule } from "./schedule.ts";
 import { AGAIN, Store, effect } from "./store.ts";
 import { AgentReports } from "./agent-reports.ts";
-import { Asks, askees, summarizeAll } from "./ask/ask.ts";
+import { type Ask, Asks, askees, summarizeAll } from "./ask/ask.ts";
 import { type AsksServer, routeAsks, routeReplies } from "./ask/routes.ts";
 import { Namer, reportTitle } from "./naming.ts";
 import { everyPane, pageState } from "./page-state.ts";
@@ -101,9 +102,9 @@ const clients = new Set<SSEStreamingApi>();
 const logError = (e: unknown) => console.error("herdr-project-web:", e);
 const { ask, tryAsk } = herdrClient();
 
-// What the server knows from outside, which its sources set and from which
-// the page and what the server does derive. What other objects keep, such
-// as the outbox and the board, are told of with store.tell().
+// What the server knows, which its sources set and from which the page and
+// what the server does derive. What other objects keep, such as the outbox
+// and the board, they tell the store of as it changes, with follow.
 type Facts = {
   // Herdr's panes and workspaces, null while it can't be asked.
   herdr: Herdr | null;
@@ -120,10 +121,29 @@ type Facts = {
   // in may have changed, and the projects shown, read since.
   projectsChanged: number;
   projects: ProjectRead[];
+  // What the last check of the pull requests that didn't fail found, or
+  // null before one.
+  pulls: PullCheck | null;
+  // Each pane's last hook event.
+  hooks: ReadonlyMap<string, HookEvent>;
+  // What the outbox holds, the board's state and the questions asked, as
+  // they keep them.
+  queued: Record<string, Queued[]>;
+  board: BoardState;
+  asks: Ask[];
 };
 const store = new Store<Facts>({
   herdr: null, appPanes: [], appRead: false, appSpacesChanged: 0, found: new Map(), projectsChanged: 0, projects: [],
+  pulls: null, hooks: new Map(), queued: {}, board: { moves: {}, asks: {} }, asks: [],
 });
+
+/** Keeps fact in the store as what get returns, now and after each change
+ * that source tells of. */
+function follow<K extends keyof Facts>(fact: K, source: { subscribe(listener: () => void): void }, get: () => Facts[K]) {
+  const set = () => store.set({ [fact]: get() } as Pick<Facts, K>);
+  set();
+  source.subscribe(set);
+}
 
 /** Sets what the check titled title found. */
 const setFound = (title: string, found: Found) => store.set({ found: new Map(store.get().found).set(title, found) });
@@ -138,9 +158,10 @@ const herdrReads = new Schedule(async () => {
   // subscribes again.
   herdrEvents.update(next);
   const states = agentStates(before) ?? {};
-  forgetAnswered(hookEvents, states, agentStates(next) ?? states);
-  if (next) for (const pane of hookEvents.keys()) if (!next.panes.some((q) => q.pane_id === pane)) hookEvents.delete(pane);
-  store.set({ herdr: next });
+  let hooks = forgetAnswered(store.get().hooks, states, agentStates(next) ?? states);
+  if (next && [...hooks.keys()].some((pane) => !next.panes.some((q) => q.pane_id === pane)))
+    hooks = new Map([...hooks].filter(([pane]) => next.panes.some((q) => q.pane_id === pane)));
+  store.set({ herdr: next, hooks });
 }, { every: 60_000, onError: logError });
 const herdrEvents = new HerdrEvents(herdrSocket, () => herdrReads.refresh());
 // The checks, in the order the page shows what they found.
@@ -149,19 +170,25 @@ const ORDER = ["Pull requests", "Panes", "Slack", "Linear"];
 // The columns the user moved pull requests to, and what came of asking
 // Copilot to review each.
 const boardStore = new BoardStore(stateDir, logError);
+follow("board", boardStore, () => boardStore.state());
 // The questions asked of every agent from the page, and their replies.
 const asks = new Asks(join(stateDir, "asks.json"));
+follow("asks", asks, () => asks.all());
 // One answer to each question from its replies, made by a headless Claude
 // soon after replies come in, so that those close together go in one.
 const SUMMARY_SCHEMA = { type: "object", required: ["answer"], properties: { answer: { type: "string" } } };
 const summaries = new Schedule(
-  () => summarizeAll(asks, (prompt) => headlessAsk(stateDir, prompt, SUMMARY_SCHEMA, [], "answer"), () => store.tell()),
+  () => summarizeAll(asks, (prompt) => headlessAsk(stateDir, prompt, SUMMARY_SCHEMA, [], "answer")),
   { every: 3_600_000, start: !!orgs, onError: logError },
 );
-// Each pane's last hook event.
-const hookEvents = new Map<string, HookEvent>();
+// Each pane's last hook event, kept in the store.
+const hookEvents: HookLog = {
+  get: (pane) => store.get().hooks.get(pane),
+  set: (pane, event) => store.set({ hooks: new Map(store.get().hooks).set(pane, event) }),
+  entries: () => store.get().hooks.entries(),
+};
 const herdrTui = tuiBackend(ask, {
-  asking: (pane) => hookEvents.get(pane)?.event === "PermissionRequest",
+  asking: (pane) => store.get().hooks.get(pane)?.event === "PermissionRequest",
   title: async (workspace, directory) => reportTitle(tryAsk, workspace, directory),
 });
 const herdrApp = appBackend();
@@ -170,6 +197,7 @@ const backendOf = (pane: string) => store.get().appPanes.some((p) => p.pane_id =
 const outbox = new Outbox(
   join(stateDir, "outbox.json"), (pane, text) => backendOf(pane).send(pane, text), (pane) => backendOf(pane).ready(pane),
 );
+follow("queued", outbox, () => outbox.all());
 // The checkouts under ~/repos each project's agents went into, by project.
 const linksPath = join(stateDir, "checkouts.json");
 const links = (loadState(linksPath) as Record<string, string[]> | null) ?? {};
@@ -181,14 +209,14 @@ const pageOf = (facts: Facts) => pageState({
   ...facts,
   watched: watched(facts),
   acting: orgs
-    ? { queued: outbox.all(), hooks: hookEvents, board: boardStore.cards(pulls.latest(), new Date()), asks: asks.all() }
+    ? { queued: facts.queued, hooks: facts.hooks, board: boardCards(facts.pulls, facts.board, new Date()), asks: facts.asks }
     : null,
 });
 
 /** Returns what the checks found, or null before any has. */
-function watched({ found }: Facts): Watched | null {
+function watched({ found, pulls }: Facts): Watched | null {
   const ours = ORDER.flatMap((t) => found.get(t) ?? []);
-  return ours.length ? watchedFrom(ours, pulls.latest()?.urls ?? []) : null;
+  return ours.length ? watchedFrom(ours, pulls?.urls ?? []) : null;
 }
 
 // The Herdr app's agents, from herdr-core as they change, keeping the last
@@ -284,6 +312,7 @@ function showPullCheck({ at, error, last }: PullChecked) {
   const before = store.get().found.get("Pull requests")?.items ?? [];
   const shown = pullSection.shown(at, new Date(Date.now() + PR_INTERVAL), check, error, before);
   if (check) boardStore.forget(check);
+  store.set({ pulls: last });
   setFound(shown.title, shown);
   if (tty !== null)
     try {
@@ -345,7 +374,6 @@ const agentActions: AgentActions = {
   known: (pane) => Object.hasOwn(agentStates(everyPane(store.get())) ?? {}, pane),
   session: (pane) => everyPane(store.get())?.panes.find((p) => p.pane_id === pane)?.agent_session?.value,
   focus: (pane) => backendOf(pane).focus(pane),
-  changed: () => store.tell(),
 };
 
 const dotfiles = dirname(here);
@@ -369,7 +397,7 @@ page.use(async (c, next) => (hosts.has(c.req.header("host") ?? "") ? next() : c.
 page.onError((e, c) => (e instanceof HTTPException ? e.getResponse() : c.json({ error: e.message }, 500)));
 // The pull requests' board, which only the watcher's server keeps, and
 // only the page may change.
-routePulls(page, { latest: () => pulls.latest(), board: boardStore, changed: () => store.tell() },
+routePulls(page, { latest: () => pulls.latest(), board: boardStore },
   (headers) => !!orgs && fromPage(headers, hosts));
 // Only the watcher's server, which delivers them, and only the page.
 routeAgents(page, agentActions, (headers) => !!orgs && fromPage(headers, hosts));
@@ -379,10 +407,7 @@ const asksServer: AsksServer = {
   asks,
   askees: () => askees(everyPane(store.get()), (JSON.parse(last) as State).projects),
   queue: (pane, text, session) => outbox.add(pane, text, session),
-  changed: () => {
-    store.tell();
-    summaries.refresh(10_000);
-  },
+  changed: () => summaries.refresh(10_000),
 };
 routeAsks(page, asksServer, (headers) => !!orgs && fromPage(headers, hosts));
 page.get("/api/state", (c) => c.body(last, 200, { "Content-Type": "application/json" }));
@@ -475,11 +500,11 @@ if (orgs) {
     const all = everyPane(facts);
     const sessions = Object.fromEntries((all?.panes ?? []).map((p) => [p.pane_id, p.agent_session?.value ?? ""]));
     const agents = Object.fromEntries((all?.panes ?? []).map((p) => [p.pane_id, p.agent ?? ""]));
-    return { states: agentStates(all) ?? {}, sessions, agents, queued: outbox.all() };
+    return { states: agentStates(all) ?? {}, sessions, agents, queued: facts.queued };
   }, async (_facts, { states, sessions, agents }) => {
-    if (await outbox.deliver(states, agents)) store.tell();
+    await outbox.deliver(states, agents);
     const takes = (pane: string) => (m: Queued) => !m.session || !sessions[pane] || m.session === sessions[pane];
-    if (Object.entries(outbox.all()).some(([pane, queued]) => canTake(states[pane], agents[pane]) && queued.some(takes(pane)))) {
+    if (Object.entries(store.get().queued).some(([pane, queued]) => canTake(states[pane], agents[pane]) && queued.some(takes(pane)))) {
       throw AGAIN;
     }
   }, { retry: true, onError: logError });

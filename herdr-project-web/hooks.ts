@@ -67,6 +67,14 @@ export async function speaker(headers: Headers, lineage = ancestors): Promise<{ 
 // What happened, with the pane the agent owns, if any.
 export type HookHandler = (pane: string | null, hook: { agent: string; event: string }, data: any) => Promise<string>;
 
+// Where the last hook event of each pane is kept, by pane: a Map, or what
+// keeps them elsewhere.
+export type HookLog = {
+  get(pane: string): HookEvent | undefined;
+  set(pane: string, event: HookEvent): unknown;
+  entries(): Iterable<[string, HookEvent]>;
+};
+
 /** Returns a server that keeps the last hook event of each pane in
  * latest, by pane. POST /hooks/:agent/:event takes the event's JSON, with
  * the pane as speaker reads it, ignores subagents, and replies with what
@@ -74,7 +82,7 @@ export type HookHandler = (pane: string | null, hook: { agent: string; event: st
  * lineage returns a process's ancestors' command lines. Other requests go
  * to app's own routes. */
 export function hookServer(
-  latest: Map<string, HookEvent>,
+  latest: HookLog,
   lineage = ancestors,
   handle: HookHandler = async () => "",
   app = new Hono(),
@@ -110,7 +118,7 @@ export function hookServer(
       post(c, { agent, event: c.req.param("event") }).catch(() => c.body(null, 500))
     );
   }
-  app.get("/hooks", (c) => c.json(Object.fromEntries(latest)));
+  app.get("/hooks", (c) => c.json(Object.fromEntries(latest.entries())));
   return createServer(getRequestListener(app.fetch));
 }
 

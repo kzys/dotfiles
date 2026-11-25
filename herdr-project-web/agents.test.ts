@@ -116,8 +116,9 @@ test("only a blocked agent that asked waits for permission", () => {
 test("forgets a permission request once it is answered", () => {
   const latest = new Map([["w1:p1", asked], ["w1:p2", asked], ["w1:p3", { ...asked, event: "Stop" }]]);
   const before = { "w1:p1": "blocked", "w1:p2": "working", "w1:p3": "blocked" };
-  forgetAnswered(latest, before, { "w1:p1": "working", "w1:p2": "blocked", "w1:p3": "idle" });
-  assert.deepEqual([...latest.keys()], ["w1:p2", "w1:p3"]);
+  const kept = forgetAnswered(latest, before, { "w1:p1": "working", "w1:p2": "blocked", "w1:p3": "idle" });
+  assert.deepEqual([...kept.keys()], ["w1:p2", "w1:p3"]);
+  assert.equal(latest.size, 3);
 });
 
 test("only the page itself passes as the page", () => {
@@ -141,9 +142,9 @@ function serve(actions: AgentActions, allowed?: () => boolean) {
 test("queues and cancels messages for known agents", async () => {
   const outbox = new Outbox(file(), none, yes);
   let changes = 0;
-  const send = serve({
-    outbox, known: (p) => p === "w1:p1", session: () => "s1", focus: none, changed: () => changes++,
-  });
+  outbox.subscribe(() => changes++);
+  const before = outbox.all();
+  const send = serve({ outbox, known: (p) => p === "w1:p1", session: () => "s1", focus: none });
   assert.equal(await send("POST", "w1%3Ap1/messages", { text: "  " }), 400);
   assert.equal(await send("POST", "w1%3Ap1/messages", { text: " hi " }), 204);
   const [{ id, text }] = outbox.queued("w1:p1");
@@ -152,10 +153,12 @@ test("queues and cancels messages for known agents", async () => {
   assert.equal(await send("DELETE", `w1%3Ap1/messages/${id}`), 204);
   assert.equal(await send("DELETE", `w1%3Ap1/messages/${id}`), 404);
   assert.equal(changes, 2);
+  // Each change is a new object, so that what holds the last one sees it.
+  assert.notEqual(outbox.all(), before);
 });
 
 test("routes only an agent's actions, and only those allowed", async () => {
-  const actions = { outbox: new Outbox(file(), none, yes), known: (p: string) => p === "w1:p1", session: () => undefined, focus: none, changed: () => {} };
+  const actions = { outbox: new Outbox(file(), none, yes), known: (p: string) => p === "w1:p1", session: () => undefined, focus: none };
   const send = serve(actions);
   assert.equal(await send("POST", "w1%3Ap1/nope"), 404);
   assert.equal(await send("GET", "w1%3Ap1/focus"), 404);
@@ -165,7 +168,7 @@ test("routes only an agent's actions, and only those allowed", async () => {
 
 test("refuses agents it doesn't know", async () => {
   const send = serve({
-    outbox: new Outbox(file(), none, yes), known: () => false, session: () => undefined, focus: none, changed: () => {},
+    outbox: new Outbox(file(), none, yes), known: () => false, session: () => undefined, focus: none
   });
   assert.equal(await send("POST", "w1%3Ap1/messages", { text: "hi" }), 404);
 });
@@ -173,7 +176,7 @@ test("refuses agents it doesn't know", async () => {
 test("focuses a known agent's pane", async () => {
   const focused: string[] = [];
   const send = serve({
-    outbox: new Outbox(file(), none, yes), known: () => true, session: () => undefined, focus: async (p) => void focused.push(p), changed: () => {},
+    outbox: new Outbox(file(), none, yes), known: () => true, session: () => undefined, focus: async (p) => void focused.push(p)
   });
   assert.equal(await send("POST", "w1%3Ap1/focus"), 204);
   assert.deepEqual(focused, ["w1:p1"]);

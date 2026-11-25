@@ -73,25 +73,27 @@ test("makes one answer from the replies, again when more come", async () => {
   const [first, second] = asks.all()[0].agents;
   const prompts: string[] = [];
   let made = 0;
+  asks.subscribe(() => made++);
   const answer = async (prompt: string) => (prompts.push(prompt), `answer ${prompts.length}`);
   // Nothing to make an answer from yet.
-  await summarizeAll(asks, answer, () => made++);
+  await summarizeAll(asks, answer);
   assert.deepEqual([prompts, made], [[], 0]);
 
   asks.reply(first.token, "CI on #12", 2);
-  await summarizeAll(asks, answer, () => made++);
+  made = 0;
+  await summarizeAll(asks, answer);
   assert.match(prompts[0], /Waiting on\?/);
   assert.match(prompts[0], /a · main:\nCI on #12/);
   assert.equal(made, 1);
   assert.deepEqual(asks.all()[0].summary?.text, "answer 1");
   // Made already from every reply there is.
-  await summarizeAll(asks, answer, () => made++);
+  await summarizeAll(asks, answer);
   assert.equal(prompts.length, 1);
 
   asks.reply(second.token, "nothing", 3);
   let view = askViews(asks.all(), {}, new Set(), () => true)[0];
   assert.deepEqual([view.summary?.replies, view.stale], [1, true]);
-  await summarizeAll(asks, answer, () => made++);
+  await summarizeAll(asks, answer);
   assert.match(prompts[1], /b · main:\nnothing/);
   view = askViews(asks.all(), {}, new Set(), () => true)[0];
   assert.deepEqual([view.summary?.text, view.summary?.replies, view.stale], ["answer 2", 2, false]);
@@ -101,7 +103,7 @@ test("makes one answer from the replies, again when more come", async () => {
   // An agent replying again replaces its reply, and the answer is made again.
   asks.reply(first.token, "merged after all", 4);
   assert.equal(askViews(asks.all(), {}, new Set(), () => true)[0].stale, true);
-  await summarizeAll(asks, answer, () => made++);
+  await summarizeAll(asks, answer);
   assert.match(prompts[2], /a · main:\nmerged after all/);
 });
 
@@ -116,14 +118,14 @@ test("goes on past a question it can't answer, and tries it again only after ano
     if (prompt.includes("\n\nold\n\n")) throw new Error("no answer\nmore");
     return "ok";
   };
-  await summarizeAll(asks, answer, () => {});
+  await summarizeAll(asks, answer);
   // Newest first, and the failure doesn't stop the others.
   assert.deepEqual(tried, ["new", "old"]);
   const views = askViews(asks.all(), {}, new Set(), () => true);
   assert.deepEqual(views.map((v) => [v.text, v.summary?.text ?? null, v.failed]), [["new", "ok", null], ["old", null, "no answer"]]);
-  await summarizeAll(asks, answer, () => {});
+  await summarizeAll(asks, answer);
   assert.equal(tried.length, 2);
   asks.reply(asks.all()[0].agents[0].token, "still fine", 20);
-  await summarizeAll(asks, answer, () => {});
+  await summarizeAll(asks, answer);
   assert.deepEqual(tried, ["new", "old", "old"]);
 });
