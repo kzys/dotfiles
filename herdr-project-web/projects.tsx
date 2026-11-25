@@ -7,7 +7,7 @@ import { FULL_AT, type Item, uniqueKeys } from "./inbox.ts";
 import { diffHref, fileHref, projectHref } from "./pages.ts";
 import { agentCounts, projectSections, statusState } from "./pulls.ts";
 import type { AgentView } from "./agents.ts";
-import type { Pane, Project, State } from "./state.ts";
+import type { Pane, ProjectView, State } from "./state.ts";
 import { Linked, matches, send } from "./ui.tsx";
 import { WatchSection } from "./watcher.tsx";
 
@@ -108,7 +108,7 @@ function PaneRow({ panes, agents }: { panes: Pane[]; agents: Record<string, Agen
 
 /** Returns links to a project's worktrees, each to its diff with the
  * subject of its last commit, and to its files. */
-function FileLinks({ project }: { project: Project }) {
+function FileLinks({ project }: { project: ProjectView }) {
   if (!project.worktrees.length && !project.files.length) return null;
   return (
     <nav class="wt-links" aria-label="Files">
@@ -128,7 +128,7 @@ function FileLinks({ project }: { project: Project }) {
   );
 }
 
-function ProjectCard({ project, agents }: { project: Project; agents: Record<string, AgentView> }) {
+function ProjectCard({ project, agents }: { project: ProjectView; agents: Record<string, AgentView> }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     try {
@@ -181,7 +181,7 @@ function DirName({ dir, name }: { dir: string; name: string }) {
 }
 
 /** Returns what the filter looks for in project p itself. */
-function projectTexts(p: Project): (string | null)[] {
+function projectTexts(p: ProjectView): (string | null)[] {
   const wts = p.worktrees.flatMap((w) => [w.dir.split("/").pop()!, w.subject]);
   return [p.name, dirName(p.dir), p.title, ...p.workspaces, ...wts, ...p.files.map((f) => f.name), ...p.panes.map((a) => a.title ?? null)];
 }
@@ -249,7 +249,7 @@ function AgentTitles({ panes }: { panes: Pane[] }) {
 /** Returns when any file directly in project p last changed, as its
  * agents' notes do while they work, in milliseconds since the epoch, or
  * 0 without files. */
-const lastActive = (p: Project) => Math.max(0, ...p.files.map((f) => f.at));
+const lastActive = (p: ProjectView) => Math.max(0, ...p.files.map((f) => f.at));
 
 /** Returns the page listing the projects in state matching query, most
  * recently active first, each with its agents, what each works on, and

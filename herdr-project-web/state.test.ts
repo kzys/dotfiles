@@ -6,8 +6,12 @@ import { join } from "node:path";
 import type { Herdr } from "./herdr/backend.ts";
 import { linkParts } from "./inbox.ts";
 import {
-  type Watched, checkoutOf, linkCheckout, namedCheckouts, projectFiles, projectPanes, projectTabs, pullRequestLinks, readProjectFile, readState, workspaceLabels,
+  type Watched, Project, checkoutOf, linkCheckout, namedCheckouts, projectFiles, pullRequestLinks, readProjectFile, readState,
 } from "./state.ts";
+
+/** Returns the project in dir with nothing read of its files, where herdr
+ * shows it. */
+const at = (dir: string, herdr: Herdr | null) => new Project({ dir, readme: null, notes: [], worktrees: [], files: [] }, herdr);
 
 test("finds the checkout holding a directory", () => {
   assert.equal(checkoutOf("/home/me/repos/o/r/sub/dir", "/home/me"), "/home/me/repos/o/r");
@@ -175,15 +179,15 @@ test("gives each agent in a project the title its terminal shows", () => {
   const pane = (pane_id: string, terminal_title?: string) =>
     ({ pane_id, workspace_id: "w1", cwd: "/p/a", agent: "claude", agent_status: "idle", terminal_title });
   const herdr = { workspaces: [], panes: [pane("t1", "Fix the board"), pane("t2", "")] };
-  assert.deepEqual(projectPanes("/p/a", herdr).map((p) => [p.id, p.title]), [["t1", "Fix the board"], ["t2", undefined]]);
+  assert.deepEqual(at("/p/a", herdr).panes().map((p) => [p.id, p.title]), [["t1", "Fix the board"], ["t2", undefined]]);
 });
 
 test("counts the tabs with panes in a project", () => {
   const pane = (tab_id: string, cwd: string) => ({ pane_id: `${tab_id}:${cwd}`, workspace_id: "w1", tab_id, cwd });
   const herdr = { workspaces: [], panes: [pane("t1", "/p/a"), pane("t1", "/p/a/wt"), pane("t2", "/p/a"), pane("t3", "/p/b")] };
-  assert.equal(projectTabs("/p/a", herdr), 2);
-  assert.equal(projectTabs("/p/c", herdr), 0);
-  assert.equal(projectTabs("/p/a", null), 0);
+  assert.equal(at("/p/a", herdr).tabs(), 2);
+  assert.equal(at("/p/c", herdr).tabs(), 0);
+  assert.equal(at("/p/a", null).tabs(), 0);
 });
 
 test("names the workspaces with panes in a project", () => {
@@ -194,8 +198,8 @@ test("names the workspaces with panes in a project", () => {
             { pane_id: "w2:p1", workspace_id: "w2", cwd: "/home", foreground_cwd: "/p/a" },
             { pane_id: "w3:p1", workspace_id: "w3", cwd: "/p/ab" }],
   };
-  assert.deepEqual(workspaceLabels("/p/a", herdr), ["custom", "w2"]);
-  assert.deepEqual(workspaceLabels("/p/a", null), []);
+  assert.deepEqual(at("/p/a", herdr).workspaces(), ["custom", "w2"]);
+  assert.deepEqual(at("/p/a", null).workspaces(), []);
 });
 
 test("links pull requests by their labels", () => {

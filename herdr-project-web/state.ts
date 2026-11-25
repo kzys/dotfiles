@@ -84,7 +84,8 @@ export type Pane = {
   waits?: import("./waits.ts").Wait[];
 };
 
-export type Project = {
+// What the page shows of a project.
+export type ProjectView = {
   dir: string;
   name: string;
   title: string;
@@ -114,7 +115,7 @@ export type State = {
   sections: Section[] | null;
   // When the watcher last reported them, in ISO 8601.
   watchedAt: string | null;
-  projects: Project[];
+  projects: ProjectView[];
   // What the watcher found that belongs to no project.
   unowned: Item[];
   // The URLs of the open pull requests by their labels, like name#N.
@@ -156,7 +157,7 @@ export function openProjects(root: string, herdr: Herdr | null = null): [string,
   return projectDirs(root).flatMap((dir): [string, string | null][] => {
     const readme = read(join(dir, "README.md"));
     const closed = readme !== null && frontMatter(readme, "closed");
-    return closed && !workspaceLabels(dir, herdr).length ? [] : [[dir, readme]];
+    return closed && !workspacesIn(dir, herdr).length ? [] : [[dir, readme]];
   });
 }
 
@@ -302,7 +303,7 @@ function inside(dir: string, cwd?: string): boolean {
 
 /** Returns the labels of the workspaces in herdr with a pane in dir or
  * under it, in the order herdr lists them. */
-export function workspaceLabels(dir: string, herdr: Herdr | null): string[] {
+function workspacesIn(dir: string, herdr: Herdr | null): string[] {
   if (!herdr) return [];
   const ids = new Set(
     herdr.panes.filter((p) => inside(dir, p.cwd) || inside(dir, p.foreground_cwd)).map((p) => p.workspace_id),
@@ -312,39 +313,6 @@ export function workspaceLabels(dir: string, herdr: Herdr | null): string[] {
     .map((w) => w.label || w.workspace_id);
 }
 
-/** Returns the panes in herdr working in dir or under it, in the order
- * herdr lists them, by the directory their agent reports, as the watcher
- * reads it, else Herdr's. */
-function panesIn(dir: string, herdr: Herdr | null): Herdr["panes"] {
-  if (!herdr) return [];
-  return herdr.panes.filter((p) => inside(dir, p.tokens?.cwd || p.cwd) || inside(dir, p.foreground_cwd));
-}
-
-/** Returns how many tabs in herdr have a pane working in dir or under
- * it. */
-export function projectTabs(dir: string, herdr: Herdr | null): number {
-  return new Set(panesIn(dir, herdr).map((p) => p.tab_id)).size;
-}
-
-/** Returns the agent panes in herdr working in dir or under it, in the
- * order herdr lists them, with how full each one's context is. A
- * background session reports to the pane that started it, flagging that with the bg token, so then the ctx
- * isn't the pane's own. */
-export function projectPanes(dir: string, herdr: Herdr | null): Pane[] {
-  return panesIn(dir, herdr)
-    .filter((p) => p.agent)
-    .map((p) => {
-      const ctx = p.tokens?.bg ? "" : (p.tokens?.ctx ?? "");
-      return {
-        id: p.pane_id,
-        cwd: p.tokens?.cwd || p.cwd || null,
-        role: p.tokens?.role || null,
-        status: p.agent_status ?? null,
-        ctx: /^\d+%*$/.test(ctx) ? parseInt(ctx, 10) : null,
-        ...(p.terminal_title ? { title: p.terminal_title } : {}),
-      };
-    });
-}
 
 /** Returns lines, the watcher's lines about panes, without those about
  * the panes with ids, named after the first field, and without saying
@@ -390,6 +358,88 @@ export function readProject(dir: string, readme: string | null, home: string, ch
   };
 }
 
+/** A project as readProject read it, and where the panes in herdr show it
+ * at work. */
+export class Project {
+  private read: ProjectRead;
+  private herdr: Herdr | null;
+
+  constructor(read: ProjectRead, herdr: Herdr | null) {
+    this.read = read;
+    this.herdr = herdr;
+  }
+
+  /** Returns its directory. */
+  dir(): string {
+    return this.read.dir;
+  }
+
+  /** Returns its name and title: see projectLabels. */
+  labels(): { name: string; title: string } {
+    return projectLabels(this.read.dir, this.read.readme);
+  }
+
+  /** Reports whether its README.md says it is closed. */
+  closed(): boolean {
+    return Boolean(this.read.readme && frontMatter(this.read.readme, "closed"));
+  }
+
+  /** Returns the labels of the workspaces in herdr with a pane in it, in
+   * the order herdr lists them. */
+  workspaces(): string[] {
+    return workspacesIn(this.read.dir, this.herdr);
+  }
+
+  /** Returns the panes in herdr working in it, in the order herdr lists
+   * them, by the directory their agent reports, as the watcher reads it,
+   * else Herdr's. */
+  herdrPanes(): Herdr["panes"] {
+    const { dir } = this.read;
+    return (this.herdr?.panes ?? []).filter((p) => inside(dir, p.tokens?.cwd || p.cwd) || inside(dir, p.foreground_cwd));
+  }
+
+  /** Returns how many tabs in herdr have a pane working in it. */
+  tabs(): number {
+    return new Set(this.herdrPanes().map((p) => p.tab_id)).size;
+  }
+
+  /** Returns the agent panes in herdr working in it, in the order herdr
+   * lists them, with how full each one's context is. A background session
+   * reports to the pane that started it, flagging that with the bg token,
+   * so then the ctx isn't the pane's own. */
+  panes(): Pane[] {
+    return this.herdrPanes()
+      .filter((p) => p.agent)
+      .map((p) => {
+        const ctx = p.tokens?.bg ? "" : (p.tokens?.ctx ?? "");
+        return {
+          id: p.pane_id,
+          cwd: p.tokens?.cwd || p.cwd || null,
+          role: p.tokens?.role || null,
+          status: p.agent_status ?? null,
+          ctx: /^\d+%*$/.test(ctx) ? parseInt(ctx, 10) : null,
+          ...(p.terminal_title ? { title: p.terminal_title } : {}),
+        };
+      });
+  }
+
+  /** Returns what the page shows of it, with found, what the watcher found
+   * for it. */
+  view(found: Item[]): ProjectView {
+    const { dir, notes, worktrees, files } = this.read;
+    return {
+      dir,
+      ...this.labels(),
+      workspaces: this.workspaces(),
+      panes: this.panes(),
+      tabs: this.tabs(),
+      worktrees,
+      items: projectItems(dir, this.closed(), notes, found),
+      files,
+    };
+  }
+}
+
 /** Returns the state for the page from watched, what the watcher found,
  * projects, the projects that are open or still have a workspace in herdr
  * as readProject read them, and herdr, naming their workspaces, if known.
@@ -403,7 +453,8 @@ export function stateOf(watched: Watched | null, projects: ProjectRead[], herdr:
   const sections = Array.isArray(watched?.sections) ? (watched.sections as Section[]).map((s) => ({ ...s })) : null;
   const watchedAt = watched?.at ?? null;
 
-  const known = new Set(projects.filter(({ readme }) => !(readme && frontMatter(readme, "closed"))).map(({ dir }) => dir));
+  const all = projects.map((read) => new Project(read, herdr));
+  const known = new Set(all.filter((p) => !p.closed()).map((p) => p.dir()));
   const byProject = new Map<string, Item[]>();
   const unowned: Item[] = [];
   for (const item of watchedItems(watched?.inbox)) {
@@ -412,22 +463,13 @@ export function stateOf(watched: Watched | null, projects: ProjectRead[], herdr:
     else byProject.set(item.project, [...(byProject.get(item.project) ?? []), item]);
   }
 
-  const shownProjects: Project[] = projects.map(({ dir, readme, notes, worktrees, files }) => ({
-    dir,
-    ...projectLabels(dir, readme),
-    workspaces: workspaceLabels(dir, herdr),
-    panes: projectPanes(dir, herdr),
-    tabs: projectTabs(dir, herdr),
-    worktrees,
-    items: projectItems(dir, Boolean(readme && frontMatter(readme, "closed")), notes, byProject.get(dir) ?? []),
-    files,
-  }));
-  const rank = (p: Project) =>
+  const shownProjects = all.map((p) => p.view(byProject.get(p.dir()) ?? []));
+  const rank = (p: ProjectView) =>
     p.panes.some((pane) => (pane.ctx ?? 0) >= FULL_AT) ? 0 : p.workspaces.length || p.items.length ? 1 : 2;
   shownProjects.sort((a, b) => rank(a) - rank(b));
   // The panes in projects show with them, and the section only when
   // others are left.
-  const ids = new Set(shownProjects.flatMap((p) => panesIn(p.dir, herdr).map((pane) => pane.pane_id)));
+  const ids = new Set(all.flatMap((p) => p.herdrPanes().map((pane) => pane.pane_id)));
   for (const section of sections ?? [])
     if (section.title === "Panes") section.lines = panesElsewhere(section.lines, ids);
   const shown = sections?.filter((s) => s.title !== "Panes" || s.lines.length) ?? null;
