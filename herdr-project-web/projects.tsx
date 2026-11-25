@@ -92,15 +92,6 @@ function PaneRow({ panes, agents }: { panes: Pane[]; agents: Record<string, Agen
             {p.title && <span class="pane-title">{p.title}</span>}
             {p.ctx !== null && <span class={p.ctx >= FULL_AT ? "ctx ctx-full" : "ctx"}>{p.ctx}%</span>}
             {agents[p.id] && <AgentControls pane={p} view={agents[p.id]} />}
-            {waiting([p]).length > 0 && (
-              <span class="waits">
-                {p.waits!.map((w, n) => (
-                  <span key={n} class="wait">
-                    waiting {forHow(w.since)}: <code>{w.command}</code>
-                  </span>
-                ))}
-              </span>
-            )}
           </span>
         );
       })}
@@ -185,32 +176,9 @@ function projectTexts(p: ProjectView): (string | null)[] {
   return [p.name, baseName(p.dir), p.title, ...p.workspaces, ...wts, ...p.files.map((f) => f.name), ...p.panes.map((a) => a.title ?? null)];
 }
 
-/** Returns the agents among panes that wait on what their Bash tool or
- * subagents run: idle, with one still running. */
-function waiting(panes: Pane[]): Pane[] {
-  return panes.filter((p) => p.waits?.length && statusState(p.status) === "idle");
-}
-
-/** Returns how long it has been since the time at, in milliseconds since
- * the epoch, in its largest unit, like 12m. The page renders at least
- * every half minute, which keeps it near enough. */
-function forHow(at: number): string {
-  const seconds = Math.max(0, Math.floor((Date.now() - at) / 1000));
-  if (seconds < 60) return `${seconds}s`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-  return seconds < 86_400 ? `${Math.floor(seconds / 3600)}h` : `${Math.floor(seconds / 86_400)}d`;
-}
-
-/** Returns what the waiting agents among panes wait on, one line each. */
-function waitLines(panes: Pane[]): string[] {
-  return waiting(panes).flatMap((p) => (p.waits ?? []).map((w) => `${p.role ?? p.id}: ${w.command} (${forHow(w.since)})`));
-}
-
-/** Returns how many agents panes has, how many are in each state, and
- * how many wait on a command, which hovering lists. */
+/** Returns how many agents panes has, and how many are in each state. */
 function AgentCounts({ panes }: { panes: Pane[] }) {
   if (!panes.length) return null;
-  const waits = waitLines(panes);
   return (
     <span class="agent-counts">
       {panes.length === 1 ? "1 agent" : `${panes.length} agents`}
@@ -219,11 +187,6 @@ function AgentCounts({ panes }: { panes: Pane[] }) {
           {n} {state}
         </span>
       ))}
-      {waits.length > 0 && (
-        <span class="waiting" title={waits.join("\n")}>
-          {waiting(panes).length} waiting
-        </span>
-      )}
     </span>
   );
 }
@@ -294,7 +257,7 @@ export function ProjectView({ dir, state, query, now }: { dir: string; state: St
   return (
     <div class="diffs">
       <h2>
-        <a href="/">Projects</a> / {project?.name ?? baseName(dir)}
+        <a href="/projects">Projects</a> / {project?.name ?? baseName(dir)}
         {project && <DirName dir={dir} name={project.name} />}
       </h2>
       {!state ? (

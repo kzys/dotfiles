@@ -2,8 +2,7 @@
 
 import { baseName } from "./paths.ts";
 
-// The paths the page is served at besides /: /pulls, a view, and
-// /projects, which moved to / but holds the views of each project.
+// The paths the page is served at besides /, each a view.
 export const PAGE_PATHS = ["/pulls", "/projects"];
 // Those of them with more views under them, as /projects/<dir>.
 export const NESTED_PATHS = ["/projects"];
@@ -22,22 +21,12 @@ export function locationKey(pathname: string, hash: string): string {
   return hash.replace(/^#/, "") || pathname.slice(1);
 }
 
-/** Returns where the view at pathname and hash, from a link made before
- * it moved, is now, or null if it hasn't moved: the views after a # at /
- * moved to paths, and the projects from /projects to /. */
-export function movedTo(pathname: string, hash: string): string | null {
-  if (pathname === "/projects") return movedTo("/", hash) ?? `/${hash}`;
-  if (pathname !== "/") return null;
-  const path = `/${hash.replace(/^#/, "")}`;
-  if (path === "/projects") return "/";
-  return path !== "/" && pagePathOf(path) ? path : null;
-}
-
 export type Route =
+  | { view: "ask" }
   | { view: "projects" }
   | { view: "project"; dir: string }
-  // project is the project it was opened from, if known.
-  | { view: "diff"; dir: string; project: string | null }
+  // project is the project it was opened from.
+  | { view: "diff"; dir: string; project: string }
   | { view: "file"; dir: string; name: string }
   | { view: "learnings" }
   | { view: "pulls" };
@@ -52,8 +41,9 @@ export function decodeHash(s: string): string {
 }
 
 /** Returns the view at hash, the page's location as locationKey reads it.
- * Any location the page doesn't know shows the projects. */
+ * Any location the page doesn't know shows where every agent is asked. */
 export function route(hash: string): Route {
+  if (hash === "projects") return { view: "projects" };
   if (hash.startsWith("projects/")) {
     // Directories are encoded, so a / only separates.
     const rest = hash.slice("projects/".length);
@@ -61,18 +51,17 @@ export function route(hash: string): Route {
     if (at < 0) return { view: "project", dir: decodeHash(rest) };
     return { view: "diff", dir: decodeHash(rest.slice(at + "/diffs/".length)), project: decodeHash(rest.slice(0, at)) };
   }
-  if (hash.startsWith("diffs/")) return { view: "diff", dir: decodeHash(hash.slice("diffs/".length)), project: null };
   if (hash.startsWith("files/")) {
     const [dir = "", name = ""] = hash.slice("files/".length).split("/");
     return { view: "file", dir: decodeHash(dir), name: decodeHash(name) };
   }
   if (hash === "learnings") return { view: "learnings" };
   if (hash === "pulls") return { view: "pulls" };
-  return { view: "projects" };
+  return { view: "ask" };
 }
 
 /** Returns the tab of the page's console strip that r is under. */
-export function tab(r: Route): "pulls" | "projects" | "learnings" {
+export function tab(r: Route): "ask" | "pulls" | "projects" | "learnings" {
   return r.view === "diff" || r.view === "file" || r.view === "project" ? "projects" : r.view;
 }
 
@@ -104,5 +93,7 @@ export function pageTitle(r: Route): string {
       return "Pull requests";
     case "projects":
       return "Projects";
+    case "ask":
+      return "Ask agents";
   }
 }

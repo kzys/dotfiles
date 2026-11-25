@@ -102,7 +102,7 @@ export function FileView({ dir, name, at, state }: { dir: string; name: string; 
   return (
     <div class="diffs">
       <h2>
-        <a href="/">Projects</a> / <a href={projectHref(dir)}>{baseName(dir)}</a> / {name}
+        <a href="/projects">Projects</a> / <a href={projectHref(dir)}>{baseName(dir)}</a> / {name}
         <Refresh at={fetchedAt} onClick={refresh} title="Read it again" />
       </h2>
       <FileBody dir={dir} name={name} file={file} error={error} state={state} />

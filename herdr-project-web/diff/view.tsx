@@ -294,10 +294,9 @@ const changesOf = (f: FileDiff) => JSON.stringify(f.hunks.map((h) => [h.header, 
 
 /** Returns the diff of the worktree in dir, from where its branch
  * started, with its files matching query, under project, the project it
- * was opened from, or else the one that lists it in state. */
-export function WorktreeDiffView({ dir, project, query, state }: { dir: string; project: string | null; query: string; state: State | null }) {
-  const owner = project ?? state?.projects.find((p) => p.worktrees.some((w) => w.dir === dir))?.dir ?? null;
-  const ownerName = state?.projects.find((p) => p.dir === owner)?.name ?? (owner && baseName(owner));
+ * was opened from. */
+export function WorktreeDiffView({ dir, project, query, state }: { dir: string; project: string; query: string; state: State | null }) {
+  const projectName = state?.projects.find((p) => p.dir === project)?.name ?? baseName(project);
   const [layout, setLayout] = useLayout();
   const review = useReview(dir);
   const [fetched, error, at, refresh] = useFetched<HighlightedDiff>(`/diff?dir=${encodeURIComponent(dir)}`);
@@ -359,7 +358,7 @@ export function WorktreeDiffView({ dir, project, query, state }: { dir: string; 
   return (
     <div class="diffs">
       <h2>
-        <a href="/">Projects</a> / {owner && <><a href={projectHref(owner)}>{ownerName}</a> / </>}{baseName(dir)}
+        <a href="/projects">Projects</a> / <a href={projectHref(project)}>{projectName}</a> / {baseName(dir)}
         <span class="layout" role="group" aria-label="Layout">
           {(["unified", "split"] as const).map((l) => (
             <button key={l} class={l === layout ? "here" : ""} aria-pressed={l === layout} onClick={() => setLayout(l)}>

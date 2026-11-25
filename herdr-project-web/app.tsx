@@ -1,11 +1,12 @@
 import "./style.css";
+import { AskAgents } from "./ask/view.tsx";
 import { render } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { WorktreeDiffView } from "./diff/view.tsx";
 import { FileView } from "./files.tsx";
 import { halMessage } from "./hal.ts";
 import { LearningsView } from "./learnings.tsx";
-import { isPagePath, locationKey, movedTo, pageTitle, route, tab } from "./pages.ts";
+import { isPagePath, locationKey, pageTitle, route, tab } from "./pages.ts";
 import { BoardView } from "./board.tsx";
 import { ProjectList, ProjectView, pressing } from "./projects.tsx";
 import type { State } from "./state.ts";
@@ -30,7 +31,8 @@ function Readout({ text }: { text: string }) {
 
 // The tabs of the console strip, each with its link.
 const TABS = [
-  ["projects", "/", "Projects"],
+  ["ask", "/", "Ask"],
+  ["projects", "/projects", "Projects"],
   ["pulls", "/pulls", "Pulls"],
   ["learnings", "/#learnings", "Learnings"],
 ] as const;
@@ -48,15 +50,9 @@ function ownLink(e: MouseEvent): URL | null {
 }
 
 /** Returns the page's location as locationKey reads it, kept current,
- * following the page's own links without loading it again. A location
- * from a link made before a view moved, however the page got there, is
- * replaced with where it is now, as movedTo says. */
+ * following the page's own links without loading it again. */
 function useLocation(): string {
-  const read = () => {
-    const moved = movedTo(location.pathname, location.hash);
-    if (moved) history.replaceState(null, "", moved);
-    return locationKey(location.pathname, location.hash);
-  };
+  const read = () => locationKey(location.pathname, location.hash);
   const [key, setKey] = useState(read);
   useEffect(() => {
     const changed = () => setKey(read());
@@ -175,8 +171,10 @@ function App() {
           <p class="empty">Loading…</p>
         ) : at.view === "pulls" ? (
           <BoardView state={state} query={q} />
-        ) : (
+        ) : at.view === "projects" ? (
           <ProjectList state={state} query={q} />
+        ) : (
+          <AskAgents state={state} query={q} />
         )}
       </div>
     </Links.Provider>
