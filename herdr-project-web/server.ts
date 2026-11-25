@@ -25,7 +25,6 @@ import { herdrClient, herdrSocket, readHerdr, tuiBackend } from "./herdr/tui.ts"
 import { type HookEvent, type HookHandler, hookServer, limit, listenOn, speaker } from "./hooks.ts";
 import { frontMatter } from "./frontmatter.ts";
 import { agentCommand, instructions, launchDirectory, launchScript, parseAgent, projectDir } from "./launch.ts";
-import { readLearnings } from "./learnings.ts";
 import { connectors } from "./headless.ts";
 import * as linear from "./linear.ts";
 import { notesTexts } from "./owners.ts";
@@ -43,6 +42,7 @@ import { CoreFeed } from "./herdr/core.ts";
 import { background, workspacesToName } from "./rows.ts";
 import { routeDiff } from "./diff/routes.ts";
 import { routeFiles } from "./files/routes.ts";
+import { routeLearnings } from "./learnings/routes.ts";
 import { routePulls } from "./pulls/routes.ts";
 import { type PickerServer, routePicker } from "./picker/routes.ts";
 import { claudeSessionDirs, codexContext, codexSessionDirs, codexSessions, reportedRole } from "./sessions.ts";
@@ -415,8 +415,7 @@ page.get("/api/events", (c) => streamSSE(c, async (stream) => {
 }));
 // The files of the projects the page lists.
 routeFiles(page, { projectRoot, herdr: () => store.get().herdr });
-// They are small and change rarely, so they are read each time.
-page.get("/api/learnings", (c) => c.json(readLearnings(reposRoot)));
+routeLearnings(page, reposRoot);
 // The page's diffs. Only requests from the page's origin may set a base.
 routeDiff(page, {
   projectRoot, reposRoot, herdr: () => store.get().herdr, bases: () => pulls.latest()?.bases ?? {},
