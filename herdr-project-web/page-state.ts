@@ -7,7 +7,6 @@ import type { Herdr } from "./herdr/backend.ts";
 import type { HookEvent } from "./hooks.ts";
 import { type ProjectRead } from "./project/project.ts";
 import { type Watched, agentStates, stateOf } from "./state.ts";
-import type { Wait } from "./waits.ts";
 
 /** What the page's state comes from. */
 export type PageFacts = {
@@ -17,8 +16,6 @@ export type PageFacts = {
   // been read yet.
   appPanes: Herdr["panes"];
   appRead: boolean;
-  // What each Claude session's Bash tool still runs, by session ID.
-  waits: ReadonlyMap<string, Wait[]>;
   // What the checks found, or null before any has.
   watched: Watched | null;
   // The projects shown, as readProject reads them.
@@ -41,8 +38,6 @@ export function pageState(facts: PageFacts) {
   const all = everyPane(facts);
   const state = stateOf(facts.watched, facts.projects, all);
   const sessions = Object.fromEntries((all?.panes ?? []).filter((p) => p.agent).map((p) => [p.pane_id, p.agent_session?.value ?? ""]));
-  for (const project of state.projects)
-    for (const pane of project.panes) pane.waits = (sessions[pane.id] && facts.waits.get(sessions[pane.id])) || [];
   const { acting } = facts;
   if (!acting) return state;
   const controls: Record<string, AgentView> = {};

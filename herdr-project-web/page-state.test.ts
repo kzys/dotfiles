@@ -10,19 +10,15 @@ const facts = (over: Partial<PageFacts> = {}): PageFacts => ({
   ] },
   appPanes: [{ pane_id: "t1", workspace_id: "sp1", cwd: "/p/b", agent: "claude", agent_status: "working", agent_session: { value: "s2" } }],
   appRead: false,
-  waits: new Map([["s1", [{ command: "npm test", since: 1 }]]]),
   watched: null,
   projects: [project("/p/a", "A"), project("/p/b", "B")],
   acting: null,
   ...over,
 });
 
-test("shows the projects with their panes and what those wait on", () => {
+test("shows the projects with their panes", () => {
   const state = pageState(facts());
-  assert.deepEqual(state.projects.map((p) => [p.title, p.panes.map((q) => [q.id, q.waits])]), [
-    ["A", [["w1:p1", [{ command: "npm test", since: 1 }]]]],
-    ["B", [["t1", []]]],
-  ]);
+  assert.deepEqual(state.projects.map((p) => [p.title, p.panes.map((q) => q.id)]), [["A", ["w1:p1"]], ["B", ["t1"]]]);
   assert.deepEqual(state.agents, { "w1:p1": "idle", t1: "working" });
   assert.equal("controls" in state, false);
 });

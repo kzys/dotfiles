@@ -26,8 +26,6 @@ export type Pane = {
   ctx: number | null;
   // The title its terminal shows, if any.
   title?: string;
-  // What its Bash tool still runs, longest-running first, if known.
-  waits?: import("../waits.ts").Wait[];
 };
 
 // What the page shows of a project.

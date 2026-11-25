@@ -50,7 +50,6 @@ import { loadState, saveState } from "./statefile.ts";
 import { type ProjectRead, checkoutOf, linkCheckout, projectDirs, readProjects } from "./project/project.ts";
 import { type Watched, agentStates } from "./state.ts";
 import { type Found, title, watchWorkspace, watchedFrom } from "./watched.ts";
-import { type Wait, readProcesses, runningSubagents, sessionFolder, waitsByPid } from "./waits.ts";
 
 const here = import.meta.dirname;
 const home = homedir();
@@ -113,8 +112,6 @@ type Facts = {
   // How many times the Herdr app's spaces have changed, which herdr-core
   // tells as changes to the app's document.
   appSpacesChanged: number;
-  // What each Claude session's Bash tool still runs, by session ID.
-  waits: Map<string, Wait[]>;
   // What the checks found, by title, once they have checked.
   found: ReadonlyMap<string, Found>;
   // How many times ~/project, a project in it or what its projects work
@@ -123,7 +120,7 @@ type Facts = {
   projects: ProjectRead[];
 };
 const store = new Store<Facts>({
-  herdr: null, appPanes: [], appRead: false, appSpacesChanged: 0, waits: new Map(), found: new Map(), projectsChanged: 0, projects: [],
+  herdr: null, appPanes: [], appRead: false, appSpacesChanged: 0, found: new Map(), projectsChanged: 0, projects: [],
 });
 
 /** Sets what the check titled title found. */
@@ -195,33 +192,6 @@ new CoreFeed({
   subscribed: () => store.set({ appSpacesChanged: store.get().appSpacesChanged + 1 }),
   onError: logError,
 });
-
-// Where Claude Code keeps each session's files, once found.
-const sessionFolders = new Map<string, string>();
-
-// What agents wait on, keeping the last read when ps fails: their Bash
-// tool's commands, then the subagents of the sessions still running.
-new Schedule(async () => {
-  const sessions = claudeSessions();
-  let processes: Awaited<ReturnType<typeof readProcesses>>;
-  try {
-    processes = await readProcesses();
-  } catch {
-    return; // Keeping the last read while ps fails.
-  }
-  const shells = waitsByPid(processes);
-  const started = new Map(processes.map((p) => [p.pid, p.started]));
-  const next = new Map<string, Wait[]>();
-  const projects = join(home, ".claude/projects");
-  for (const [pid, session] of sessions) {
-    let folder = sessionFolders.get(session) ?? null;
-    if (!folder && (folder = sessionFolder(projects, session))) sessionFolders.set(session, folder);
-    const since = started.get(pid);
-    const w = [...(shells.get(pid) ?? []), ...(folder && since !== undefined ? runningSubagents(folder, since) : [])];
-    if (w.length) next.set(session, w);
-  }
-  if (JSON.stringify([...next]) !== JSON.stringify([...store.get().waits])) store.set({ waits: next });
-}, { every: 10_000, onError: logError });
 
 const paneHerdr: PaneHerdr = {
   list: async () => (await ask("pane.list")).panes,
