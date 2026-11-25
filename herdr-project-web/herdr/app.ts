@@ -92,26 +92,39 @@ export function terminalSession(
 const roleTokens = (terminal: any): { tokens?: Record<string, string> } =>
   terminal.labels?.role ? { tokens: { role: terminal.labels.role } } : {};
 
-/** Returns the panes among terminals, each as hc get describes it with the
- * agent hc ls reports, that show in a space of the Herdr app, as Herdr
- * describes its panes. Unlike appHerdrPanes, a terminal is an agent as
- * soon as hc ls says so. sessions maps the process IDs of running Claude
- * sessions to their IDs, as for terminalSession with parent; herdr-core
- * doesn't know sessions, and knows roles only as labels. */
-export function appListedPanes(
-  terminals: any[], sessions: Map<number, string>, parent: (pid: number) => number | null = procParent,
+/** Returns the panes among terminals, as hc get describes them, that show
+ * in a space of the Herdr app, as Herdr describes its panes, each an agent
+ * if agentOf names its app. sessions maps the process IDs of running
+ * Claude sessions to their IDs, as for terminalSession with parent;
+ * herdr-core doesn't know sessions, and knows roles only as labels. */
+function spacePanes(
+  terminals: any[], agentOf: (terminal: any) => string | undefined, sessions: Map<number, string>,
+  parent: (pid: number) => number | null,
 ): Herdr["panes"] {
   return terminals.filter((t) => t.state === "live" && t.labels?.["herdr.space"]).map((t) => {
-    const agent = AGENTS[t.agent] ?? t.agent ?? null;
+    const app = agentOf(t);
+    const agent = app ? (AGENTS[app] ?? app) : null;
     return {
       pane_id: t.address,
       workspace_id: t.labels["herdr.space"],
-      cwd: t.foreground?.cwd || t.cwd || "",
+      tab_id: t.labels["herdr.tab"],
+      cwd: t.foreground?.cwd || t.cwd,
       agent,
+      agent_status: t.status?.state,
       agent_session: agent === "claude" ? { value: terminalSession(t, sessions, parent) ?? "" } : null,
+      terminal_title: t.title || undefined,
       ...roleTokens(t),
     };
   });
+}
+
+/** Returns the panes among terminals, each as hc get describes it with the
+ * agent hc ls reports, as spacePanes does. Unlike appHerdrPanes, a
+ * terminal is an agent as soon as hc ls says so. */
+export function appListedPanes(
+  terminals: any[], sessions: Map<number, string>, parent: (pid: number) => number | null = procParent,
+): Herdr["panes"] {
+  return spacePanes(terminals, (t) => t.agent, sessions, parent);
 }
 
 /** Returns herdr-core's live terminals on this machine, each as hc get
@@ -134,29 +147,13 @@ export async function appPanes(run: Json = json, sessions = claudeSessions()): P
   return appListedPanes(await appTerminals(run), sessions);
 }
 
-/** Returns the terminals among terminals, as appTerminals reads them, that
- * show in a space of the Herdr app, as Herdr describes its panes, so that
- * their agents count as Herdr's do. A terminal is an agent only while its
- * program reports a status. sessions and parent are as for
- * appListedPanes. */
+/** Returns the panes among terminals, as appTerminals reads them, as
+ * spacePanes does, so that their agents count as Herdr's do. A terminal is
+ * an agent only while its program reports a status. */
 export function appHerdrPanes(
   terminals: any[], sessions: Map<number, string>, parent: (pid: number) => number | null = procParent,
 ): Herdr["panes"] {
-  return terminals.filter((t) => t.state === "live" && t.labels?.["herdr.space"]).map((t) => {
-    const app = t.status?.app;
-    const agent = app ? (AGENTS[app] ?? app) : null;
-    return {
-      pane_id: t.address,
-      workspace_id: t.labels["herdr.space"],
-      tab_id: t.labels["herdr.tab"],
-      cwd: t.foreground?.cwd || t.cwd,
-      agent,
-      agent_status: t.status?.state,
-      agent_session: agent === "claude" ? { value: terminalSession(t, sessions, parent) ?? "" } : null,
-      terminal_title: t.title || undefined,
-      ...roleTokens(t),
-    };
-  });
+  return spacePanes(terminals, (t) => t.status?.app, sessions, parent);
 }
 
 /** Reports whether the agent in terminal, as hc get describes it, is
