@@ -35,7 +35,7 @@ export type Section = {
   lines: string[];
   // The pull requests the lines list, if the section is about them.
   pullRequests?: PullRequest[];
-  // What the lines list, if the section is about Slack or Linear.
+  // The conversations or issues, if the section is about Slack or Linear.
   entries?: Entry[];
 };
 

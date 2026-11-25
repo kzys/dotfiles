@@ -32,7 +32,7 @@ test("reads the panes of the app's spaces", () => {
     { pane_id: "t1", workspace_id: "sp1", cwd: "/now", agent: "claude", agent_session: { value: "s1" } },
     { pane_id: "t2", workspace_id: "sp1", cwd: "/start", agent: null, agent_session: null },
     { pane_id: "t5", workspace_id: "sp1", cwd: "/now", agent: "claude", agent_session: { value: "s1" }, tokens: { role: "reviewer" } },
-  ]);
+  ].map((p) => ({ tab_id: undefined, agent_status: undefined, terminal_title: undefined, ...p })));
 });
 
 test("reads the agents of the app's spaces as Herdr's panes", () => {

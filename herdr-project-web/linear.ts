@@ -6,7 +6,7 @@ import { mkdirSync } from "node:fs";
 import { basename, dirname } from "node:path";
 import * as headless from "./headless.ts";
 import type { Item } from "./inbox.ts";
-import { type NotesText, type Owner, cut, escapeRegExp, ownedItem, pad, projectName, projectOf } from "./owners.ts";
+import { type NotesText, type Owner, escapeRegExp, ownedItem, projectName, projectOf } from "./owners.ts";
 import { day } from "./day.ts";
 import { loadState, saveState } from "./statefile.ts";
 
@@ -130,18 +130,7 @@ function ordered(issues: Issue[]): Issue[] {
   return latest.sort((a, b) => Number(!a.waiting_on_me) - Number(!b.waiting_on_me));
 }
 
-/** Returns lines listing issues, those waiting on the user first, then
- * the latest updated, with the project name from owners (by
- * identifier). */
-export function table(issues: Issue[], owners: Record<string, Owner | null>): string[] {
-  return ordered(issues).map((i) => {
-    const found = owners[i.identifier];
-    const name = found ? projectName(found.project) : "";
-    return `${i.waiting_on_me ? "*" : " "} ${pad(i.identifier, 9)} ${pad(cut(i.state, 11), 11)} ${pad(name, 20)} ${i.summary}`;
-  });
-}
-
-/** Returns issues as rows for other viewers, in the order of table, with
+/** Returns issues as rows for other viewers, in the order of ordered, with
  * the name of their project from owners (by identifier). */
 export function entries(issues: Issue[], owners: Record<string, Owner | null>) {
   return ordered(issues).map((i) => {
@@ -156,7 +145,7 @@ export function entries(issues: Issue[], owners: Record<string, Owner | null>) {
 
 /** Checks the Linear issues once with fetch: tells the user with notify
  * about those newly waiting on them since the state in path, saves the
- * new state there, and returns the lines of table, the rows of entries
+ * new state there, and returns the rows of entries
  * and inbox items for the issues waiting on the user. texts are the
  * projects' notes, and prOwners the projects of pull requests by url. */
 export async function poll(
@@ -166,7 +155,7 @@ export async function poll(
   prOwners: Record<string, Owner | null>,
   fetchIssues: (stateDir: string) => Promise<Issue[]> = fetch,
   now = new Date(),
-): Promise<{ lines: string[]; rows: unknown[]; items: Item[] }> {
+): Promise<{ rows: unknown[]; items: Item[] }> {
   const kept = loadState(path);
   const old = kept && typeof kept === "object" ? (kept as Record<string, string>) : null;
   mkdirSync(dirname(path), { recursive: true });
@@ -181,5 +170,5 @@ export async function poll(
   const items = found
     .filter((i) => i.waiting_on_me)
     .map((i) => ownedItem(owners[i.identifier], "linear", `${i.identifier}: ${i.summary}`));
-  return { lines: table(found, owners), rows: entries(found, owners), items };
+  return { rows: entries(found, owners), items };
 }

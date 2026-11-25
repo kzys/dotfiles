@@ -5,9 +5,8 @@ import type { Item } from "./inbox.ts";
 import type { Section } from "./state.ts";
 import type { Found } from "./watched.ts";
 
-// What a source's check returns: lines for the screen, rows for the page
-// and inbox items.
-export type Checked = { lines: string[]; rows: unknown[]; items: Item[] };
+// What a source's check returns: rows for the page and inbox items.
+export type Checked = { rows: unknown[]; items: Item[] };
 
 /** Returns what checking the source titled title found, by calling check
  * if its connector is among names, the connected ones, where last is what
@@ -35,8 +34,8 @@ export async function checkQueue(
     return { title, section: section(["Cannot list the claude.ai connectors."]), items: last?.items ?? [] };
   if (!names.has(connector)) return { title, section: null, items: [] };
   try {
-    const { lines, rows, items } = await check();
-    return { title, section: section(lines, rows), items };
+    const { rows, items } = await check();
+    return { title, section: section([], rows), items };
   } catch (e) {
     return { title, section: section([`Cannot check ${title}: ${String(e).split("\n")[0]}`]), items: last?.items ?? [] };
   }

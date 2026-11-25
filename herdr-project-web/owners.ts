@@ -77,11 +77,6 @@ export function ownedItem(found: Owner | null | undefined, mark: string, text: s
   return { project: found?.project ?? null, role: found?.role ?? null, mark, text };
 }
 
-/** Returns text cut to at most n characters, counting as Python does. */
-export function cut(text: string, n: number): string {
-  return Array.from(text).slice(0, n).join("");
-}
-
 /** Returns text padded with spaces to at least n characters, counting as
  * Python does. */
 export function pad(text: string, n: number): string {
