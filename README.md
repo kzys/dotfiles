@@ -90,8 +90,9 @@ running: without it `hp` and the picker start it in the background, logging
 to `~/.local/state/herdr-project/watch.log`, and hooks do nothing.
 Plain `claude` in a shell still works for fixing it.
 
-Its localhost-only page asks every agent a question at `/`: each gets it once
-idle and replies with `herdr-project --reply`, and the page shows the replies.
+Its localhost-only page asks every agent a question at `/`: each gets it as
+the comments below do, and replies with `herdr-project --reply`, and the page
+shows the replies.
 At `/projects` it shows the open projects under `~/project`, with their agents
 and what their notes say waits on you, and how each worktree differs from
 where its branch left the remote's default branch.
@@ -101,7 +102,9 @@ the page, which `gh pr create` also uses, else the branch it was created from
 until that is merged, else the default branch.
 
 Clicking a line number in a diff comments on that line, and the comments go to
-the agent you choose as one message, once it is idle.
+the agent you choose as one message. It is typed in once the agent is idle, or,
+for Claude Code, which takes what is typed into its turn, also while it works;
+never while it is blocked on a prompt or Herdr doesn't know its state.
 
 `hp` and the picker start the server in the background when it isn't running;
 in the Herdr TUI, shells also start it in a pane of the `watch` workspace if

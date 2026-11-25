@@ -20,7 +20,7 @@ import * as github from "./github/poll.ts";
 import * as pullSection from "./github-section.ts";
 import { type PullChecked, PullRequests } from "./github/watch.ts";
 import { BoardStore } from "./board-store.ts";
-import { type Herdr, isFree } from "./herdr/backend.ts";
+import { type Herdr, canTake } from "./herdr/backend.ts";
 import { HerdrEvents } from "./herdr/events.ts";
 import { herdrClient, herdrSocket, readHerdr, tuiBackend } from "./herdr/tui.ts";
 import { type HookEvent, hookServer, listenOn, speaker } from "./hooks.ts";
@@ -458,17 +458,18 @@ effect(store, (facts) => {
 
 // Only the watcher's server acts on agents and names their places.
 if (orgs) {
-  // What waits for each agent, sent once it is free, and again on the next
-  // change of anything while some a free one could take is left: not those
-  // for another session, which wait for the user.
+  // What waits for each agent, sent once it can take it, and again on the
+  // next change of anything while some one that can could take is left:
+  // not those for another session, which wait for the user.
   effect(store, (facts) => {
     const all = everyPane(facts);
     const sessions = Object.fromEntries((all?.panes ?? []).map((p) => [p.pane_id, p.agent_session?.value ?? ""]));
-    return { states: agentStates(all) ?? {}, sessions, queued: outbox.all() };
-  }, async (_facts, { states, sessions }) => {
-    if (await outbox.deliver(states)) store.tell();
+    const agents = Object.fromEntries((all?.panes ?? []).map((p) => [p.pane_id, p.agent ?? ""]));
+    return { states: agentStates(all) ?? {}, sessions, agents, queued: outbox.all() };
+  }, async (_facts, { states, sessions, agents }) => {
+    if (await outbox.deliver(states, agents)) store.tell();
     const takes = (pane: string) => (m: Queued) => !m.session || !sessions[pane] || m.session === sessions[pane];
-    if (Object.entries(outbox.all()).some(([pane, queued]) => isFree(states[pane]) && queued.some(takes(pane)))) {
+    if (Object.entries(outbox.all()).some(([pane, queued]) => canTake(states[pane], agents[pane]) && queued.some(takes(pane)))) {
       throw AGAIN;
     }
   }, { retry: true, onError: logError });

@@ -5,7 +5,7 @@
 import { execFile } from "node:child_process";
 import { createConnection } from "node:net";
 import { promisify } from "node:util";
-import { type Backend, type Herdr, type OpenHerdr, isFree } from "./backend.ts";
+import { type Backend, type Herdr, type OpenHerdr, canTake } from "./backend.ts";
 
 // An error Herdr replied with, as opposed to failing to reach it.
 export class HerdrError extends Error {}
@@ -113,7 +113,7 @@ export function tuiBackend(
   return {
     async ready(pane) {
       const { pane: now } = await ask("pane.get", { pane_id: pane });
-      const free = Boolean(now.agent) && isFree(now.agent_status) && !options.asking(pane);
+      const free = Boolean(now.agent) && canTake(now.agent_status, now.agent) && !options.asking(pane);
       return free ? (now.agent_session?.value ?? "") : null;
     },
     send,

@@ -5,11 +5,20 @@
  * its next message. */
 export const isFree = (status: string | null | undefined) => status === "idle" || status === "done";
 
+/** Reports whether agent, with status, as Herdr reports them, can take a
+ * message now: idle, or, for Claude Code, which takes what is typed while
+ * it works into its turn, working. Not one blocked on a prompt, which
+ * typed text could answer, nor one whose status isn't known; nor another
+ * agent at work, which may not queue what is typed. */
+export const canTake = (status: string | null | undefined, agent: string | null | undefined) =>
+  isFree(status) || (status === "working" && agent === "claude");
+
 /** One of the places agents run in: the Herdr TUI or the Herdr app. */
 export interface Backend {
-  /** Returns the session in pane, "" if unknown, if it runs an idle agent
-   * right now with no permission request open, or else null. Text sent to
-   * anything else could answer a prompt, or run in a shell. */
+  /** Returns the session in pane, "" if unknown, if it runs an agent that
+   * can take a message right now, as canTake says, with no permission
+   * request open, or else null. Text sent to anything else could answer a
+   * prompt, or run in a shell. */
   ready(pane: string): Promise<string | null>;
   /** Types text into pane and presses Enter. */
   send(pane: string, text: string): Promise<void>;

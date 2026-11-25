@@ -1,11 +1,14 @@
 // Acting on agents from the page: messages wait in an outbox until their
-// agent is idle, since text typed at a prompt could answer it. Prompts are
-// shown, not answered: keys sent to one can't be tied to what it asks.
+// agent can take them: not blocked on a prompt, since text typed at one
+// could answer it, and idle unless it is Claude Code, which takes what is
+// typed while it works into its turn.
+// Prompts are shown, not answered: keys sent to one can't be tied to what
+// it asks.
 
 import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import { jsonBody, limit, only } from "./http.ts";
-import { isFree } from "./herdr/backend.ts";
+import { canTake } from "./herdr/backend.ts";
 import type { HookEvent } from "./hooks.ts";
 import { loadState, saveState } from "./statefile.ts";
 
@@ -68,11 +71,12 @@ export class Outbox {
     return true;
   }
 
-  /** Sends each idle pane its messages as one, from statuses, what Herdr
-   * says of each pane, keeping them if that fails. Messages for panes
+  /** Sends each pane that can take them, as canTake says, its messages as
+   * one, from statuses, what Herdr says of each pane, and agents, the
+   * agent each runs, keeping them if that fails. Messages for panes
    * statuses doesn't list wait. Returns whether it sent any. */
-  async deliver(statuses: Record<string, string>): Promise<boolean> {
-    const panes = Object.keys(this.queues).filter((p) => isFree(statuses[p]) && !this.sending.has(p));
+  async deliver(statuses: Record<string, string>, agents: Record<string, string> = {}): Promise<boolean> {
+    const panes = Object.keys(this.queues).filter((p) => canTake(statuses[p], agents[p]) && !this.sending.has(p));
     const sent = await Promise.all(panes.map((p) => this.deliverTo(p)));
     return sent.includes(true);
   }

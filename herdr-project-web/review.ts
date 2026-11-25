@@ -69,7 +69,9 @@ function waitingFor(state: Receiving, pane: string): [number, number] {
 }
 
 /** Reports whether state shows the agent in pane busy with nothing left
- * to reach it, so with what it was sent. */
+ * to reach it, so with what it was sent: other agents get it only once
+ * idle, and Claude Code, which gets it while it works, takes it into its
+ * turn. */
 export function receiverStarted(state: Receiving | null, pane: string): boolean {
   const agent = statusState(state?.agents?.[pane]);
   return !!state && (agent === "working" || agent === "blocked") && waitingFor(state, pane)[0] <= 0;

@@ -47,7 +47,8 @@ function AskCard({ ask }: { ask: AskView }) {
 }
 
 /** Returns the box that asks every agent a question, and the questions
- * asked, newest first, matching query. Busy agents get it once idle. */
+ * asked, newest first, matching query. Busy agents get it once idle;
+ * Claude Code agents, while they work too, but not on a prompt. */
 export function AskAgents({ state, query }: { state: State; query: string }) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -86,7 +87,7 @@ export function AskAgents({ state, query }: { state: State; query: string }) {
           <button class="copy" disabled={!text.trim() || sending} onClick={ask}>
             ask every agent
           </button>
-          <span class="empty">Busy agents get it once they are idle.</span>
+          <span class="empty">Busy agents get it once idle; Claude Code agents, while they work too.</span>
           {error && <span class="agent-error">{error}</span>}
         </div>
       </div>
