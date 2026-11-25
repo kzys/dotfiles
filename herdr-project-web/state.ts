@@ -1,11 +1,10 @@
 // Reading what the watcher and the agents' notes say into one state
 // for the page.
 
-import { homedir } from "node:os";
 import type { Herdr } from "./herdr/backend.ts";
-import { FULL_AT, type Item, watchedItems } from "./inbox.ts";
+import { FULL_AT, type Item } from "./inbox.ts";
 import type { Run } from "./github/pullrequest.ts";
-import { Project, type ProjectRead, type ProjectView, readProjects } from "./project/project.ts";
+import { Project, type ProjectRead, type ProjectView } from "./project/project.ts";
 
 // An open pull request as the watcher lists it.
 export type PullRequest = {
@@ -18,21 +17,20 @@ export type PullRequest = {
   // The rollup state of its checks, like SUCCESS, or null without any.
   checks: string | null;
   failed: string[];
-  // Each check, from watchers that keep them.
-  runs?: Run[];
+  runs: Run[];
   review: string | null;
   project: string | null;
-  // The directory of its project, from watchers that keep it.
-  projectDir?: string | null;
+  // The directory of its project.
+  projectDir: string | null;
   agent: boolean;
-  // The agent's pane, from watchers that keep it.
-  pane?: string | null;
+  // The agent's pane, if known.
+  pane: string | null;
 };
 
 export type Section = {
   title: string;
   at: string | null;
-  // When the watcher checks again, from watchers that say.
+  // When the watcher checks again.
   next?: string | null;
   lines: string[];
   // The pull requests the lines list, if the section is about them.
@@ -52,17 +50,17 @@ export type Entry = {
   detail?: string;
   url: string | null;
   waiting: boolean;
-  // Whether Claude finds nothing left for the user in it, from watchers
+  // Whether Claude finds nothing left for the user in it, for sources
   // that say.
   done?: boolean;
   project: string | null;
-  // The directory of its project, from watchers that keep it.
-  projectDir?: string | null;
+  // The directory of its project.
+  projectDir: string | null;
 };
 
 // What the watcher found: its sections, its inbox items by source, the
 // URLs of the open pull requests it last found, and when, in ISO 8601.
-export type Watched = { sections: unknown; inbox: unknown; urls?: string[]; at: string };
+export type Watched = { sections: Section[]; inbox: Record<string, Item[]>; urls: string[]; at: string };
 
 export type State = {
   // What the page shows of each agent besides what Herdr says, by pane.
@@ -86,10 +84,10 @@ export type State = {
 
 /** Returns urls, those of pull requests, by their labels: owner/name#N,
  * and name#N as the watcher shows them, unless two share it. */
-export function pullRequestLinks(urls: string[] | undefined): Record<string, string> {
+export function pullRequestLinks(urls: string[]): Record<string, string> {
   const links: Record<string, string> = {};
   const shared = new Set<string>();
-  for (const url of urls ?? []) {
+  for (const url of urls) {
     const m = url.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)$/);
     if (!m) continue;
     links[`${m[1]}/${m[2]}#${m[3]}`] = url;
@@ -127,14 +125,14 @@ export function agentStates(herdr: Herdr | null): Record<string, string> | null 
  * left. */
 export function stateOf(watched: Watched | null, projects: ProjectRead[], herdr: Herdr | null): State {
   // Copies, since the Panes section is trimmed below.
-  const sections = Array.isArray(watched?.sections) ? (watched.sections as Section[]).map((s) => ({ ...s })) : null;
+  const sections = watched?.sections.map((s) => ({ ...s })) ?? null;
   const watchedAt = watched?.at ?? null;
 
   const all = projects.map((read) => new Project(read, herdr));
   const known = new Set(all.filter((p) => !p.closed()).map((p) => p.dir()));
   const byProject = new Map<string, Item[]>();
   const unowned: Item[] = [];
-  for (const item of watchedItems(watched?.inbox)) {
+  for (const item of Object.values(watched?.inbox ?? {}).flat()) {
     // Items of projects since removed or closed belong to none.
     if (item.project === null || !known.has(item.project)) unowned.push(item);
     else byProject.set(item.project, [...(byProject.get(item.project) ?? []), item]);
@@ -150,18 +148,6 @@ export function stateOf(watched: Watched | null, projects: ProjectRead[], herdr:
   for (const section of sections ?? [])
     if (section.title === "Panes") section.lines = panesElsewhere(section.lines, ids);
   const shown = sections?.filter((s) => s.title !== "Panes" || s.lines.length) ?? null;
-  const links = pullRequestLinks(watched?.urls);
+  const links = pullRequestLinks(watched?.urls ?? []);
   return { sections: shown, watchedAt, projects: shownProjects, unowned, links, agents: agentStates(herdr) };
-}
-
-/** Returns the state for the page as stateOf does, for the projects under
- * projectRoot as readProjects reads them. */
-export function readState(
-  watched: Watched | null,
-  projectRoot: string,
-  herdr: Herdr | null = null,
-  home: string = homedir(),
-  checkouts: Record<string, string[]> = {},
-): State {
-  return stateOf(watched, readProjects(projectRoot, herdr, home, checkouts), herdr);
 }

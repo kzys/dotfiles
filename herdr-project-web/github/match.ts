@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { type NotesText, type Owner, escapeRegExp } from "../owners.ts";
 import { type HerdrPane, paneCwd } from "../panes.ts";
+import { within } from "../paths.ts";
 import { type PullRequest as Pull, byString, repoName } from "./pullrequest.ts";
 
 /** Returns what git with args prints in directory d, trimmed, or "" if it
@@ -101,10 +102,9 @@ export function owner(pr: Pull, trees: Tree[], texts: NotesText[]): Owner | null
  * that found owns, or null: the agent in its worktree, else the one with
  * its role, else any agent in its project. */
 export function agentPane(panes: HerdrPane[], found: Owner): HerdrPane | null {
-  const inside = (path: string, d: string) => path === d || path.startsWith(d.replace(/\/+$/, "") + "/");
-  const inProject = panes.filter((p) => p.agent && inside(paneCwd(p), found.project));
+  const inProject = panes.filter((p) => p.agent && within(found.project, paneCwd(p)));
   return (
-    inProject.find((p) => found.dir && inside(paneCwd(p), found.dir)) ??
+    inProject.find((p) => found.dir && within(found.dir, paneCwd(p))) ??
     inProject.find((p) => found.role && p.tokens?.role === found.role) ??
     inProject[0] ??
     null

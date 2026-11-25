@@ -1,11 +1,17 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Herdr } from "./herdr/backend.ts";
 import { linkParts } from "./inbox.ts";
-import { type Watched, pullRequestLinks, readState } from "./state.ts";
+import { readProjects } from "./project/project.ts";
+import { type Section, type Watched, pullRequestLinks, stateOf } from "./state.ts";
+
+/** Returns the state stateOf gives for the projects under projectRoot. */
+const readState = (watched: Watched | null, projectRoot: string, herdr: Herdr | null = null, home = homedir(),
+                   checkouts: Record<string, string[]> = {}) =>
+  stateOf(watched, readProjects(projectRoot, herdr, home, checkouts), herdr);
 
 test("reads what the watcher found and the projects' notes", () => {
   const root = mkdtempSync(join(tmpdir(), "herdr-project-web-"));
@@ -80,8 +86,8 @@ test("reads what the watcher found and the projects' notes", () => {
   assert.deepEqual(withHerdr.unowned.map((i) => i.text), ["hi", "dm", "c#1 failed"]);
   assert.deepEqual(withHerdr.sections, [{ title: "Panes", at: null, lines: [" 90% w9:p1    /tmp/x"] }]);
   // The report itself keeps all its lines for the next read.
-  assert.equal((watched.sections as { lines: string[] }[])[0].lines.length, 3);
-  const sections = (...list: unknown[]): Watched => ({ ...watched, sections: list });
+  assert.equal(watched.sections[0].lines.length, 3);
+  const sections = (...list: Section[]): Watched => ({ ...watched, sections: list });
   assert.deepEqual(
     readState(sections({ title: "Panes", at: null, lines: [" 85% w2:p1    20261019-z"] },
                        { title: "Slack", at: null, lines: ["Nothing to clean up."] }), projects, herdr).sections,
@@ -132,7 +138,7 @@ test("links pull requests by their labels", () => {
     "kzys/containerd#12": "https://github.com/kzys/containerd/pull/12",
     "containerd/containerd#12": "https://github.com/containerd/containerd/pull/12",
   });
-  assert.deepEqual(pullRequestLinks(undefined), {});
+  assert.deepEqual(pullRequestLinks([]), {});
 
   assert.deepEqual(linkParts("✓ ● dotfiles#80     dotfiles   Add it", links), [
     ["✓ ● "], ["dotfiles#80", "https://github.com/kzys/dotfiles/pull/80"],

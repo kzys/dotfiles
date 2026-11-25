@@ -1,7 +1,8 @@
 // Comments on the lines of a diff or a Markdown file, kept in the browser
 // until they go to an agent as one message.
 
-import { type FileDiff, filePath } from "./diff.ts";
+import { type FileDiff, filePath } from "./diff/diff.ts";
+import { within } from "./paths.ts";
 import { type AgentState, statusState } from "./pulls.ts";
 import type { State } from "./state.ts";
 
@@ -42,10 +43,9 @@ export function reviewers(
   projects: { name: string; dir: string; worktrees: { dir: string }[]; panes: { id: string; role: string | null; cwd: string | null }[] }[],
   dir: string,
 ): Reviewer[] {
-  const within = (cwd: string | null) => cwd === dir || !!cwd?.startsWith(`${dir}/`);
   return projects.filter((p) => p.dir === dir || p.worktrees.some((w) => w.dir === dir))
     .flatMap((p) => p.panes.map((a) => ({
-      id: a.id, label: a.role ? `${p.name} · ${a.role} (${a.id})` : `${p.name} · ${a.id}`, inside: within(a.cwd),
+      id: a.id, label: a.role ? `${p.name} · ${a.role} (${a.id})` : `${p.name} · ${a.id}`, inside: within(dir, a.cwd),
     })))
     .sort((x, y) => Number(y.inside) - Number(x.inside) || x.id.localeCompare(y.id));
 }

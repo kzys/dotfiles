@@ -11,6 +11,8 @@ import { frontMatter } from "./frontmatter.ts";
 import { type Agent, AGENTS, isProject, newProject, quote } from "./launch.ts";
 import { type CodexSession, codexContext, reportedRole, title, transcriptDir, transcripts } from "./sessions.ts";
 import type { Herdr, OpenHerdr } from "./herdr/backend.ts";
+import { within } from "./paths.ts";
+import { readReadme, readmeName, roleNotes } from "./project/project.ts";
 import type { State } from "./state.ts";
 
 // Kind, directory, agent:session, and what the picker shows: as one line,
@@ -30,8 +32,6 @@ export function paneRecords(herdr: Herdr | null): PaneRecord[] {
     role: p.tokens?.role ?? "",
   }));
 }
-
-const inDir = (cwd: string, dir: string) => cwd === dir || cwd.startsWith(`${dir}/`);
 
 // Reading transcripts is slow and they rarely change, so what they say is
 // kept by path and modification time.
@@ -76,14 +76,6 @@ function context(directory: string, s: Session): string {
   return pct === null ? "" : `${pct}%`;
 }
 
-const readme = (dir: string) => {
-  try {
-    return readFileSync(join(dir, "README.md"), "utf8");
-  } catch {
-    return null;
-  }
-};
-
 /** Reports whether path is a directory, or a link to one. */
 function isDir(path: string): boolean {
   try {
@@ -110,9 +102,9 @@ export function choices(panes: PaneRecord[], projects: string, codex: CodexSessi
   mkdirSync(projects, { recursive: true });
   const dirs = readdirSync(projects).filter((name) => isProject(name) && isDir(join(projects, name))).map((name) => {
     const dir = join(projects, name);
-    const text = readme(dir);
+    const text = readReadme(dir);
     const closed = Boolean(text && frontMatter(text, "closed"));
-    return { dir, name, text, closed, busy: active.some((c) => inDir(c, dir)) };
+    return { dir, name, text, closed, busy: active.some((c) => within(dir, c)) };
   }).sort((a, b) => Number(b.busy) - Number(a.busy) || Number(a.closed) - Number(b.closed) || b.name.localeCompare(a.name));
   for (const { dir, name, text, closed } of dirs) {
     let summary = text === null ? "(no notes)" : frontMatter(text, "title") || "(no title)";
@@ -137,7 +129,7 @@ const source = (mark: string) => SOURCES[mark] ?? mark;
 /** Returns agent:session for role's running or saved session in directory,
  * else the newest, or "" if there is none. */
 function sessionFor(directory: string, role: string | null, panes: PaneRecord[], codex: CodexSession[], home: string): string {
-  const pane = panes.find((p) => AGENTS.includes(p.agent as Agent) && p.session && role && p.role === role && inDir(p.cwd, directory));
+  const pane = panes.find((p) => AGENTS.includes(p.agent as Agent) && p.session && role && p.role === role && within(directory, p.cwd));
   if (pane) return `${pane.agent}:${pane.session}`;
   const found = sessions(directory, codex, home);
   const owner = role ? found.find((s) => s.transcript && cached("role", s.transcript, reportedRole) === role) : undefined;
@@ -174,22 +166,10 @@ export function inboxChoices(panes: PaneRecord[], codex: CodexSession[], state: 
  * the file exists, else README.md, then every AGENT-*.md. */
 export function notes(directory: string, role: string | null = null): string {
   if (!directory) return "";
-  const read = (name: string) => {
-    try {
-      return readFileSync(join(directory, name), "utf8");
-    } catch {
-      return null;
-    }
-  };
-  if (role) {
-    const own = read(`AGENT-${role}.md`);
-    if (own !== null) return own;
-  }
-  let names: string[] = [];
-  try {
-    names = readdirSync(directory).filter((n) => /^AGENT-.*\.md$/.test(n)).sort();
-  } catch {}
-  return ["README.md", ...names].map((n) => read(n) ?? "").join("");
+  const all = roleNotes(directory);
+  const own = role ? all.find(([r]) => r === role) : undefined;
+  if (own) return own[1];
+  return [readReadme(directory) ?? "", ...all.map(([, text]) => text)].join("");
 }
 
 /** Returns the notes of a row: its session's role's, or all the project's. */
@@ -241,7 +221,7 @@ export async function plan(
     if (bg && !(bg[1] === "idle" && (await deps.stop(bg[0])))) command = `claude attach ${quote(bg[0])}`;
     else command += ` --resume ${quote(sid)}`;
   }
-  const workspace = panes.find((p) => inDir(p.cwd, directory))?.workspace ?? null;
+  const workspace = panes.find((p) => within(directory, p.cwd))?.workspace ?? null;
   return { workspace, directory, command };
 }
 
@@ -268,10 +248,7 @@ export async function open(planned: Plan, herdr: OpenHerdr) {
   let { workspace } = planned;
   let pane: string;
   if (workspace) pane = await herdr.tab(workspace, directory);
-  else {
-    const text = readme(directory);
-    ({ workspace, pane } = await herdr.workspace(directory, (text && frontMatter(text, "name")) || null));
-  }
+  else ({ workspace, pane } = await herdr.workspace(directory, readmeName(directory)));
   // Without herdr-project, nothing else reports the title.
   if (command.startsWith("claude attach ")) await herdr.title(workspace, directory);
   await herdr.run(pane, command);

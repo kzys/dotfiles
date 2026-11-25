@@ -1,6 +1,10 @@
 // What the server does with the panes of the Herdr TUI and of the Herdr
 // app alike, so that it needn't tell which one a pane is in.
 
+/** Reports whether an agent with status, as Herdr reports it, waits for
+ * its next message. */
+export const isFree = (status: string | null | undefined) => status === "idle" || status === "done";
+
 /** One of the places agents run in: the Herdr TUI or the Herdr app. */
 export interface Backend {
   /** Returns the session in pane, "" if unknown, if it runs an idle agent

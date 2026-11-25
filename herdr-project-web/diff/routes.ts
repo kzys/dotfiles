@@ -4,7 +4,7 @@
 import type { Hono } from "hono";
 import type { Herdr } from "../herdr/backend.ts";
 import { highlightDiff, highlightLines } from "./highlight.ts";
-import { limit } from "../hooks.ts";
+import { jsonBody, limit, only } from "../http.ts";
 import { openProjects } from "../project/project.ts";
 import { worktreeDirs } from "../project/worktrees.ts";
 import { type PullBases, changedSince, checkoutDirs, fileLines, setBase, worktreeDiff } from "./git.ts";
@@ -51,9 +51,8 @@ export function routeDiff(routes: Hono, server: DiffServer, allowed: (headers: H
     const lines = known ? fileLines(dir, path, Number(c.req.query("from")), Number(c.req.query("to"))) : null;
     return lines === null ? c.json({ error: "no such file" }, 404) : c.json(await highlightLines(path, lines));
   });
-  routes.post("/diff/base", limit(), async (c) => {
-    if (!allowed(c.req.raw.headers)) return c.body(null, 403);
-    const { dir, branch, base } = JSON.parse((await c.req.text()) || "{}");
+  routes.post("/diff/base", limit(), only(allowed), async (c) => {
+    const { dir, branch, base } = await jsonBody(c);
     if (!listed(dir)) return c.body(null, 404);
     if (typeof branch !== "string" || !(base === null || typeof base === "string")) return c.body(null, 400);
     return c.body(null, (await setBase(dir, branch, base)) ? 204 : 409);

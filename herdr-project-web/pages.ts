@@ -1,5 +1,7 @@
 // The page's views, by its location: its path, as /pulls, or after its #.
 
+import { baseName } from "./paths.ts";
+
 // The paths the page is served at besides /, each a view.
 export const PAGE_PATHS = ["/pulls", "/projects"];
 // Those of them with more views under them, as /projects/<dir>.
@@ -90,11 +92,11 @@ export const fileHref = (dir: string, name: string) =>
 export function pageTitle(r: Route): string {
   switch (r.view) {
     case "project":
-      return `${r.dir.split("/").filter(Boolean).pop() ?? "Project"} · Project`;
+      return `${baseName(r.dir) || "Project"} · Project`;
     case "diff":
-      return `${r.dir.split("/").filter(Boolean).pop() ?? "Worktree"} · Diff`;
+      return `${baseName(r.dir) || "Worktree"} · Diff`;
     case "file":
-      return `${r.name} · ${r.dir.split("/").filter(Boolean).pop() ?? "Project"}`;
+      return `${r.name} · ${baseName(r.dir) || "Project"}`;
     case "learnings":
       return "Learnings";
     case "pulls":

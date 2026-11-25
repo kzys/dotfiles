@@ -4,7 +4,9 @@
 
 import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
-import { type HookEvent, limit } from "./hooks.ts";
+import { jsonBody, limit, only } from "./http.ts";
+import { isFree } from "./herdr/backend.ts";
+import type { HookEvent } from "./hooks.ts";
 import { loadState, saveState } from "./statefile.ts";
 
 // A message, for the session in its pane when it was written, if known: a
@@ -16,8 +18,6 @@ export type Undelivered = { pane: string; messages: Queued[] };
 
 // What the page shows of an agent, besides what Herdr says of it.
 export type AgentView = { queued: Queued[]; permission: { detail: string; at: number } | null };
-
-const free = (status: string | undefined) => status === "idle" || status === "done";
 
 /** Keeps messages for agents in path by pane, surviving restarts, and
  * sends them with send once ready, which looks at the pane again, says
@@ -70,7 +70,7 @@ export class Outbox {
    * says of each pane, keeping them if that fails. Messages for panes
    * statuses doesn't list wait. Returns whether it sent any. */
   async deliver(statuses: Record<string, string>): Promise<boolean> {
-    const panes = Object.keys(this.queues).filter((p) => free(statuses[p]) && !this.sending.has(p));
+    const panes = Object.keys(this.queues).filter((p) => isFree(statuses[p]) && !this.sending.has(p));
     const sent = await Promise.all(panes.map((p) => this.deliverTo(p)));
     return sent.includes(true);
   }
@@ -150,7 +150,7 @@ export type AgentActions = {
  * that allowed refuses get 403. */
 export function routeAgents(app: Hono, actions: AgentActions, allowed: (headers: Headers) => boolean = () => true) {
   const agents = new Hono();
-  agents.use(async (c, next) => (allowed(c.req.raw.headers) ? next() : c.body(null, 403)));
+  agents.use(only(allowed));
   // Only the agents in panes that have one.
   const known = createMiddleware(async (c, next) =>
     actions.known(c.req.param("pane")!) ? next() : c.json({ error: "no such agent" }, 404)
@@ -159,12 +159,7 @@ export function routeAgents(app: Hono, actions: AgentActions, allowed: (headers:
   // Queues {text} for the agent in pane.
   agents.post("/:pane/messages", limit((c) => c.json({ error: "too large" }, 413)), known, async (c) => {
     const pane = c.req.param("pane");
-    let text: unknown;
-    try {
-      ({ text } = JSON.parse((await c.req.text()) || "{}"));
-    } catch {
-      return c.json({ error: "not JSON" }, 400);
-    }
+    const { text } = await jsonBody(c);
     if (typeof text !== "string" || !text.trim()) return c.json({ error: "no text" }, 400);
     actions.outbox.add(pane, text.trim(), actions.session(pane));
     actions.changed();

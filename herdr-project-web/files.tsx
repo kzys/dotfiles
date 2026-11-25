@@ -3,9 +3,10 @@
 
 import { h } from "preact";
 import { useEffect, useMemo, useRef } from "preact/hooks";
-import { CommentAt, type Review, SendReview, type Sender, SentNote, useReview, useSender } from "./diffs.tsx";
+import { CommentAt, type Review, SendReview, type Sender, SentNote, useReview, useSender } from "./review.tsx";
 import { type MarkdownNode, commentable, markdownTree } from "./markdown.ts";
 import { projectHref } from "./pages.ts";
+import { baseName } from "./paths.ts";
 import { type Comment, commentKey, displacedFromBlocks } from "./review.ts";
 import type { State } from "./state.ts";
 import { Refresh, useFetched } from "./ui.tsx";
@@ -101,7 +102,7 @@ export function FileView({ dir, name, at, state }: { dir: string; name: string; 
   return (
     <div class="diffs">
       <h2>
-        <a href="/projects">Projects</a> / <a href={projectHref(dir)}>{dir.split("/").pop()}</a> / {name}
+        <a href="/projects">Projects</a> / <a href={projectHref(dir)}>{baseName(dir)}</a> / {name}
         <Refresh at={fetchedAt} onClick={refresh} title="Read it again" />
       </h2>
       <FileBody dir={dir} name={name} file={file} error={error} state={state} />

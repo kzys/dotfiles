@@ -43,7 +43,7 @@ function RunNames({ runs }: { runs: Run[] }) {
  * failed or still runs. */
 function Checks({ pr }: { pr: PullRequest }) {
   const by = runsByState(pr);
-  const total = pr.runs?.length ?? 0;
+  const total = pr.runs.length;
   if (!total) return null;
   return (
     <div class="runs">
@@ -109,9 +109,6 @@ function PullRequestRow({
           {pr.project && <span class="workspace">{pr.project}</span>}
           {agent && !agentInPill && (
             <span class={`pr-agent agent-${agent}`}>{AGENT_LABELS[agent]}</span>
-          )}
-          {!pr.runs && pr.failed.length > 0 && (
-            <span class="pr-failed">failed: {pr.failed.join(", ")}</span>
           )}
         </div>
         <Checks pr={pr} />

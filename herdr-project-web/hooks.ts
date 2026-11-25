@@ -9,16 +9,9 @@ import { dirname } from "node:path";
 import { promisify } from "node:util";
 import { getRequestListener } from "@hono/node-server";
 import { type Context, Hono } from "hono";
-import { bodyLimit } from "hono/body-limit";
+import { limit } from "./http.ts";
 
 const AGENTS = new Set(["claude", "codex", "opencode"]);
-// Far more than any request needs, to bound what's kept in memory.
-const MAX_BODY = 1 << 20;
-
-/** Returns middleware that refuses a request whose body is too large to
- * keep, with what tooLarge returns. */
-export const limit = (tooLarge = (c: Context): Response => c.body(null, 413)) =>
-  bodyLimit({ maxSize: MAX_BODY, onError: tooLarge });
 
 // What a permission request asks for is kept to show the user, this long
 // at most.

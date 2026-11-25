@@ -2,12 +2,10 @@
 // panes that have long been idle.
 
 import { createHash } from "node:crypto";
-import { realpathSync } from "node:fs";
-import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
 import { FULL_AT, type Item } from "./inbox.ts";
-import { isProject } from "./launch.ts";
+import { projectDir } from "./launch.ts";
 import { projectName } from "./owners.ts";
-import type { Herdr } from "./herdr/backend.ts";
+import { type Herdr, isFree } from "./herdr/backend.ts";
 import { loadState, saveState } from "./statefile.ts";
 
 // A pane as herdr pane list shows it.
@@ -89,27 +87,6 @@ export function full(panes: HerdrPane[]): HerdrPane[] {
   return panes.filter((p) => p.agent && (ctx(p) ?? 0) >= FULL_AT).sort((a, b) => ctx(b)! - ctx(a)!);
 }
 
-/** Returns the project directory directly under root that holds cwd, or
- * null if cwd isn't in one. Symlinks in either path don't matter. */
-export function projectDir(cwd: string, root: string): string | null {
-  if (!cwd) return null;
-  const rel = relative(real(root), real(cwd));
-  if (!rel || rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) return null;
-  const name = rel.split(sep)[0];
-  return isProject(name) ? join(root, name) : null;
-}
-
-/** Returns path with the symlinks in the part of it that exists
- * resolved. */
-function real(path: string): string {
-  const parent = dirname(path);
-  try {
-    return realpathSync(path);
-  } catch {
-    return parent === path ? path : join(real(parent), basename(path));
-  }
-}
-
 /** Returns what to tell the agent in pane about its full context. */
 export function wakeMessage(pane: HerdrPane): string {
   return `Your context is ${ctx(pane)}% full. Update your notes so that a new session can pick up from them, then tell the user.`;
@@ -156,7 +133,7 @@ export async function checkPanes(herdr: PaneHerdr, root: string, path: string, n
     if (!project) continue;
     items.push({ project, role: p.tokens?.role || null, mark: "ctx",
                  text: `${where}: context ${ctx(p)}% full, restart it from its notes` });
-    if (state.told.includes(p.pane_id) || !["idle", "done"].includes(p.agent_status ?? "")) continue;
+    if (state.told.includes(p.pane_id) || !isFree(p.agent_status)) continue;
     // Keep it told before telling, so a failed save can't tell it again.
     state.told.push(p.pane_id);
     saveState(path, state);

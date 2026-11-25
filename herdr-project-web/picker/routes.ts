@@ -3,7 +3,7 @@
 
 import type { Hono } from "hono";
 import type { Backend } from "../herdr/backend.ts";
-import { limit } from "../hooks.ts";
+import { jsonBody, limit, only } from "../http.ts";
 import { type PlanDeps, choices, inboxChoices, open, paneRecords, plan, rowNotes } from "../rows.ts";
 import { codexSessions } from "../sessions.ts";
 import type { State } from "../state.ts";
@@ -33,9 +33,8 @@ export function routePicker(routes: Hono, server: PickerServer, allowed: (header
       : choices(await panes(app), server.projectRoot, codexSessions()));
   });
   routes.get("/picker/notes", (c) => c.text(rowNotes(c.req.query("kind") ?? "", c.req.query("dir") ?? "", c.req.query("session") ?? "")));
-  routes.post("/picker/open", limit(), async (c) => {
-    if (!allowed(c.req.raw.headers)) return c.body(null, 403);
-    const { row, agent, app } = JSON.parse((await c.req.text()) || "{}");
+  routes.post("/picker/open", limit(), only(allowed), async (c) => {
+    const { row, agent, app } = await jsonBody(c);
     // Panes as they are now, not as last read: going by old ones could
     // resume a session that already runs.
     const planned = await plan(row, agent, await panes(Boolean(app)), server.projectRoot, server.launcher, server.planDeps);

@@ -126,20 +126,6 @@ export function projectItems(
   return items.sort((a, b) => rank(a) - rank(b));
 }
 
-/** Returns the watcher's inbox items from sources, its items by source
- * as it reports them, skipping any not in the form it sends. */
-export function watchedItems(sources: unknown): Item[] {
-  if (!sources || typeof sources !== "object" || Array.isArray(sources)) return [];
-  const strOrNull = (v: unknown) => typeof v === "string" || v === null || v === undefined;
-  return Object.values(sources)
-    .filter(Array.isArray)
-    .flat()
-    .filter((i): i is Item =>
-      !!i && typeof i === "object" && typeof i.text === "string" &&
-      typeof i.mark === "string" && strOrNull(i.project) && strOrNull(i.role))
-    .map((i) => ({ ...i, project: i.project ?? null, role: i.role ?? null }));
-}
-
 /** Returns text in parts, each with the URL it links to, if any: the
  * URLs in it, and the pull request labels in links. */
 export function linkParts(text: string, links: Record<string, string>): [string, string?][] {

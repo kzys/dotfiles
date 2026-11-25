@@ -7,6 +7,7 @@ import { frontMatter } from "../frontmatter.ts";
 import type { Herdr } from "../herdr/backend.ts";
 import { type Item, projectItems } from "../inbox.ts";
 import { isProject } from "../launch.ts";
+import { within } from "../paths.ts";
 import { isCheckout, lastSubject, worktreeDirs } from "./worktrees.ts";
 
 // A worktree or checkout, with the subject of its last commit, if git
@@ -56,6 +57,16 @@ function read(path: string): string | null {
   }
 }
 
+/** Returns the README.md of the project in dir, or null. */
+export const readReadme = (dir: string) => read(join(dir, "README.md"));
+
+/** Returns the name the front matter of the README.md of the project in
+ * dir gives it, or null. */
+export function readmeName(dir: string): string | null {
+  const readme = readReadme(dir);
+  return (readme && frontMatter(readme, "name")) || null;
+}
+
 /** Returns the project directories under root, newest name first, as
  * the ~/project convention dates them, skipping those isProject doesn't
  * take for one. */
@@ -76,7 +87,7 @@ export function projectDirs(root: string): string[] {
  * it has none. */
 export function openProjects(root: string, herdr: Herdr | null = null): [string, string | null][] {
   return projectDirs(root).flatMap((dir): [string, string | null][] => {
-    const readme = read(join(dir, "README.md"));
+    const readme = readReadme(dir);
     const closed = readme !== null && frontMatter(readme, "closed");
     return closed && !workspacesIn(dir, herdr).length ? [] : [[dir, readme]];
   });
@@ -156,8 +167,9 @@ export function readProjectFile(directory: string, name: string): { text: string
   }
 }
 
-/** Returns the agents' notes in directory as [role, text] pairs. */
-function roleNotes(directory: string): [string, string][] {
+/** Returns the agents' notes in directory, each AGENT-<role>.md, as
+ * [role, text] pairs, by role. */
+export function roleNotes(directory: string): [string, string][] {
   let names: string[];
   try {
     names = readdirSync(directory);
@@ -200,17 +212,12 @@ export function linkCheckout(links: Record<string, string[]>, dir: string, check
   return true;
 }
 
-/** Reports whether cwd, if any, is dir or under it. */
-function inside(dir: string, cwd?: string): boolean {
-  return !!cwd && (cwd === dir || cwd.startsWith(dir + "/"));
-}
-
 /** Returns the labels of the workspaces in herdr with a pane in dir or
  * under it, in the order herdr lists them. */
 function workspacesIn(dir: string, herdr: Herdr | null): string[] {
   if (!herdr) return [];
   const ids = new Set(
-    herdr.panes.filter((p) => inside(dir, p.cwd) || inside(dir, p.foreground_cwd)).map((p) => p.workspace_id),
+    herdr.panes.filter((p) => within(dir, p.cwd) || within(dir, p.foreground_cwd)).map((p) => p.workspace_id),
   );
   return herdr.workspaces
     .filter((w) => ids.has(w.workspace_id))
@@ -282,7 +289,7 @@ export class Project {
    * else Herdr's. */
   herdrPanes(): Herdr["panes"] {
     const { dir } = this.read;
-    return (this.herdr?.panes ?? []).filter((p) => inside(dir, p.tokens?.cwd || p.cwd) || inside(dir, p.foreground_cwd));
+    return (this.herdr?.panes ?? []).filter((p) => within(dir, p.tokens?.cwd || p.cwd) || within(dir, p.foreground_cwd));
   }
 
   /** Returns how many tabs in herdr have a pane working in it. */

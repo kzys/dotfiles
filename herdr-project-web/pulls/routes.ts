@@ -6,7 +6,7 @@ import * as board from "../board.ts";
 import type { BoardStore } from "../board-store.ts";
 import { requestCopilot } from "../github/api.ts";
 import type { PullCheck } from "../github/poll.ts";
-import { limit } from "../hooks.ts";
+import { jsonBody, limit, only } from "../http.ts";
 
 /** What the board's routes need of the server. */
 export type PullsServer = {
@@ -24,17 +24,15 @@ export type PullsServer = {
  * board.MOVABLE, or back for null, and asking Copilot to review one. */
 export function routePulls(routes: Hono, server: PullsServer, allowed: (headers: Headers) => boolean) {
   const isOpen = (url: unknown) => board.isOpen(server.latest()?.pulls ?? [], url);
-  routes.post("/pulls/stage", limit(), async (c) => {
-    if (!allowed(c.req.raw.headers)) return c.body(null, 403);
-    const { url, stage } = JSON.parse((await c.req.text()) || "{}");
+  routes.post("/pulls/stage", limit(), only(allowed), async (c) => {
+    const { url, stage } = await jsonBody(c);
     if (!(stage === null || board.MOVABLE.includes(stage))) return c.body(null, 400);
     if (!isOpen(url)) return c.body(null, 404);
     if (server.board.move(url, stage)) server.changed();
     return c.body(null, 204);
   });
-  routes.post("/pulls/copilot", limit(), async (c) => {
-    if (!allowed(c.req.raw.headers)) return c.body(null, 403);
-    const { url } = JSON.parse((await c.req.text()) || "{}");
+  routes.post("/pulls/copilot", limit(), only(allowed), async (c) => {
+    const { url } = await jsonBody(c);
     if (!isOpen(url)) return c.body(null, 404);
     const asked = await server.board.askCopilot(url, (u) => requestCopilot(u));
     server.changed();
