@@ -103,9 +103,13 @@ const clients = new Set<SSEStreamingApi>();
 const logError = (e: unknown) => console.error("herdr-project-web:", e);
 const { ask, tryAsk } = herdrClient();
 
+// The columns the user moved pull requests to, and what came of asking
+// Copilot to review each.
+const boardStore = new BoardStore(stateDir, logError);
+
 // What the server knows, which its sources set and from which the page and
 // what the server does derive.
-const facts = new Facts();
+const facts = new Facts(boardStore.state);
 
 /** Calls set now and after each change that source tells of. */
 function follow(source: { subscribe(listener: () => void): void }, set: () => void) {
@@ -127,10 +131,6 @@ const herdrEvents = new HerdrEvents(herdrSocket, () => herdrReads.refresh());
 // The checks, in the order the page shows what they found.
 const ORDER = ["Pull requests", "Panes", "Slack", "Linear"];
 
-// The columns the user moved pull requests to, and what came of asking
-// Copilot to review each.
-const boardStore = new BoardStore(stateDir, logError);
-follow(boardStore, () => facts.setBoard(boardStore.state()));
 // The questions asked of every agent from the page, and their replies.
 const asks = new Asks(join(stateDir, "asks.json"));
 follow(asks, () => facts.setAsks(asks.all()));
