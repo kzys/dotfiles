@@ -41,16 +41,15 @@ import { appBackend, appCommand, appHerdrPanes, appSpaces, claudeSessions, space
 import { CoreFeed } from "./herdr/core.ts";
 import { background, workspacesToName } from "./rows.ts";
 import { routeDiff } from "./diff/routes.ts";
-import { routeFiles } from "./files/routes.ts";
+import { routeFiles } from "./project/routes.ts";
 import { routeLearnings } from "./learnings/routes.ts";
 import { routePulls } from "./pulls/routes.ts";
 import { type PickerServer, routePicker } from "./picker/routes.ts";
 import { claudeSessionDirs, codexContext, codexSessionDirs, codexSessions, reportedRole } from "./sessions.ts";
 import * as slack from "./slack.ts";
 import { loadState, saveState } from "./statefile.ts";
-import {
-  type ProjectRead, type Watched, agentStates, checkoutOf, linkCheckout, projectDirs, projectLabels, readProjects,
-} from "./state.ts";
+import { type ProjectRead, checkoutOf, linkCheckout, projectDirs, projectLabels, readProjects } from "./project/project.ts";
+import { type Watched, agentStates } from "./state.ts";
 import { type Found, title, watchWorkspace, watchedFrom } from "./watched.ts";
 import { type Wait, readProcesses, runningSubagents, sessionFolder, waitsByPid } from "./waits.ts";
 

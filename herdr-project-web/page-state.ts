@@ -5,7 +5,8 @@ import { type AgentView, type Queued, permission, undelivered } from "./agents.t
 import type { Card } from "./board.ts";
 import type { Herdr } from "./herdr/backend.ts";
 import type { HookEvent } from "./hooks.ts";
-import { type ProjectRead, type Watched, agentStates, stateOf } from "./state.ts";
+import { type ProjectRead } from "./project/project.ts";
+import { type Watched, agentStates, stateOf } from "./state.ts";
 import type { Wait } from "./waits.ts";
 
 /** What the page's state comes from. */

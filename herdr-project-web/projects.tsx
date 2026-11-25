@@ -7,7 +7,8 @@ import { FULL_AT, type Item, uniqueKeys } from "./inbox.ts";
 import { diffHref, fileHref, projectHref } from "./pages.ts";
 import { agentCounts, projectSections, statusState } from "./pulls.ts";
 import type { AgentView } from "./agents.ts";
-import type { Pane, ProjectView, State } from "./state.ts";
+import type { Pane, ProjectView } from "./project/project.ts";
+import type { State } from "./state.ts";
 import { Linked, matches, send } from "./ui.tsx";
 import { WatchSection } from "./watcher.tsx";
 

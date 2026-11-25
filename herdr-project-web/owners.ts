@@ -4,7 +4,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { Item } from "./inbox.ts";
-import { projectLabels } from "./state.ts";
+import { projectLabels } from "./project/project.ts";
 
 // Who works on something: the project directory, the worktree in it, if
 // known, and the role of the agent, if known.
