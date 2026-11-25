@@ -15,8 +15,6 @@ import { type SSEStreamingApi, streamSSE } from "hono/streaming";
 import {
   type AgentActions, type Queued, Outbox, forgetAnswered, fromPage, permission, routeAgents, undelivered,
 } from "./agents.ts";
-import * as board from "./board.ts";
-import { requestCopilot } from "./github/api.ts";
 import * as github from "./github/poll.ts";
 import * as pullSection from "./github-section.ts";
 import { type PullChecked, PullRequests } from "./github/watch.ts";
@@ -44,6 +42,7 @@ import { appBackend, appCommand, appHerdrPanes, appSpaces, claudeSessions, space
 import { CoreFeed } from "./herdr/core.ts";
 import { background, workspacesToName } from "./rows.ts";
 import { routeDiff } from "./diff/routes.ts";
+import { routePulls } from "./pulls/routes.ts";
 import { type PickerServer, routePicker } from "./picker/routes.ts";
 import { claudeSessionDirs, codexContext, codexSessionDirs, codexSessions, reportedRole } from "./sessions.ts";
 import * as slack from "./slack.ts";
@@ -302,8 +301,6 @@ const pulls = new PullRequests(
   showPullCheck,
   { every: PR_INTERVAL, soon: 15_000, start: !!orgs, onError: logError },
 );
-/** Reports whether url is of an open pull request, as last found. */
-const isOpen = (url: unknown) => board.isOpen(pulls.latest()?.pulls ?? [], url);
 let queuing = false;
 
 /** Shows a check of the pull requests: on the page, in the watcher's pane
@@ -369,27 +366,6 @@ setInterval(() => {
 // any site read the page.
 const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
 
-/** Asks Copilot to review the open pull request that body, a request's,
- * names, keeping what came of it, and returns the HTTP status. */
-async function askCopilotFrom(body: string | null): Promise<number> {
-  const { url } = JSON.parse(body ?? "{}");
-  if (!isOpen(url)) return 404;
-  const asked = await boardStore.askCopilot(url, (u) => requestCopilot(u));
-  store.tell();
-  return asked ? 204 : 502;
-}
-
-/** Moves the open pull request that body, a request's, names to the
- * column it asks for, one of board.MOVABLE, or undoes its move for null,
- * returning the HTTP status. */
-async function setStageFrom(body: string | null): Promise<number> {
-  const { url, stage } = JSON.parse(body ?? "{}");
-  if (!(stage === null || board.MOVABLE.includes(stage))) return 400;
-  if (!isOpen(url)) return 404;
-  if (boardStore.move(url, stage)) store.tell();
-  return 204;
-}
-
 const agentActions: AgentActions = {
   outbox,
   known: (pane) => Object.hasOwn(agentStates(everyPane(store.get())) ?? {}, pane),
@@ -398,8 +374,6 @@ const agentActions: AgentActions = {
   changed: () => store.tell(),
 };
 
-/** Returns the reply to a request that changed something, with status. */
-const done = (status: number) => new Response(null, { status });
 
 const dotfiles = dirname(here);
 const launcher = join(dotfiles, "bin/herdr-project");
@@ -420,8 +394,10 @@ const picker: PickerServer = {
 const page = new Hono();
 page.use(async (c, next) => (hosts.has(c.req.header("host") ?? "") ? next() : c.body(null, 403)));
 page.onError((e, c) => c.json({ error: e.message }, 500));
-page.post("/api/stage", limit(), async (c) => done(orgs && fromPage(c.req.raw.headers, hosts) ? await setStageFrom(await c.req.text()) : 403));
-page.post("/api/copilot", limit(), async (c) => done(orgs && fromPage(c.req.raw.headers, hosts) ? await askCopilotFrom(await c.req.text()) : 403));
+// The pull requests' board, which only the watcher's server keeps, and
+// only the page may change.
+routePulls(page, { latest: () => pulls.latest(), board: boardStore, changed: () => store.tell() },
+  (headers) => !!orgs && fromPage(headers, hosts));
 // Only the watcher's server, which delivers them, and only the page.
 routeAgents(page, agentActions, (headers) => !!orgs && fromPage(headers, hosts));
 page.get("/api/state", (c) => c.body(last, 200, { "Content-Type": "application/json" }));

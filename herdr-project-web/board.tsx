@@ -31,7 +31,7 @@ function MoveButtons({ card }: { card: Card }) {
     setBusy(true);
     setError("");
     try {
-      const res = await fetch("/api/stage", {
+      const res = await fetch("/pulls/stage", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: card.url, stage }),
@@ -69,7 +69,7 @@ function CopilotButton({ card }: { card: Card }) {
     setBusy(true);
     setError("");
     try {
-      const res = await fetch("/api/copilot", {
+      const res = await fetch("/pulls/copilot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: card.url }),
