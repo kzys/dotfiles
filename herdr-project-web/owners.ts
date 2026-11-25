@@ -1,10 +1,10 @@
 // Finding which project works on something the watcher found, from the
 // projects' notes and the pull requests it links to.
 
-import { readFileSync, readdirSync } from "node:fs";
+import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { Item } from "./inbox.ts";
-import { projectLabels } from "./project/project.ts";
+import { projectLabels, readReadme, roleNotes } from "./project/project.ts";
 
 // Who works on something: the project directory, the worktree in it, if
 // known, and the role of the agent, if known.
@@ -25,20 +25,11 @@ export function notesTexts(root: string): NotesText[] {
   } catch {
     return [];
   }
-  for (const dir of dirs) {
-    let names: string[];
-    try {
-      names = readdirSync(join(root, dir)).filter((n) => n.endsWith(".md")).sort();
-    } catch {
-      continue;
-    }
-    for (const name of names) {
-      const role = name === "README.md" ? null : name.startsWith("AGENT-") ? name.slice(6, -3) : undefined;
-      if (role === undefined) continue;
-      try {
-        texts.push([join(root, dir), role, readFileSync(join(root, dir, name), "utf8")]);
-      } catch {}
-    }
+  for (const name of dirs) {
+    const dir = join(root, name);
+    texts.push(...roleNotes(dir).map(([role, text]): NotesText => [dir, role, text]));
+    const readme = readReadme(dir);
+    if (readme !== null) texts.push([dir, null, readme]);
   }
   return texts;
 }
@@ -71,11 +62,7 @@ export function projectOf(
 /** Returns the short name of the project in dir: the name in the front
  * matter of its README.md, else the directory's name. */
 export function projectName(dir: string): string {
-  let readme: string | null = null;
-  try {
-    readme = readFileSync(join(dir, "README.md"), "utf8");
-  } catch {}
-  return projectLabels(dir, readme).name;
+  return projectLabels(dir, readReadme(dir)).name;
 }
 
 /** Returns the short name of the project in dir, as projectName does, from

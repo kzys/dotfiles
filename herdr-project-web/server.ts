@@ -19,11 +19,10 @@ import * as github from "./github/poll.ts";
 import * as pullSection from "./github-section.ts";
 import { type PullChecked, PullRequests } from "./github/watch.ts";
 import { BoardStore } from "./board-store.ts";
-import type { Herdr } from "./herdr/backend.ts";
+import { type Herdr, isFree } from "./herdr/backend.ts";
 import { HerdrEvents } from "./herdr/events.ts";
 import { herdrClient, herdrSocket, readHerdr, tuiBackend } from "./herdr/tui.ts";
 import { type HookEvent, type HookHandler, hookServer, limit, listenOn, speaker } from "./hooks.ts";
-import { frontMatter } from "./frontmatter.ts";
 import { agentCommand, instructions, launchDirectory, launchScript, parseAgent, projectDir } from "./launch.ts";
 import { connectors } from "./headless.ts";
 import * as linear from "./linear.ts";
@@ -48,7 +47,7 @@ import { type PickerServer, routePicker } from "./picker/routes.ts";
 import { claudeSessionDirs, codexContext, codexSessionDirs, codexSessions, reportedRole } from "./sessions.ts";
 import * as slack from "./slack.ts";
 import { loadState, saveState } from "./statefile.ts";
-import { type ProjectRead, checkoutOf, linkCheckout, projectDirs, projectLabels, readProjects } from "./project/project.ts";
+import { type ProjectRead, checkoutOf, linkCheckout, projectDirs, projectLabels, readProjects, readReadme, readmeName } from "./project/project.ts";
 import { type Watched, agentStates } from "./state.ts";
 import { type Found, title, watchWorkspace, watchedFrom } from "./watched.ts";
 import { type Wait, readProcesses, runningSubagents, sessionFolder, waitsByPid } from "./waits.ts";
@@ -288,7 +287,7 @@ let tty: number | null = null;
 try {
   if (orgs && process.env.HERDR_PROJECT_TTY) tty = openSync(process.env.HERDR_PROJECT_TTY, "w");
 } catch (e) {
-  console.error("herdr-project-web:", e);
+  logError(e);
 }
 
 // Check the pull requests five minutes after each check ends, or 15s after
@@ -437,19 +436,10 @@ store.set({ projects: readProjects(projectRoot, null, home, links) });
 last = JSON.stringify(pageOf(store.get()));
 server.listen(pageFd ? { fd: pageFd } : { port, host: "127.0.0.1" }, () => console.log(`herdr-project-web on http://127.0.0.1:${port}/`));
 
-/** Returns the README.md of the project in directory, or null. */
-function readProjectReadme(directory: string): string | null {
-  try {
-    return readFileSync(join(directory, "README.md"), "utf8");
-  } catch {
-    return null;
-  }
-}
-
 /** Reports the title in the front matter of the project in directory to
  * Herdr workspace, for the Spaces panel, if it has one. */
 function reportTitle(workspace: string, directory: string) {
-  const title = projectLabels(directory, readProjectReadme(directory)).title;
+  const title = projectLabels(directory, readReadme(directory)).title;
   if (title !== "(no title)") return tryAsk("workspace.report_metadata", { workspace_id: workspace, source: "readme-title", tokens: { title } });
 }
 
@@ -477,7 +467,7 @@ function noteCheckout(dir: string | null, cwd: string) {
   try {
     saveState(linksPath, links);
   } catch (e) {
-    console.error("herdr-project-web:", e);
+    logError(e);
   }
   projectsChanged();
 }
@@ -522,10 +512,7 @@ saveState(namedPath, [...named]);
  * asked to. */
 async function nameWorkspaces(herdr: Herdr | null): Promise<boolean> {
   let all = true;
-  const nameOf = (dir: string) => {
-    const text = readProjectReadme(dir);
-    return (text && frontMatter(text, "name")) || "";
-  };
+  const nameOf = (dir: string) => readmeName(dir) ?? "";
   for (const { dir, workspace, name } of workspacesToName(herdr, named, (cwd) => projectDir(cwd, projectRoot), nameOf)) {
     if (!(await tryAsk("workspace.rename", { workspace_id: workspace, label: name }))) {
       all = false;
@@ -538,22 +525,16 @@ async function nameWorkspaces(herdr: Herdr | null): Promise<boolean> {
   return all;
 }
 
-/** Returns the name README.md gives the project in directory, or null. */
-function projectName(directory: string): string | null {
-  const text = readProjectReadme(directory);
-  return (text && frontMatter(text, "name")) || null;
-}
-
 /** Returns the projects in ~/project, each with the name its README.md
  * gives it, or null. */
-const projectNames = () => projectDirs(projectRoot).map((dir) => [dir, projectName(dir)]);
+const projectNames = () => projectDirs(projectRoot).map((dir) => [dir, readmeName(dir)]);
 
 /** Names each Herdr app space after its project once its README.md names
  * it, and again when that name changes. */
 async function nameAppSpaces() {
   const nameOf = (folder: string) => {
     const dir = projectDir(folder, projectRoot);
-    return dir && projectName(dir);
+    return dir && readmeName(dir);
   };
   const spaces = await appSpaces();
   const first = spaceNamesGiven === null;
@@ -611,7 +592,7 @@ if (orgs) {
   }, async (_facts, { states, sessions }) => {
     if (await outbox.deliver(states)) store.tell();
     const takes = (pane: string) => (m: Queued) => !m.session || !sessions[pane] || m.session === sessions[pane];
-    if (Object.entries(outbox.all()).some(([pane, queued]) => ["idle", "done"].includes(states[pane]) && queued.some(takes(pane)))) {
+    if (Object.entries(outbox.all()).some(([pane, queued]) => isFree(states[pane]) && queued.some(takes(pane)))) {
       throw AGAIN;
     }
   }, { retry: true, onError: logError });
@@ -666,7 +647,7 @@ async function reportHook(pane: string, agent: string, event: string, data: any)
 /** Acts on a hook event, returning what to add to the agent's context
  * first: the agent is waiting, and gives up on a slow reply. */
 const onHook: HookHandler = async (pane, { agent, event }, data) => {
-  if (pane) reportHook(pane, agent, event, data).catch((e) => console.error("herdr-project-web:", e));
+  if (pane) reportHook(pane, agent, event, data).catch(logError);
   // An agent may have committed or gone into a checkout, which the watches
   // don't see.
   projectsChanged();

@@ -4,6 +4,7 @@
 
 import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
+import { isFree } from "./herdr/backend.ts";
 import { type HookEvent, limit } from "./hooks.ts";
 import { loadState, saveState } from "./statefile.ts";
 
@@ -16,8 +17,6 @@ export type Undelivered = { pane: string; messages: Queued[] };
 
 // What the page shows of an agent, besides what Herdr says of it.
 export type AgentView = { queued: Queued[]; permission: { detail: string; at: number } | null };
-
-const free = (status: string | undefined) => status === "idle" || status === "done";
 
 /** Keeps messages for agents in path by pane, surviving restarts, and
  * sends them with send once ready, which looks at the pane again, says
@@ -70,7 +69,7 @@ export class Outbox {
    * says of each pane, keeping them if that fails. Messages for panes
    * statuses doesn't list wait. Returns whether it sent any. */
   async deliver(statuses: Record<string, string>): Promise<boolean> {
-    const panes = Object.keys(this.queues).filter((p) => free(statuses[p]) && !this.sending.has(p));
+    const panes = Object.keys(this.queues).filter((p) => isFree(statuses[p]) && !this.sending.has(p));
     const sent = await Promise.all(panes.map((p) => this.deliverTo(p)));
     return sent.includes(true);
   }

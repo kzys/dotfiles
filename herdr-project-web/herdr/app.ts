@@ -7,7 +7,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import type { Backend, Herdr, OpenHerdr } from "./backend.ts";
+import { type Backend, type Herdr, type OpenHerdr, isFree } from "./backend.ts";
 
 // herdr-core names some agents by their app, not their command.
 const AGENTS: Record<string, string> = { "claude-code": "claude" };
@@ -162,7 +162,7 @@ export function appHerdrPanes(
 /** Reports whether the agent in terminal, as hc get describes it, is
  * waiting for its next message. */
 export function appAgentFree(terminal: any): boolean {
-  return ["idle", "done"].includes(terminal?.status?.state);
+  return isFree(terminal?.status?.state);
 }
 
 /** A space of the Herdr app, as herdr-app ls lists it. */

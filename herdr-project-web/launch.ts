@@ -2,7 +2,7 @@
 // it is told, and the command that starts it.
 
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 export const AGENTS = ["claude", "codex", "opencode"] as const;
 export type Agent = (typeof AGENTS)[number];
@@ -26,13 +26,16 @@ export function parseAgent(argv: string[]): { agent: Agent; argv: string[] } {
   return { agent: agent as Agent, argv: rest };
 }
 
-const real = (path: string) => {
+/** Returns path, made absolute, with the symlinks in the part of it that
+ * exists resolved. */
+function real(path: string): string {
+  const parent = dirname(resolve(path));
   try {
     return realpathSync(path);
   } catch {
-    return resolve(path);
+    return parent === resolve(path) ? parent : join(real(parent), basename(path));
   }
-};
+}
 
 /** Reports whether a directory named name, directly under the projects
  * directory, is a project: those starting with . are hidden, and those
@@ -44,9 +47,10 @@ export function isProject(name: string): boolean {
 /** Returns the project directory directly under projects that holds cwd,
  * or null if cwd isn't in one. Symlinks in either path don't matter. */
 export function projectDir(cwd: string, projects: string): string | null {
-  const inside = relative(real(projects), real(cwd));
-  if (!inside || inside.startsWith("..")) return null;
-  const name = inside.split("/")[0];
+  if (!cwd) return null;
+  const rel = relative(real(projects), real(cwd));
+  if (!rel || rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) return null;
+  const name = rel.split(sep)[0];
   return isProject(name) ? join(projects, name) : null;
 }
 

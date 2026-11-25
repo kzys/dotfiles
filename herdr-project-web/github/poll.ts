@@ -4,6 +4,7 @@
 
 import { basename } from "node:path";
 import { type NotesText, type Owner, notesTexts, projectNameIn } from "../owners.ts";
+import { isFree } from "../herdr/backend.ts";
 import type { HerdrPane } from "../panes.ts";
 import { loadState, saveState } from "../statefile.ts";
 import { fetch } from "./api.ts";
@@ -80,7 +81,7 @@ export function look({ prs, trees, texts, panes, checkouts, seen: old }: Snapsho
   const tells = (panes ? events(old, prs) : []).map(([pr, message, wake]): Tell => {
     const found = owners[pr.url];
     const pane = byUrl[pr.url];
-    const idle = pane && (pane.agent_status === "idle" || pane.agent_status === "done");
+    const idle = pane && isFree(pane.agent_status);
     return {
       title: `${label(pr)} ${message}`,
       body: `${pr.title}${found ? ` (${basename(found.project)})` : ""}`,

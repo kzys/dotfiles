@@ -1,6 +1,7 @@
 // What the page says about an open pull request.
 
 import type { Run } from "./github/pullrequest.ts";
+import { isFree } from "./herdr/backend.ts";
 import type { PullRequest, Section } from "./state.ts";
 
 // What the agent working on a pull request is doing.
@@ -22,7 +23,7 @@ export function agentState(pr: PullRequest, agents: Record<string, string> | nul
  * "unknown" for a state the page doesn't know. */
 export function statusState(status: string | null | undefined): AgentState {
   if (status === "working" || status === "blocked") return status;
-  if (status === "idle" || status === "done") return "idle";
+  if (isFree(status)) return "idle";
   return "unknown";
 }
 
