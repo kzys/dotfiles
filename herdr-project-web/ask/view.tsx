@@ -2,6 +2,7 @@
 
 import { useState } from "preact/hooks";
 import type { State } from "../state.ts";
+import { renderMarkdown } from "../markdown.ts";
 import { Linked, matches, send } from "../ui.tsx";
 import type { AskStatus, AskView } from "./ask.ts";
 
@@ -15,16 +16,16 @@ const STATUS: Record<AskStatus, [string, string]> = {
 
 const clock = (at: number) => new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-/** Returns one answer from ask's replies, or that one is being made. */
+/** Returns one answer from ask's replies, rendered from Markdown, or that
+ * one is being made. */
 function Summary({ ask, replied }: { ask: AskView; replied: number }) {
   const { summary } = ask;
   if (!replied) return null;
   if (!summary) return <p class="ask-summary empty">Putting the replies together…</p>;
   return (
     <div class="ask-summary">
-      <p class="ask-reply">
-        <Linked text={summary.text} />
-      </p>
+      {/* Claude writes it in Markdown; markdown-it leaves out raw HTML. */}
+      <div class="markdown" dangerouslySetInnerHTML={{ __html: renderMarkdown(summary.text) }} />
       <span class="empty">
         From {summary.replies} {summary.replies === 1 ? "reply" : "replies"} · {clock(summary.at)}
         {ask.stale && " · adding the newer ones…"}

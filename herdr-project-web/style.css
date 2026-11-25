@@ -620,3 +620,5 @@ main.board { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--space-
 .ask-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .ask-reply { flex-basis: 100%; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .ask-summary { margin: 0; padding: var(--space-3) var(--space-5); border-bottom: 1px solid var(--panel-edge); background: var(--well); }
+.ask-summary .markdown { margin-bottom: var(--space-2); }
+.ask-summary .markdown code, .ask-summary .markdown pre { background: var(--panel); }
