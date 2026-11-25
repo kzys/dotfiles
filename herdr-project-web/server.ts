@@ -39,7 +39,8 @@ import { Schedule } from "./schedule.ts";
 import {
   codexTokens, lastPrompt, percent, resumedText, roleToReport, sessionCwd, sessionReport, statusLine, statusTokens, usageFile,
 } from "./report.ts";
-import { appBackend, appCommand, appHerdrPanes, appSpaces, appTerminals, claudeSessions, spaceNames } from "./herdr/app.ts";
+import { appBackend, appCommand, appHerdrPanes, appSpaces, claudeSessions, spaceNames } from "./herdr/app.ts";
+import { CoreFeed } from "./herdr/core.ts";
 import { background, choices, inboxChoices, open, paneRecords, plan, rowNotes, workspacesToName } from "./rows.ts";
 import { claudeSessionDirs, codexContext, codexSessionDirs, codexSessions, reportedRole } from "./sessions.ts";
 import * as slack from "./slack.ts";
@@ -189,20 +190,29 @@ function watched(): Watched | null {
   return ours.length ? watchedFrom(ours, pulls.latest()?.urls ?? []) : null;
 }
 
-// The Herdr app's agents, telling only of changes.
-new Schedule(async () => {
-  let next: Herdr["panes"];
-  try {
-    next = appHerdrPanes(await appTerminals(), claudeSessions());
-  } catch {
-    return; // Keeping the last ones while hc fails.
-  }
-  if (appRead && JSON.stringify(next) === JSON.stringify(appTerminalPanes)) return;
-  appTerminalPanes = next;
-  appRead = true;
-  deliver();
-  refresh();
-}, { every: 5_000, onError: logError });
+// How many times the Herdr app's spaces have changed, which herdr-core
+// tells as changes to the app's document.
+let appSpacesChanged = 0;
+
+// The Herdr app's agents, from herdr-core as they change, telling only of
+// changes, and keeping the last ones while hc fails.
+new CoreFeed({
+  terminals: (terminals) => {
+    const next = appHerdrPanes(terminals, claudeSessions());
+    if (appRead && JSON.stringify(next) === JSON.stringify(appTerminalPanes)) return;
+    appTerminalPanes = next;
+    appRead = true;
+    deliver();
+    refresh();
+  },
+  doc: (name) => {
+    if (name !== "herdr-app") return;
+    appSpacesChanged++;
+    refresh();
+  },
+  subscribed: () => void appSpacesChanged++,
+  onError: logError,
+});
 
 // The names the Herdr app's spaces were last given after their projects,
 // by space, so that a name the user gives a space stays until its
@@ -211,9 +221,10 @@ new Schedule(async () => {
 const spaceNamesPath = join(stateDir, "space-names.json");
 let spaceNamesGiven = loadState(spaceNamesPath) as Record<string, string> | null;
 
-// The Herdr app's spaces and the projects' names when the spaces were last
-// named, so that the app is asked only once either changes, even after a
-// failure, and the naming under way, which the next waits for.
+// How many times the Herdr app's spaces had changed and the projects'
+// names when the spaces were last named, so that the app is asked only
+// once either changes, even after a failure, and the naming under way,
+// which the next waits for.
 let spacesNamedFrom = "";
 let spacesNaming: Promise<void> = Promise.resolve();
 
@@ -644,8 +655,7 @@ function nameAppSpaces(): Promise<void> {
 }
 
 async function nameAppSpacesNow() {
-  const ids = [...new Set(appTerminalPanes.map((p) => p.workspace_id))].sort();
-  const from = JSON.stringify([ids, projectDirs(projectRoot).map((dir) => [dir, projectName(dir)])]);
+  const from = JSON.stringify([appSpacesChanged, projectDirs(projectRoot).map((dir) => [dir, projectName(dir)])]);
   if (from === spacesNamedFrom) return;
   spacesNamedFrom = from;
   const nameOf = (folder: string) => {
