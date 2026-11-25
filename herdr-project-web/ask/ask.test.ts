@@ -95,7 +95,35 @@ test("makes one answer from the replies, again when more come", async () => {
   assert.match(prompts[1], /b · main:\nnothing/);
   view = askViews(asks.all(), {}, new Set(), () => true)[0];
   assert.deepEqual([view.summary?.text, view.summary?.replies, view.stale], ["answer 2", 2, false]);
-  // One made from fewer replies, finishing late, doesn't replace it.
-  asks.summarize(asks.all()[0].id, "late", 1);
+  // One made from older replies, finishing late, doesn't replace it.
+  asks.summarize(asks.all()[0].id, "late", 1, 2);
   assert.equal(asks.all()[0].summary?.text, "answer 2");
+  // An agent replying again replaces its reply, and the answer is made again.
+  asks.reply(first.token, "merged after all", 4);
+  assert.equal(askViews(asks.all(), {}, new Set(), () => true)[0].stale, true);
+  await summarizeAll(asks, answer, () => made++);
+  assert.match(prompts[2], /a · main:\nmerged after all/);
+});
+
+test("goes on past a question it can't answer, and tries it again only after another reply", async () => {
+  const asks = new Asks(path(), () => `t${Math.random()}`);
+  let n = 0;
+  for (const text of ["old", "new"]) asks.ask(text, [{ pane: "w1:p1", label: "a" }], () => `m${++n}`, n);
+  for (const [i, ask] of asks.all().entries()) asks.reply(ask.agents[0].token, "fine", 10 + i);
+  const tried: string[] = [];
+  const answer = async (prompt: string) => {
+    tried.push(prompt.includes("\n\nold\n\n") ? "old" : "new");
+    if (prompt.includes("\n\nold\n\n")) throw new Error("no answer\nmore");
+    return "ok";
+  };
+  await summarizeAll(asks, answer, () => {});
+  // Newest first, and the failure doesn't stop the others.
+  assert.deepEqual(tried, ["new", "old"]);
+  const views = askViews(asks.all(), {}, new Set(), () => true);
+  assert.deepEqual(views.map((v) => [v.text, v.summary?.text ?? null, v.failed]), [["new", "ok", null], ["old", null, "no answer"]]);
+  await summarizeAll(asks, answer, () => {});
+  assert.equal(tried.length, 2);
+  asks.reply(asks.all()[0].agents[0].token, "still fine", 20);
+  await summarizeAll(asks, answer, () => {});
+  assert.deepEqual(tried, ["new", "old", "old"]);
 });

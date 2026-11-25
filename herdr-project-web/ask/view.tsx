@@ -21,6 +21,7 @@ const clock = (at: number) => new Date(at).toLocaleTimeString([], { hour: "2-dig
 function Summary({ ask, replied }: { ask: AskView; replied: number }) {
   const { summary } = ask;
   if (!replied) return null;
+  if (!summary && ask.failed) return <p class="ask-summary agent-error">Couldn't put the replies together: {ask.failed}</p>;
   if (!summary) return <p class="ask-summary empty">Putting the replies together…</p>;
   return (
     <div class="ask-summary">
@@ -28,7 +29,7 @@ function Summary({ ask, replied }: { ask: AskView; replied: number }) {
       <div class="markdown" dangerouslySetInnerHTML={{ __html: renderMarkdown(summary.text) }} />
       <span class="empty">
         From {summary.replies} {summary.replies === 1 ? "reply" : "replies"} · {clock(summary.at)}
-        {ask.stale && " · adding the newer ones…"}
+        {ask.stale && (ask.failed ? ` · couldn't add the newer ones: ${ask.failed}` : " · adding the newer ones…")}
       </span>
     </div>
   );
