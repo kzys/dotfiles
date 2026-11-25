@@ -15,8 +15,6 @@ import { type SSEStreamingApi, streamSSE } from "hono/streaming";
 import {
   type AgentActions, type Queued, Outbox, forgetAnswered, fromPage, permission, routeAgents, undelivered,
 } from "./agents.ts";
-import * as board from "./board.ts";
-import { requestCopilot } from "./github/api.ts";
 import * as github from "./github/poll.ts";
 import * as pullSection from "./github-section.ts";
 import { type PullChecked, PullRequests } from "./github/watch.ts";
@@ -25,10 +23,8 @@ import type { Herdr } from "./herdr/backend.ts";
 import { HerdrEvents } from "./herdr/events.ts";
 import { herdrClient, herdrSocket, readHerdr, tuiBackend } from "./herdr/tui.ts";
 import { type HookEvent, type HookHandler, hookServer, limit, listenOn, speaker } from "./hooks.ts";
-import { highlightDiff, highlightLines } from "./highlight.ts";
 import { frontMatter } from "./frontmatter.ts";
 import { agentCommand, instructions, launchDirectory, launchScript, parseAgent, projectDir } from "./launch.ts";
-import { readLearnings } from "./learnings.ts";
 import { connectors } from "./headless.ts";
 import * as linear from "./linear.ts";
 import { notesTexts } from "./owners.ts";
@@ -43,17 +39,20 @@ import {
 } from "./report.ts";
 import { appBackend, appCommand, appHerdrPanes, appSpaces, claudeSessions, spaceNames } from "./herdr/app.ts";
 import { CoreFeed } from "./herdr/core.ts";
-import { background, choices, inboxChoices, open, paneRecords, plan, rowNotes, workspacesToName } from "./rows.ts";
+import { background, workspacesToName } from "./rows.ts";
+import { routeDiff } from "./diff/routes.ts";
+import { routeFiles } from "./files/routes.ts";
+import { routeLearnings } from "./learnings/routes.ts";
+import { routePulls } from "./pulls/routes.ts";
+import { type PickerServer, routePicker } from "./picker/routes.ts";
 import { claudeSessionDirs, codexContext, codexSessionDirs, codexSessions, reportedRole } from "./sessions.ts";
 import * as slack from "./slack.ts";
 import { loadState, saveState } from "./statefile.ts";
 import {
-  type ProjectRead, type Watched, agentStates, checkoutOf, linkCheckout, openProjects, projectDirs, projectLabels, readProjectFile,
-  readProjects,
+  type ProjectRead, type Watched, agentStates, checkoutOf, linkCheckout, projectDirs, projectLabels, readProjects,
 } from "./state.ts";
 import { type Found, title, watchWorkspace, watchedFrom } from "./watched.ts";
 import { type Wait, readProcesses, runningSubagents, sessionFolder, waitsByPid } from "./waits.ts";
-import { changedSince, checkoutDirs, fileLines, setBase, worktreeDiff, worktreeDirs } from "./worktrees.ts";
 
 const here = import.meta.dirname;
 const home = homedir();
@@ -302,8 +301,6 @@ const pulls = new PullRequests(
   showPullCheck,
   { every: PR_INTERVAL, soon: 15_000, start: !!orgs, onError: logError },
 );
-/** Reports whether url is of an open pull request, as last found. */
-const isOpen = (url: unknown) => board.isOpen(pulls.latest()?.pulls ?? [], url);
 let queuing = false;
 
 /** Shows a check of the pull requests: on the page, in the watcher's pane
@@ -365,53 +362,9 @@ setInterval(() => {
   projectsChanged();
 }, 30_000);
 
-/** Returns the projects that are open or still have a workspace in
- * Herdr, with worktrees in them, each with their directories, followed
- * by the checkouts in ~/repos, where some tasks work on their branches. */
-function projectWorktrees() {
-  return [
-    ...openProjects(projectRoot, store.get().herdr).map(([dir, readme]) => ({
-      dir,
-      ...projectLabels(dir, readme),
-      worktrees: worktreeDirs(dir),
-    })),
-    { dir: reposRoot, name: "repos", title: "Checkouts in ~/repos", worktrees: checkoutDirs(reposRoot) },
-  ].filter((p) => p.worktrees.length);
-}
-
 // Other names for this address come from DNS rebinding, which would let
 // any site read the page.
 const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
-
-/** Sets the base that body, a request's, asks for, of a worktree the page
- * lists, and returns the status to answer with. */
-async function setBaseFrom(body: string | null): Promise<number> {
-  const { dir, branch, base } = JSON.parse(body ?? "{}");
-  if (!projectWorktrees().some((p) => p.worktrees.includes(dir))) return 404;
-  if (typeof branch !== "string" || !(base === null || typeof base === "string")) return 400;
-  return (await setBase(dir, branch, base)) ? 204 : 409;
-}
-
-/** Asks Copilot to review the open pull request that body, a request's,
- * names, keeping what came of it, and returns the HTTP status. */
-async function askCopilotFrom(body: string | null): Promise<number> {
-  const { url } = JSON.parse(body ?? "{}");
-  if (!isOpen(url)) return 404;
-  const asked = await boardStore.askCopilot(url, (u) => requestCopilot(u));
-  store.tell();
-  return asked ? 204 : 502;
-}
-
-/** Moves the open pull request that body, a request's, names to the
- * column it asks for, one of board.MOVABLE, or undoes its move for null,
- * returning the HTTP status. */
-async function setStageFrom(body: string | null): Promise<number> {
-  const { url, stage } = JSON.parse(body ?? "{}");
-  if (!(stage === null || board.MOVABLE.includes(stage))) return 400;
-  if (!isOpen(url)) return 404;
-  if (boardStore.move(url, stage)) store.tell();
-  return 204;
-}
 
 const agentActions: AgentActions = {
   outbox,
@@ -421,15 +374,29 @@ const agentActions: AgentActions = {
   changed: () => store.tell(),
 };
 
-/** Returns the reply to a request that changed something, with status. */
-const done = (status: number) => new Response(null, { status });
+const dotfiles = dirname(here);
+const launcher = join(dotfiles, "bin/herdr-project");
+
+// What the picker's routes need.
+const picker: PickerServer = {
+  backend: (app) => app ? herdrApp : herdrTui,
+  page: () => JSON.parse(last),
+  projectRoot,
+  launcher,
+  planDeps: {
+    background,
+    stop: (id: string) => promisify(execFile)("claude", ["stop", id]).then(() => true, () => false),
+    now: () => new Date(),
+  },
+};
 
 const page = new Hono();
 page.use(async (c, next) => (hosts.has(c.req.header("host") ?? "") ? next() : c.body(null, 403)));
 page.onError((e, c) => c.json({ error: e.message }, 500));
-page.post("/api/base", limit(), async (c) => done(fromPage(c.req.raw.headers, hosts) ? await setBaseFrom(await c.req.text()) : 403));
-page.post("/api/stage", limit(), async (c) => done(orgs && fromPage(c.req.raw.headers, hosts) ? await setStageFrom(await c.req.text()) : 403));
-page.post("/api/copilot", limit(), async (c) => done(orgs && fromPage(c.req.raw.headers, hosts) ? await askCopilotFrom(await c.req.text()) : 403));
+// The pull requests' board, which only the watcher's server keeps, and
+// only the page may change.
+routePulls(page, { latest: () => pulls.latest(), board: boardStore, changed: () => store.tell() },
+  (headers) => !!orgs && fromPage(headers, hosts));
 // Only the watcher's server, which delivers them, and only the page.
 routeAgents(page, agentActions, (headers) => !!orgs && fromPage(headers, hosts));
 page.get("/api/state", (c) => c.body(last, 200, { "Content-Type": "application/json" }));
@@ -445,35 +412,16 @@ page.get("/api/events", (c) => streamSSE(c, async (stream) => {
   await closed;
   clients.delete(stream);
 }));
-page.get("/api/diff", async (c) => {
-  // Only the worktrees the page lists, not any directory asked for.
-  const dir = c.req.query("dir") ?? "";
-  if (!projectWorktrees().some((p) => p.worktrees.includes(dir))) return c.json({ error: "no such worktree" }, 404);
-  return c.json(await highlightDiff(await worktreeDiff(dir, pulls.latest()?.bases ?? {})));
-});
-page.get("/api/lines", async (c) => {
-  // More context for a diff: only the worktrees the page lists, like it.
-  const dir = c.req.query("dir") ?? "";
-  const path = c.req.query("path") ?? "";
-  const listed = projectWorktrees().some((p) => p.worktrees.includes(dir));
-  // Newer lines would pass for unchanged ones in the diff taken then.
-  if (listed && changedSince(dir, path, Number(c.req.query("at")))) return c.json({ error: "the file changed" }, 409);
-  const lines = listed ? fileLines(dir, path, Number(c.req.query("from")), Number(c.req.query("to"))) : null;
-  return lines === null ? c.json({ error: "no such file" }, 404) : c.json(await highlightLines(path, lines));
-});
-page.get("/api/file", (c) => {
-  // Only the files of the projects the page lists, not any file asked for.
-  const dir = c.req.query("dir");
-  const file = openProjects(projectRoot, store.get().herdr).some(([d]) => d === dir)
-    ? readProjectFile(dir!, c.req.query("name") ?? "")
-    : null;
-  return file === null ? c.json({ error: "no such file" }, 404) : c.json(file);
-});
-// They are small and change rarely, so they are read each time.
-page.get("/api/learnings", (c) => c.json(readLearnings(reposRoot)));
+// The files of the projects the page lists.
+routeFiles(page, { projectRoot, herdr: () => store.get().herdr });
+routeLearnings(page, reposRoot);
+// The page's diffs. Only requests from the page's origin may set a base.
+routeDiff(page, {
+  projectRoot, reposRoot, herdr: () => store.get().herdr, bases: () => pulls.latest()?.bases ?? {},
+}, (headers) => fromPage(headers, hosts));
 // Also on the page's port, for the Herdr app's picker, which can't reach
 // the socket. Only requests from the page's origin may open a row.
-routePicker(page, (headers) => fromPage(headers, hosts));
+routePicker(page, picker, (headers) => fromPage(headers, hosts));
 for (const [path, [type, body]] of Object.entries(assets)) page.get(path, (c) => c.body(body, 200, { "Content-Type": type }));
 // The views under the paths that nest, as /projects/<dir>.
 for (const path of NESTED_PATHS) page.get(`${path}/*`, (c) => c.body(assets["/"][1], 200, { "Content-Type": assets["/"][0] }));
@@ -489,9 +437,6 @@ const socketFd = Number(process.env.HERDR_PROJECT_SOCKET_FD) || null;
 store.set({ projects: readProjects(projectRoot, null, home, links) });
 last = JSON.stringify(pageOf(store.get()));
 server.listen(pageFd ? { fd: pageFd } : { port, host: "127.0.0.1" }, () => console.log(`herdr-project-web on http://127.0.0.1:${port}/`));
-
-const dotfiles = dirname(here);
-const launcher = join(dotfiles, "bin/herdr-project");
 
 /** Returns the README.md of the project in directory, or null. */
 function readProjectReadme(directory: string): string | null {
@@ -524,12 +469,6 @@ function launch(form: URLSearchParams): string {
   if (workspace) reportTitle(workspace, directory);
   return launchScript(directory, command);
 }
-
-const planDeps = {
-  background,
-  stop: (id: string) => promisify(execFile)("claude", ["stop", id]).then(() => true, () => false),
-  now: () => new Date(),
-};
 
 /** Remembers that the project in dir, if any, works in the checkout holding
  * cwd, if any, so that the page links its diff. */
@@ -737,11 +676,6 @@ const onHook: HookHandler = async (pane, { agent, event }, data) => {
   return dir ? resumedText(dir, instructions(dotfiles)) : "";
 };
 
-// The Herdr app, for a picker that opens rows there, else the TUI.
-const pickerBackend = (app: unknown) => app ? herdrApp : herdrTui;
-/** Returns the panes of the picker's Backend as the picker uses them. */
-const pickerPanes = async (app: unknown) => paneRecords({ workspaces: [], panes: await pickerBackend(app).panes() });
-
 // What herdr-project and the picker ask for on the socket.
 const socket = new Hono();
 socket.onError((e, c) => c.text(e.message, 500));
@@ -763,26 +697,7 @@ socket.post("/pulls/check", (c) => {
   return c.body(null, 202);
 });
 
-/** Adds the picker's routes to routes: its rows, a row's notes and opening
- * a row, which only requests that allowed lets through may do. */
-function routePicker(routes: Hono, allowed: (headers: Headers) => boolean) {
-  routes.get("/picker", async (c) => {
-    const app = c.req.query("app") !== undefined;
-    return c.json(c.req.query("inbox") !== undefined
-      ? inboxChoices(await pickerPanes(app), codexSessions(), JSON.parse(last))
-      : choices(await pickerPanes(app), projectRoot, codexSessions()));
-  });
-  routes.get("/picker/notes", (c) => c.text(rowNotes(c.req.query("kind") ?? "", c.req.query("dir") ?? "", c.req.query("session") ?? "")));
-  routes.post("/picker/open", limit(), async (c) => {
-    if (!allowed(c.req.raw.headers)) return c.body(null, 403);
-    const { row, agent, app } = JSON.parse((await c.req.text()) || "{}");
-    // Panes as they are now, not as last read: going by old ones could
-    // resume a session that already runs.
-    await open(await plan(row, agent, await pickerPanes(app), projectRoot, launcher, planDeps), pickerBackend(app).opener());
-    return c.body(null, 204);
-  });
-}
-routePicker(socket, () => true);
+routePicker(socket, picker, () => true);
 
 // Only the watcher's server: hooks reach one server, like the checks.
 if (orgs) {

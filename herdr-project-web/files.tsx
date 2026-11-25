@@ -16,7 +16,7 @@ type FileText = { text?: string; error?: string };
  * does, fetched again whenever at, when it last changed, does. */
 function useFile(dir: string, name: string, at: number | null) {
   const fetched = useFetched<FileText>(
-    `/api/file?dir=${encodeURIComponent(dir)}&name=${encodeURIComponent(name)}`,
+    `/files?dir=${encodeURIComponent(dir)}&name=${encodeURIComponent(name)}`,
   );
   const [, , , refresh] = fetched;
   // useFetched fetches it first; fetch again only on changes.

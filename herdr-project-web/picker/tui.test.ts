@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { clip, columns, draw, found, hint, listLines, parseKeys, press, printable, spans, start, visible } from "./picker.ts";
-import type { Row } from "./rows.ts";
+import { PickerScreen, clip, columns, found, hint, listLines, parseKeys, printable, spans, visible } from "./tui.ts";
+import type { Row } from "../rows.ts";
 
-const agents = ["claude", "codex"];
+const picker = new PickerScreen(["claude", "codex"]);
 const rows: Row[] = [
   ["new", "", "", "+ new project"],
   ["project", "/a", "", "alpha  First"],
@@ -49,7 +49,7 @@ test("reads keys from what the terminal sends", () => {
   assert.deepEqual(parseKeys("\x1bb"), []);
 });
 
-const after = (...keys: string[]) => keys.reduce((s, k) => press(s, k, rows, agents, 3), start(rows, agents));
+const after = (...keys: string[]) => keys.reduce((s, k) => picker.press(s, k, rows, 3), picker.start(rows));
 
 test("moves within the list", () => {
   assert.equal(after("down", "ctrl-n").cursor, 2);
@@ -88,7 +88,7 @@ test("scrolls the preview", () => {
 const plain = (lines: string[]) => lines.map((l) => l.replace(/\x1b\[[0-9;]*m/g, ""));
 
 test("draws the list, its hint and the preview within the screen", () => {
-  const screen = plain(draw(after("down"), rows, agents, "notes\nmore", 12, 60));
+  const screen = plain(picker.draw(after("down"), rows, "notes\nmore", 12, 60));
   assert.equal(screen[0], "project> ");
   assert.equal(screen[1], "  + new project with  claude  codex ");
   assert.equal(screen[2], "> alpha  First");
@@ -100,8 +100,8 @@ test("draws the list, its hint and the preview within the screen", () => {
 
 test("keeps every line within the screen, and escapes out of it", () => {
   const long: Row[] = [["new", "", "", `+ ${"x".repeat(200)}`], ["project", "/a", "", "evil\x1b[2J title"]];
-  const state = start(long, agents);
-  const screen = draw(state, long, agents, "note\x1b]0;x\x07", 12, 30);
+  const state = picker.start(long);
+  const screen = picker.draw(state, long, "note\x1b]0;x\x07", 12, 30);
   for (const line of plain(screen)) assert.ok(columns(line) <= 30, line);
   assert.ok(!screen.join("").includes("\x1b[2J"));
   assert.ok(!screen.join("").includes("\x1b]"));
@@ -110,13 +110,13 @@ test("keeps every line within the screen, and escapes out of it", () => {
 
 test("doesn't scroll the preview past its end", () => {
   const state = after("shift-down", "shift-down", "shift-down");
-  draw(state, rows, agents, "one\ntwo", 12, 40);
+  picker.draw(state, rows, "one\ntwo", 12, 40);
   assert.equal(state.scroll, 1);
 });
 
 test("keeps the cursor in view", () => {
   const state = after("pagedown", "pagedown");
-  const screen = plain(draw(state, rows, agents, "", 9, 40));
+  const screen = plain(picker.draw(state, rows, "", 9, 40));
   assert.equal(state.top, 2);
   assert.match(screen[3], /^> beta/);
 });

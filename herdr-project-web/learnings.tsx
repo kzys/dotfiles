@@ -19,7 +19,7 @@ const topicId = (org: string, i: number) => `learn-${org}-${i}`;
 /** Returns the topics of each LEARNINGS.md in ~/repos matching query,
  * with an index of their headings. */
 export function LearningsView({ query }: { query: string }) {
-  const [learnings, error, at, refresh] = useFetched<Learnings[]>("/api/learnings");
+  const [learnings, error, at, refresh] = useFetched<Learnings[]>("/learnings");
   const shown = (learnings ?? [])
     .map((l) => ({ ...l, topics: matching(l, query) }))
     .filter((l) => l.topics.length);

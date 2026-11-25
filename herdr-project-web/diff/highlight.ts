@@ -3,8 +3,8 @@
 
 import { basename, extname } from "node:path";
 import { type BundledLanguage, bundledLanguages, codeToTokens } from "shiki";
-import { type DiffLine, type FileDiff, type Token, hunkSides, parseDiff, withTokens } from "./diff.ts";
-import type { WorktreeDiff } from "./worktrees.ts";
+import { type DiffLine, type FileDiff, type Token, hunkSides, parseDiff, withTokens } from "../diff.ts";
+import type { WorktreeDiff } from "./git.ts";
 
 const THEME = "github-light";
 
