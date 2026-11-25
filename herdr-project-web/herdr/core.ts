@@ -7,16 +7,20 @@ import { createInterface } from "node:readline";
 /** Applies an event of hc's events.subscribe, of type, about the terminal
  * at address, carrying data, to terminals by address. Other than created,
  * removed and foreground, an event carries the fields of the terminal it
- * changes. */
+ * changes, but its state, live or finished, changes only when it finishes
+ * or starts again: another event's state is its program's status. */
 export function applyEvent(terminals: Map<string, any>, type: string, address: string | undefined, data: any) {
   if (!address) return;
   if (type === "created") return void terminals.set(address, data);
   if (type === "removed") return void terminals.delete(address);
   const terminal = terminals.get(address);
   if (!terminal) return;
-  if (type === "foreground") terminal.foreground = data;
+  if (type === "foreground") return void (terminal.foreground = data);
+  const { state, ...fields } = data ?? {};
+  Object.assign(terminal, fields);
   // A lost terminal stays live while it may be started again.
-  else Object.assign(terminal, data, type === "finished" ? { state: type } : {});
+  if (type === "finished") terminal.state = "finished";
+  else if (type === "restarted") terminal.state = state ?? "live";
 }
 
 export type CoreFeedOptions = {

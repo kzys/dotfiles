@@ -17,8 +17,15 @@ test("applies herdr-core's events to its terminals", () => {
   }]);
   applyEvent(terminals, "lost", "t1", { reason: "signal" });
   assert.equal(terminals.get("t1").state, "live");
+  // A status's state is not the terminal's.
+  applyEvent(terminals, "turn", "t1", { turn: 2, state: "done" });
+  assert.equal(terminals.get("t1").state, "live");
+  assert.equal(terminals.get("t1").turn, 2);
   applyEvent(terminals, "finished", "t1", { exit_code: 0 });
   assert.equal(terminals.get("t1").state, "finished");
+  applyEvent(terminals, "restarted", "t1", { address: "t1", state: "live", status: null });
+  assert.equal(terminals.get("t1").state, "live");
+  applyEvent(terminals, "finished", "t1", { exit_code: 0 });
   applyEvent(terminals, "removed", "t1", {});
   assert.equal(terminals.size, 0);
 });
