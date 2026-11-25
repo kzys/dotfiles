@@ -1,5 +1,5 @@
 import "./style.css";
-import { AskAgents } from "./ask.tsx";
+import { AskAgents } from "./ask/view.tsx";
 import { render } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { WorktreeDiffView } from "./diff/view.tsx";

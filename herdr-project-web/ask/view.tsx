@@ -1,9 +1,9 @@
 // The page's view for asking every agent a question, and their replies.
 
 import { useState } from "preact/hooks";
-import type { AskStatus, AskView } from "./asks.ts";
-import type { State } from "./state.ts";
-import { Linked, matches, send } from "./ui.tsx";
+import type { State } from "../state.ts";
+import { Linked, matches, send } from "../ui.tsx";
+import type { AskStatus, AskView } from "./ask.ts";
 
 // How each status shows: its badge's text and kind.
 const STATUS: Record<AskStatus, [string, string]> = {
