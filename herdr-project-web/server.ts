@@ -19,7 +19,7 @@ import {
 import * as github from "./github/poll.ts";
 import * as pullSection from "./github-section.ts";
 import { type PullChecked, PullRequests } from "./github/watch.ts";
-import { BoardStore, boardCards } from "./board-store.ts";
+import { BoardStore, boardCards } from "./pulls/board-store.ts";
 import { type Herdr, canTake } from "./herdr/backend.ts";
 import { HerdrEvents } from "./herdr/events.ts";
 import { herdrClient, herdrSocket, readHerdr, tuiBackend } from "./herdr/tui.ts";

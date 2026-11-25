@@ -4,9 +4,9 @@
 
 import { join } from "node:path";
 import { type Signal, computed, createModel, effect, signal } from "@preact/signals-core";
-import * as board from "./board.ts";
-import type { PullCheck } from "./github/poll.ts";
-import { loadState, saveState } from "./statefile.ts";
+import * as board from "../board.ts";
+import type { PullCheck } from "../github/poll.ts";
+import { loadState, saveState } from "../statefile.ts";
 
 /** Returns the JSON object kept at path, or {} if there is none. */
 function loadRecord<T extends object>(path: string): T {

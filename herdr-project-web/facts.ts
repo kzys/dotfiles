@@ -5,7 +5,7 @@
 import { type ReadonlySignal, type Signal, computed, createModel, signal } from "@preact/signals-core";
 import { type Queued, forgetAnswered } from "./agents.ts";
 import type { Ask } from "./ask/ask.ts";
-import type { BoardState } from "./board-store.ts";
+import type { BoardState } from "./pulls/board-store.ts";
 import type { PullCheck } from "./github/poll.ts";
 import type { Herdr } from "./herdr/backend.ts";
 import type { HookEvent } from "./hooks.ts";

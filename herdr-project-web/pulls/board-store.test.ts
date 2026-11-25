@@ -5,9 +5,9 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { effect } from "@preact/signals-core";
 import { BoardStore, boardCards } from "./board-store.ts";
-import type { PullCheck } from "./github/poll.ts";
-import { pullRequests } from "./github/pullrequest.ts";
-import { prNode, search } from "./github/fixtures.ts";
+import type { PullCheck } from "../github/poll.ts";
+import { pullRequests } from "../github/pullrequest.ts";
+import { prNode, search } from "../github/fixtures.ts";
 
 test("keeps the user's moves and requests to Copilot across restarts, until their pull requests go", async () => {
   const dir = mkdtempSync(join(tmpdir(), "board-"));
