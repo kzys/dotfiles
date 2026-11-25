@@ -165,10 +165,33 @@ export function appAgentFree(terminal: any): boolean {
   return ["idle", "done"].includes(terminal?.status?.state);
 }
 
+/** A space of the Herdr app, as herdr-app ls lists it. */
+export type AppSpace = { id: string; name: string; folder: string; machine: string | null };
+
+/** Returns the Herdr app's spaces, read with run. */
+export async function appSpaces(run: Json = json): Promise<AppSpace[]> {
+  return (await run("herdr-app", ["ls"])).spaces;
+}
+
+/** Returns, for each space of this machine among spaces whose folder
+ * nameOf finds a name for, other than the one applied last gave it, that
+ * name, and whether giving it takes a rename. applied holds names by space
+ * id, so that a name the user gives a space stays until nameOf finds a new
+ * one. */
+export function spaceNames(
+  spaces: AppSpace[], applied: Record<string, string>, nameOf: (folder: string) => string | null,
+): { id: string; name: string; rename: boolean }[] {
+  return spaces.flatMap((s) => {
+    const name = s.machine === null && s.folder ? nameOf(s.folder) : null;
+    return name && applied[s.id] !== name ? [{ id: s.id, name, rename: s.name !== name }] : [];
+  });
+}
+
 /** Runs the Herdr app command name with args and returns what it made. */
 export type AppCommand = (name: string, args: object) => Promise<any>;
 
-const appCommand: AppCommand = (name, args) => json("herdr-app", ["do", name, JSON.stringify(args)]);
+/** Runs a Herdr app command, as AppCommand describes, with herdr-app do. */
+export const appCommand: AppCommand = (name, args) => json("herdr-app", ["do", name, JSON.stringify(args)]);
 
 /** Returns how open opens rows in the Herdr app, with command running its
  * commands. The app starts a terminal with its program rather than typing
