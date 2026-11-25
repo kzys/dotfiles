@@ -1,4 +1,5 @@
 import "./style.css";
+import { AskAgents } from "./ask.tsx";
 import { render } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { WorktreeDiffView } from "./diff/view.tsx";
@@ -30,7 +31,8 @@ function Readout({ text }: { text: string }) {
 
 // The tabs of the console strip, each with its link.
 const TABS = [
-  ["projects", "/", "Projects"],
+  ["ask", "/", "Ask"],
+  ["projects", "/projects", "Projects"],
   ["pulls", "/pulls", "Pulls"],
   ["learnings", "/#learnings", "Learnings"],
 ] as const;
@@ -49,8 +51,8 @@ function ownLink(e: MouseEvent): URL | null {
 
 /** Returns the page's location as locationKey reads it, kept current,
  * following the page's own links without loading it again. A location
- * from a link made before a view moved, however the page got there, is
- * replaced with where it is now, as movedTo says. */
+ * from a link made before a view moved to a path, however the page got
+ * there, is replaced with the path. */
 function useLocation(): string {
   const read = () => {
     const moved = movedTo(location.pathname, location.hash);
@@ -175,8 +177,10 @@ function App() {
           <p class="empty">Loading…</p>
         ) : at.view === "pulls" ? (
           <BoardView state={state} query={q} />
-        ) : (
+        ) : at.view === "projects" ? (
           <ProjectList state={state} query={q} />
+        ) : (
+          <AskAgents state={state} query={q} />
         )}
       </div>
     </Links.Provider>

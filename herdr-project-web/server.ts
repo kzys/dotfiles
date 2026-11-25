@@ -34,6 +34,7 @@ import { type Checked, checkQueue } from "./queues.ts";
 import { Schedule } from "./schedule.ts";
 import { AGAIN, Store, effect } from "./store.ts";
 import { AgentReports } from "./agent-reports.ts";
+import { Asks, askees, routeAsks } from "./asks.ts";
 import { Namer, reportTitle } from "./naming.ts";
 import { everyPane, pageState } from "./page-state.ts";
 import { appBackend, appCommand, appHerdrPanes, appSpaces, claudeSessions } from "./herdr/app.ts";
@@ -48,7 +49,7 @@ import { claudeSessionDirs, codexSessionDirs, codexSessions } from "./sessions.t
 import * as slack from "./slack.ts";
 import { loadState, saveState } from "./statefile.ts";
 import { type ProjectRead, checkoutOf, linkCheckout, projectDirs, readProjects } from "./project/project.ts";
-import { type Watched, agentStates } from "./state.ts";
+import { type State, type Watched, agentStates } from "./state.ts";
 import { type Found, title, watchWorkspace, watchedFrom } from "./watched.ts";
 
 const here = import.meta.dirname;
@@ -147,6 +148,8 @@ const ORDER = ["Pull requests", "Panes", "Slack", "Linear"];
 // The columns the user moved pull requests to, and what came of asking
 // Copilot to review each.
 const boardStore = new BoardStore(stateDir, logError);
+// The questions asked of every agent from the page, and their replies.
+const asks = new Asks(join(stateDir, "asks.json"));
 // Each pane's last hook event.
 const hookEvents = new Map<string, HookEvent>();
 const herdrTui = tuiBackend(ask, {
@@ -169,7 +172,9 @@ let last = "";
 const pageOf = (facts: Facts) => pageState({
   ...facts,
   watched: watched(facts),
-  acting: orgs ? { queued: outbox.all(), hooks: hookEvents, board: boardStore.cards(pulls.latest(), new Date()) } : null,
+  acting: orgs
+    ? { queued: outbox.all(), hooks: hookEvents, board: boardStore.cards(pulls.latest(), new Date()), asks: asks.all() }
+    : null,
 });
 
 /** Returns what the checks found, or null before any has. */
@@ -490,6 +495,14 @@ socket.post("/pulls/check", (c) => {
 });
 
 routePicker(socket, picker, () => true);
+// Asking every agent, which only the watcher's server, which delivers the
+// questions, does, and only from the page; agents reply on the socket.
+routeAsks(page, socket, {
+  asks,
+  askees: () => askees(everyPane(store.get()), (JSON.parse(last) as State).projects),
+  queue: (pane, text, session) => outbox.add(pane, text, session),
+  changed: () => store.tell(),
+}, (headers) => !!orgs && fromPage(headers, hosts));
 
 // Only the watcher's server: hooks reach one server, like the checks.
 if (orgs) {

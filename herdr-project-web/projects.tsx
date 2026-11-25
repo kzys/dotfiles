@@ -257,7 +257,7 @@ export function ProjectView({ dir, state, query, now }: { dir: string; state: St
   return (
     <div class="diffs">
       <h2>
-        <a href="/">Projects</a> / {project?.name ?? baseName(dir)}
+        <a href="/projects">Projects</a> / {project?.name ?? baseName(dir)}
         {project && <DirName dir={dir} name={project.name} />}
       </h2>
       {!state ? (

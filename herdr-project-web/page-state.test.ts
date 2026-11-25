@@ -25,7 +25,7 @@ test("shows the projects with their panes", () => {
 
 test("shows what the watcher's server acts on, telling undelivered only what has been read", () => {
   const queued = { "w1:p1": [{ id: "1", text: "hi", at: 1, session: "old" }], t1: [{ id: "2", text: "yo", at: 2, session: "old" }] };
-  const state = pageState(facts({ acting: { queued, hooks: new Map(), board: [] } }));
+  const state = pageState(facts({ acting: { queued, hooks: new Map(), board: [], asks: [] } }));
   assert.deepEqual(state.controls, {
     "w1:p1": { queued: queued["w1:p1"], permission: null },
     t1: { queued: queued.t1, permission: null },

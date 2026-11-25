@@ -613,3 +613,9 @@ main.board { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--space-
 }
 .board-review:hover { color: var(--accent); border-color: currentColor; }
 .board-review:disabled { opacity: 0.5; cursor: default; }
+
+/* Asking every agent. */
+.ask-box { display: grid; gap: var(--space-2); max-width: 720px; margin-bottom: var(--space-5); }
+.ask-box textarea { width: 100%; box-sizing: border-box; font: inherit; padding: var(--space-2); }
+.ask-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.ask-reply { flex-basis: 100%; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }

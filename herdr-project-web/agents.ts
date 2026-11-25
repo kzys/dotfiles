@@ -51,9 +51,11 @@ export class Outbox {
     return this.queues;
   }
 
-  /** Queues text for session, if known, in pane. */
-  add(pane: string, text: string, session?: string, at = Date.now()) {
-    this.set(pane, [...this.queued(pane), { id: `${at}-${this.next++}`, text, at, ...(session ? { session } : {}) }]);
+  /** Queues text for session, if known, in pane, and returns its id. */
+  add(pane: string, text: string, session?: string, at = Date.now()): string {
+    const id = `${at}-${this.next++}`;
+    this.set(pane, [...this.queued(pane), { id, text, at, ...(session ? { session } : {}) }]);
+    return id;
   }
 
   /** Removes the message with id from pane's queue, and returns whether

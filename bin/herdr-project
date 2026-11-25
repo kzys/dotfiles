@@ -14,9 +14,21 @@
 #
 # herdr-project --background starts it in the background, unless it
 # runs. Starting an agent does that, and waits for it, if it isn't running.
+#
+# herdr-project --reply <token> <answer...> sends an agent's answer to a
+# question the user asked every agent from the page, which gave it token.
 
 here=$(dirname "$(readlink -f "$0")")
+state=${XDG_STATE_HOME:-$HOME/.local/state}
 case $1 in
+--reply)
+    [ $# -ge 3 ] || { echo "usage: herdr-project --reply <token> <answer...>" >&2; exit 2; }
+    token=$2
+    shift 2
+    exec curl --silent --show-error --fail-with-body --max-time 10 \
+        --unix-socket "$state/herdr-project/run/server.sock" \
+        --data-urlencode "token=$token" --data-urlencode "text=$*" http://localhost/reply
+    ;;
 --watch | --start-watch | --background)
     WATCH_TTY=$(tty 2>/dev/null) && export WATCH_TTY
     exec node --experimental-strip-types --disable-warning=ExperimentalWarning \
@@ -28,7 +40,6 @@ for arg in "$@"; do
     set -- "$@" --data-urlencode "arg=$arg"
     shift
 done
-state=${XDG_STATE_HOME:-$HOME/.local/state}
 ask() {
     script=$(curl --silent --fail-with-body --max-time 10 \
         --unix-socket "$state/herdr-project/run/server.sock" \

@@ -2,6 +2,7 @@
 // nothing itself.
 
 import { type AgentView, type Queued, permission, undelivered } from "./agents.ts";
+import { type Ask, askViews } from "./asks.ts";
 import type { Card } from "./board.ts";
 import type { Herdr } from "./herdr/backend.ts";
 import type { HookEvent } from "./hooks.ts";
@@ -21,9 +22,10 @@ export type PageFacts = {
   // The projects shown, as readProject reads them.
   projects: ProjectRead[];
   // What only the watcher's server, which acts on agents, shows: the
-  // messages queued for each agent, each pane's last hook event and the
-  // pull requests' board; null for another server.
-  acting: { queued: Record<string, Queued[]>; hooks: ReadonlyMap<string, HookEvent>; board: Card[] } | null;
+  // messages queued for each agent, each pane's last hook event, the pull
+  // requests' board and the questions asked of every agent; null for
+  // another server.
+  acting: { queued: Record<string, Queued[]>; hooks: ReadonlyMap<string, HookEvent>; board: Card[]; asks: Ask[] } | null;
 };
 
 /** Returns Herdr's panes with the Herdr app's agents among them, or those
@@ -43,10 +45,13 @@ export function pageState(facts: PageFacts) {
   const controls: Record<string, AgentView> = {};
   for (const [pane, status] of Object.entries(agentStates(all) ?? {}))
     controls[pane] = { queued: acting.queued[pane] ?? [], permission: permission(acting.hooks.get(pane), status) };
-  // Only messages for panes of what has been read can be told undelivered:
-  // Herdr's panes are named like w1:p2, the app's terminals like t3.
-  const readable = Object.fromEntries(
-    Object.entries(acting.queued).filter(([pane]) => pane.includes(":") ? facts.herdr !== null : facts.appRead),
-  );
-  return { ...state, controls, undelivered: undelivered(readable, sessions), board: acting.board };
+  // Only panes of what has been read can be told gone: Herdr's panes are
+  // named like w1:p2, the app's terminals like t3.
+  const read = (pane: string) => (pane.includes(":") ? facts.herdr !== null : facts.appRead);
+  const readable = Object.fromEntries(Object.entries(acting.queued).filter(([pane]) => read(pane)));
+  const present = (pane: string) => Object.hasOwn(sessions, pane) || !read(pane);
+  return {
+    ...state, controls, undelivered: undelivered(readable, sessions), board: acting.board,
+    asks: askViews(acting.asks, acting.queued, present),
+  };
 }

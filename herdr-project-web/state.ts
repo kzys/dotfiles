@@ -80,6 +80,9 @@ export type State = {
   agents: Record<string, string> | null;
   // The board of the user's pull requests, from the watcher's server.
   board?: import("./board.ts").Card[];
+  // The questions asked of every agent, newest first, from the watcher's
+  // server.
+  asks?: import("./asks.ts").AskView[];
 };
 
 /** Returns urls, those of pull requests, by their labels: owner/name#N,
