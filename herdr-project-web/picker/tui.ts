@@ -1,5 +1,6 @@
-// The project picker's screen, as functions of its state: matching rows,
-// handling keys and drawing, with no terminal involved.
+// The project picker's screen: matching rows, handling keys and drawing,
+// each returning what follows from the state it is given, with no terminal
+// involved.
 
 import type { Row } from "../rows.ts";
 
@@ -127,41 +128,8 @@ export type Picker = {
   done: "no" | "picked" | "quit";
 };
 
-/** Returns the picker's state before any key, over rows. */
-export const start = (rows: Row[], agents: readonly string[]): Picker => ({
-  query: "", shown: visible(rows, ""), cursor: 0, top: 0, scroll: 0, agent: agents[0], done: "no",
-});
-
 /** Returns how many rows of the list fit in height. */
 export const listLines = (height: number) => Math.max(1, Math.floor((height - 3) / 2));
-
-/** Returns state after key. Up, down, ctrl-p, ctrl-n, page up and page
- * down move; left, right, ctrl-b and ctrl-f switch the agent; shift-up
- * and shift-down scroll the preview; Esc, ctrl-g and ctrl-c quit. */
-export function press(state: Picker, key: string, rows: Row[], agents: readonly string[], lines: number): Picker {
-  const move = (by: number) => ({ ...state, cursor: Math.max(0, Math.min(state.cursor + by, state.shown.length - 1)), scroll: 0 });
-  const edit = (query: string) => ({ ...state, query, shown: visible(rows, query), cursor: 0, top: 0, scroll: 0 });
-  const change = (by: number) => ({ ...state, agent: agents[(agents.indexOf(state.agent) + by + agents.length) % agents.length] });
-  switch (key) {
-    case "esc": case "ctrl-g": case "ctrl-c": return { ...state, done: "quit" };
-    case "enter": return { ...state, done: state.shown.length ? "picked" : "quit" };
-    case "up": case "ctrl-p": return move(-1);
-    case "down": case "ctrl-n": return move(1);
-    case "pageup": return move(-lines);
-    case "pagedown": return move(lines);
-    case "right": case "ctrl-f": return change(1);
-    case "left": case "ctrl-b": return change(-1);
-    case "shift-up": return { ...state, scroll: Math.max(0, state.scroll - 1) };
-    case "shift-down": return { ...state, scroll: state.scroll + 1 };
-    case "backspace": return edit([...state.query].slice(0, -1).join(""));
-    case "ctrl-u": return edit("");
-    case "ctrl-w": {
-      const kept = state.query.trimEnd();
-      return edit(kept.slice(0, kept.lastIndexOf(" ") + 1));
-    }
-    default: return [...key].length === 1 && key >= " " ? edit(state.query + key) : state;
-  }
-}
 
 const BOLD = "\x1b[1m";
 const DIM = "\x1b[2m";
@@ -191,37 +159,80 @@ function colored(text: string, words: string[], limit: number, base: string): st
   return out + RESET;
 }
 
-/** Returns the screen for state as its lines, height of them at most and
- * each fitting in width columns, showing preview, the highlighted row's
- * notes, below the list. It also moves top to keep the cursor in view. */
-export function draw(
-  state: Picker, rows: Row[], agents: readonly string[], preview: string, height: number, screenWidth: number,
-): string[] {
-  const lines = listLines(height);
-  state.top = Math.min(Math.max(state.top, state.cursor - lines + 1), state.cursor);
-  const words = state.query.split(/\s+/).filter(Boolean);
-  const out = [`${BLUE}${BOLD}project> ${RESET}${clip(state.query, screenWidth - 10)}`];
-  for (const [n, i] of state.shown.slice(state.top, state.top + lines).entries()) {
-    const [kind, , , text] = rows[i];
-    const selected = state.top + n === state.cursor;
-    const suffix = ` with ${agents.map((a) => ` ${a} `).join("")}`;
-    const room = screenWidth - 2 - (kind === "new" ? columns(suffix) : 0);
-    let line = `${selected ? `${BLUE}${BOLD}>${RESET}` : " "} `;
-    line += colored(printable(text), words, Math.max(0, room), kind === "session" ? "" : BOLD);
-    if (kind === "new" && room > 0) {
-      line += ` with ${agents.map((a) => (a === state.agent ? `${REVERSE}${BOLD} ${a} ${RESET}` : `${DIM} ${a} ${RESET}`)).join("")}`;
+/** The picker's screen, for the agents a new session can start with, the
+ * first chosen at first. */
+export class PickerScreen {
+  private agents: readonly string[];
+
+  constructor(agents: readonly string[]) {
+    this.agents = agents;
+  }
+
+  /** Returns the picker's state before any key, over rows. */
+  start(rows: Row[]): Picker {
+    return { query: "", shown: visible(rows, ""), cursor: 0, top: 0, scroll: 0, agent: this.agents[0], done: "no" };
+  }
+
+  /** Returns state after key. Up, down, ctrl-p, ctrl-n, page up and page
+   * down move; left, right, ctrl-b and ctrl-f switch the agent; shift-up
+   * and shift-down scroll the preview; Esc, ctrl-g and ctrl-c quit. */
+  press(state: Picker, key: string, rows: Row[], lines: number): Picker {
+    const { agents } = this;
+    const move = (by: number) => ({ ...state, cursor: Math.max(0, Math.min(state.cursor + by, state.shown.length - 1)), scroll: 0 });
+    const edit = (query: string) => ({ ...state, query, shown: visible(rows, query), cursor: 0, top: 0, scroll: 0 });
+    const change = (by: number) => ({ ...state, agent: agents[(agents.indexOf(state.agent) + by + agents.length) % agents.length] });
+    switch (key) {
+      case "esc": case "ctrl-g": case "ctrl-c": return { ...state, done: "quit" };
+      case "enter": return { ...state, done: state.shown.length ? "picked" : "quit" };
+      case "up": case "ctrl-p": return move(-1);
+      case "down": case "ctrl-n": return move(1);
+      case "pageup": return move(-lines);
+      case "pagedown": return move(lines);
+      case "right": case "ctrl-f": return change(1);
+      case "left": case "ctrl-b": return change(-1);
+      case "shift-up": return { ...state, scroll: Math.max(0, state.scroll - 1) };
+      case "shift-down": return { ...state, scroll: state.scroll + 1 };
+      case "backspace": return edit([...state.query].slice(0, -1).join(""));
+      case "ctrl-u": return edit("");
+      case "ctrl-w": {
+        const kept = state.query.trimEnd();
+        return edit(kept.slice(0, kept.lastIndexOf(" ") + 1));
+      }
+      default: return [...key].length === 1 && key >= " " ? edit(state.query + key) : state;
     }
-    out.push(line);
   }
-  while (out.length <= lines) out.push("");
-  const row = state.shown.length ? rows[state.shown[state.cursor]] : null;
-  out.push(`${DIM}${clip(`  ${state.shown.length}/${rows.length}  ${row ? hint(row, state.agent) : ""}`, screenWidth)}${RESET}`);
-  out.push(`${BLUE}${"─".repeat(screenWidth)}${RESET}`);
-  const text = preview.split("\n");
-  state.scroll = Math.min(state.scroll, Math.max(0, text.length - 1));
-  for (const line of text.slice(state.scroll)) {
-    if (out.length >= height) break;
-    out.push(clip(printable(line), screenWidth));
+
+  /** Returns the screen for state as its lines, height of them at most and
+   * each fitting in width columns, showing preview, the highlighted row's
+   * notes, below the list. It also moves top to keep the cursor in view. */
+  draw(state: Picker, rows: Row[], preview: string, height: number, screenWidth: number): string[] {
+    const { agents } = this;
+    const lines = listLines(height);
+    state.top = Math.min(Math.max(state.top, state.cursor - lines + 1), state.cursor);
+    const words = state.query.split(/\s+/).filter(Boolean);
+    const out = [`${BLUE}${BOLD}project> ${RESET}${clip(state.query, screenWidth - 10)}`];
+    for (const [n, i] of state.shown.slice(state.top, state.top + lines).entries()) {
+      const [kind, , , text] = rows[i];
+      const selected = state.top + n === state.cursor;
+      const suffix = ` with ${agents.map((a) => ` ${a} `).join("")}`;
+      const room = screenWidth - 2 - (kind === "new" ? columns(suffix) : 0);
+      let line = `${selected ? `${BLUE}${BOLD}>${RESET}` : " "} `;
+      line += colored(printable(text), words, Math.max(0, room), kind === "session" ? "" : BOLD);
+      if (kind === "new" && room > 0) {
+        line += ` with ${agents.map((a) => (a === state.agent ? `${REVERSE}${BOLD} ${a} ${RESET}` : `${DIM} ${a} ${RESET}`)).join("")}`;
+      }
+      out.push(line);
+    }
+    while (out.length <= lines) out.push("");
+    const row = state.shown.length ? rows[state.shown[state.cursor]] : null;
+    out.push(`${DIM}${clip(`  ${state.shown.length}/${rows.length}  ${row ? hint(row, state.agent) : ""}`, screenWidth)}${RESET}`);
+    out.push(`${BLUE}${"─".repeat(screenWidth)}${RESET}`);
+    const text = preview.split("\n");
+    state.scroll = Math.min(state.scroll, Math.max(0, text.length - 1));
+    for (const line of text.slice(state.scroll)) {
+      if (out.length >= height) break;
+      out.push(clip(printable(line), screenWidth));
+    }
+    return out.slice(0, height);
   }
-  return out.slice(0, height);
 }

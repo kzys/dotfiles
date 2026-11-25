@@ -8,7 +8,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { AGENTS } from "../launch.ts";
-import { columns, draw, listLines, parseKeys, press, start } from "./tui.ts";
+import { PickerScreen, columns, listLines, parseKeys } from "./tui.ts";
 import type { Row } from "../rows.ts";
 import { answers } from "../watch.ts";
 
@@ -56,7 +56,8 @@ function waitForKey(): Promise<void> {
 function pick(rows: Row[]): Promise<[Row, string] | null> {
   return new Promise((resolve) => {
     const out = process.stdout;
-    let state = start(rows, AGENTS);
+    const screen = new PickerScreen(AGENTS);
+    let state = screen.start(rows);
     // Notes by row, read once: the picker is short-lived.
     const previews = new Map<number, string>();
     let finished = false;
@@ -72,7 +73,7 @@ function pick(rows: Row[]): Promise<[Row, string] | null> {
           redraw();
         }, () => {});
       }
-      const lines = draw(state, rows, AGENTS, previews.get(row) ?? "", out.rows, out.columns);
+      const lines = screen.draw(state, rows, previews.get(row) ?? "", out.rows, out.columns);
       out.write(`\x1b[H\x1b[J${lines.join("\r\n")}\x1b[1;${Math.min(out.columns, 10 + columns(state.query))}H`);
     };
     const finish = (result: [Row, string] | null) => {
@@ -88,7 +89,7 @@ function pick(rows: Row[]): Promise<[Row, string] | null> {
     process.stdin.setEncoding("utf8");
     process.stdin.on("data", (data: string) => {
       for (const key of parseKeys(data)) {
-        state = press(state, key, rows, AGENTS, listLines(out.rows));
+        state = screen.press(state, key, rows, listLines(out.rows));
         if (state.done === "quit") return finish(null);
         if (state.done === "picked") return finish([rows[state.shown[state.cursor]], state.agent]);
       }
