@@ -34,3 +34,15 @@ test("shows what the watcher's server acts on, telling undelivered only what has
   assert.deepEqual(state.undelivered?.map((u) => u.pane), ["w1:p1"]);
   assert.deepEqual(state.board, []);
 });
+
+test("tells an agent asked gone only once what it ran in has been read", () => {
+  const asked = (pane: string, message: string) => ({ pane, label: pane, message, token: pane, reply: null });
+  const asks = [{ id: "1", text: "q", at: 1, agents: [asked("w1:p1", "m1"), asked("w1:p9", "m2"), asked("t9", "m3")] }];
+  const statuses = (over: object) => pageState(facts({ ...over, acting: { queued: {}, hooks: new Map(), board: [], asks } }))
+    .asks?.[0].agents.map((a) => a.status);
+  // w1:p9 is gone from Herdr; the app's t9 may just not be read yet.
+  assert.deepEqual(statuses({}), ["asked", "gone", "asked"]);
+  assert.deepEqual(statuses({ appRead: true }), ["asked", "gone", "gone"]);
+  // While Herdr can't be asked, its panes may still be there.
+  assert.deepEqual(statuses({ herdr: null }), ["asked", "asked", "asked"]);
+});

@@ -36,19 +36,23 @@ const KEPT = 20;
  * replies with token. */
 export function askMessage(text: string, token: string): string {
   return `${text}\n\n(The user asked every agent this from herdr-project-web. ` +
-    `Reply by running: herdr-project --reply ${token} '<your answer>')`;
+    `Reply by running herdr-project --reply ${token} followed by your answer, quoted for the shell.)`;
 }
 
 /** Returns what the page shows of asks, newest first, from queued, what
- * the outbox holds by pane, and present, which reports whether a pane may
- * still have its agent. */
-export function askViews(asks: Ask[], queued: Record<string, Queued[]>, present: (pane: string) => boolean): AskView[] {
+ * the outbox holds by pane, lost, the ids of messages in it that nothing
+ * will deliver, and present, which reports whether a pane may still have
+ * its agent. */
+export function askViews(
+  asks: Ask[], queued: Record<string, Queued[]>, lost: Set<string>, present: (pane: string) => boolean,
+): AskView[] {
   return [...asks].reverse().map(({ id, text, at, agents: asked }) => ({
     id, text, at,
     agents: asked.map((a) => {
       const status: AskStatus = a.reply ? "replied"
+        : lost.has(a.message) || !present(a.pane) ? "gone"
         : (queued[a.pane] ?? []).some((m) => m.id === a.message) ? "queued"
-        : present(a.pane) ? "asked" : "gone";
+        : "asked";
       return { label: a.label, status, reply: a.reply };
     }),
   }));
@@ -59,6 +63,7 @@ export class Asks {
   private path: string;
   private asks: Ask[];
   private token: () => string;
+  private next = 0;
 
   constructor(path: string, token = () => randomBytes(6).toString("hex")) {
     this.path = path;
@@ -79,7 +84,7 @@ export class Asks {
       const token = this.token();
       return { pane, label, token, message: queue(pane, askMessage(text, token), session), reply: null };
     });
-    const ask = { id: `${at}`, text, at, agents: asked };
+    const ask = { id: `${at}-${this.next++}`, text, at, agents: asked };
     this.asks = [...this.asks, ask].slice(-KEPT);
     saveState(this.path, this.asks);
     return ask;
@@ -96,11 +101,12 @@ export class Asks {
   }
 }
 
-/** Returns the agents among herdr's panes to ask, each named after the
- * project in projects whose panes hold it, else its directory, and its
- * role, else its pane. */
+/** Returns the agents among herdr's panes to ask, those whose status
+ * Herdr reports, as the outbox delivers only to them, each named after
+ * the project in projects whose panes hold it, else its directory, and
+ * its role, else its pane. */
 export function askees(herdr: Herdr | null, projects: { name: string; panes: { id: string }[] }[]): Askee[] {
-  return (herdr?.panes ?? []).filter((p) => p.agent).map((p) => {
+  return (herdr?.panes ?? []).filter((p) => p.agent && p.agent_status).map((p) => {
     const where = projects.find((q) => q.panes.some((a) => a.id === p.pane_id))?.name ?? (baseName(p.cwd ?? "") || "?");
     const session = p.agent_session?.value;
     return { pane: p.pane_id, label: `${where} · ${p.tokens?.role || p.pane_id}`, ...(session ? { session } : {}) };

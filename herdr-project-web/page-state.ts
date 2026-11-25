@@ -50,8 +50,9 @@ export function pageState(facts: PageFacts) {
   const read = (pane: string) => (pane.includes(":") ? facts.herdr !== null : facts.appRead);
   const readable = Object.fromEntries(Object.entries(acting.queued).filter(([pane]) => read(pane)));
   const present = (pane: string) => Object.hasOwn(sessions, pane) || !read(pane);
+  const lost = undelivered(readable, sessions);
   return {
-    ...state, controls, undelivered: undelivered(readable, sessions), board: acting.board,
-    asks: askViews(acting.asks, acting.queued, present),
+    ...state, controls, undelivered: lost, board: acting.board,
+    asks: askViews(acting.asks, acting.queued, new Set(lost.flatMap((u) => u.messages.map((m) => m.id))), present),
   };
 }

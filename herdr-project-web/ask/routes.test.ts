@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Hono } from "hono";
 import { Asks } from "./ask.ts";
-import { routeAsks } from "./routes.ts";
+import { routeAsks, routeReplies } from "./routes.ts";
 
 const path = () => join(mkdtempSync(join(tmpdir(), "asks-")), "asks.json");
 
@@ -15,7 +15,9 @@ test("asks from the page and takes replies on the socket", async () => {
   const asks = new Asks(path(), () => "tok");
   let changes = 0;
   let agents = [{ pane: "w1:p1", label: "a" }];
-  routeAsks(page, socket, { asks, askees: () => agents, queue: () => "m1", changed: () => changes++ }, (h) => h.get("x-ok") === "1");
+  const server = { asks, askees: () => agents, queue: () => "m1", changed: () => changes++ };
+  routeAsks(page, server, (h) => h.get("x-ok") === "1");
+  routeReplies(socket, server);
   const ask = (body: string, ok = "1") => page.request("/api/asks", { method: "POST", body, headers: { "x-ok": ok } });
   assert.equal((await ask('{"text":"hi"}', "0")).status, 403);
   assert.equal((await ask('{"text":"  "}')).status, 400);

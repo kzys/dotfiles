@@ -90,9 +90,11 @@ running: without it `hp` and the picker start it in the background, logging
 to `~/.local/state/herdr-project/watch.log`, and hooks do nothing.
 Plain `claude` in a shell still works for fixing it.
 
-Its localhost-only page shows the open projects under `~/project`, with their
-agents, what they wait on and what their notes say waits on you, and how each
-worktree differs from where its branch left the remote's default branch.
+Its localhost-only page asks every agent a question at `/`: each gets it once
+idle and replies with `herdr-project --reply`, and the page shows the replies.
+At `/projects` it shows the open projects under `~/project`, with their agents
+and what their notes say waits on you, and how each worktree differs from
+where its branch left the remote's default branch.
 A branch's diff starts from its pull request's base, for the open ones the
 watcher finds (yours, updated in the last two weeks), else the base chosen on
 the page, which `gh pr create` also uses, else the branch it was created from

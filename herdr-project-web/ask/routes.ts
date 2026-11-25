@@ -17,9 +17,8 @@ export type AsksServer = {
 };
 
 /** Adds to page the request to ask every agent {text}, which only
- * requests that allowed lets through may make, and to socket the one an
- * agent replies with, a form of its token and text. */
-export function routeAsks(page: Hono, socket: Hono, server: AsksServer, allowed: (headers: Headers) => boolean) {
+ * requests that allowed lets through may make. */
+export function routeAsks(page: Hono, server: AsksServer, allowed: (headers: Headers) => boolean) {
   page.post("/api/asks", limit((c) => c.json({ error: "too large" }, 413)), only(allowed), async (c) => {
     const { text } = await jsonBody(c);
     if (typeof text !== "string" || !text.trim()) return c.json({ error: "no question" }, 400);
@@ -29,6 +28,11 @@ export function routeAsks(page: Hono, socket: Hono, server: AsksServer, allowed:
     server.changed();
     return c.body(null, 204);
   });
+}
+
+/** Adds to socket the request an agent replies with: a form of the token
+ * it was asked with and its text. */
+export function routeReplies(socket: Hono, server: AsksServer) {
   socket.post("/reply", limit((c) => c.text("reply too long\n", 413)), async (c) => {
     const form = new URLSearchParams(await c.req.text());
     const text = form.get("text")?.trim();

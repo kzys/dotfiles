@@ -35,7 +35,7 @@ import { Schedule } from "./schedule.ts";
 import { AGAIN, Store, effect } from "./store.ts";
 import { AgentReports } from "./agent-reports.ts";
 import { Asks, askees } from "./ask/ask.ts";
-import { routeAsks } from "./ask/routes.ts";
+import { type AsksServer, routeAsks, routeReplies } from "./ask/routes.ts";
 import { Namer, reportTitle } from "./naming.ts";
 import { everyPane, pageState } from "./page-state.ts";
 import { appBackend, appCommand, appHerdrPanes, appSpaces, claudeSessions } from "./herdr/app.ts";
@@ -366,6 +366,15 @@ routePulls(page, { latest: () => pulls.latest(), board: boardStore, changed: () 
   (headers) => !!orgs && fromPage(headers, hosts));
 // Only the watcher's server, which delivers them, and only the page.
 routeAgents(page, agentActions, (headers) => !!orgs && fromPage(headers, hosts));
+// Asking every agent, which only the watcher's server, which delivers the
+// questions, does, and only from the page.
+const asksServer: AsksServer = {
+  asks,
+  askees: () => askees(everyPane(store.get()), (JSON.parse(last) as State).projects),
+  queue: (pane, text, session) => outbox.add(pane, text, session),
+  changed: () => store.tell(),
+};
+routeAsks(page, asksServer, (headers) => !!orgs && fromPage(headers, hosts));
 page.get("/api/state", (c) => c.body(last, 200, { "Content-Type": "application/json" }));
 page.get("/api/version", (c) => c.json({ version, pid: process.pid }));
 page.get("/api/events", (c) => streamSSE(c, async (stream) => {
@@ -496,14 +505,8 @@ socket.post("/pulls/check", (c) => {
 });
 
 routePicker(socket, picker, () => true);
-// Asking every agent, which only the watcher's server, which delivers the
-// questions, does, and only from the page; agents reply on the socket.
-routeAsks(page, socket, {
-  asks,
-  askees: () => askees(everyPane(store.get()), (JSON.parse(last) as State).projects),
-  queue: (pane, text, session) => outbox.add(pane, text, session),
-  changed: () => store.tell(),
-}, (headers) => !!orgs && fromPage(headers, hosts));
+// Agents reply to what the page asked them on the socket.
+routeReplies(socket, asksServer);
 
 // Only the watcher's server: hooks reach one server, like the checks.
 if (orgs) {

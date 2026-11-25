@@ -33,23 +33,30 @@ test("says where each agent's question stands", () => {
   let n = 0;
   const queue = () => `m${++n}`;
   asks.ask("first", [{ pane: "w1:p1", label: "a" }], queue, 1);
-  asks.ask("second", [{ pane: "w1:p1", label: "a" }, { pane: "w1:p2", label: "b" }, { pane: "w1:p3", label: "c" }], queue, 2);
+  asks.ask("second", [{ pane: "w1:p1", label: "a" }, { pane: "w1:p2", label: "b" }, { pane: "w1:p3", label: "c" },
+                       { pane: "w1:p4", label: "d" }], queue, 2);
   asks.all()[1].agents[2].reply = { text: "done", at: 3 };
-  const views = askViews(asks.all(), { "w1:p1": [{ id: "m2", text: "", at: 2 }] }, (pane) => pane !== "w1:p2");
+  const queued = { "w1:p1": [{ id: "m2", text: "", at: 2 }], "w1:p2": [{ id: "m3", text: "", at: 2 }], "w1:p4": [{ id: "m5", text: "", at: 2 }] };
+  // w1:p2 closed with its question queued, and w1:p4's is for a session it no longer runs.
+  const views = askViews(asks.all(), queued, new Set(["m5"]), (pane) => pane !== "w1:p2");
   // Newest first.
   assert.deepEqual(views.map((v) => [v.text, v.agents.map((a) => [a.label, a.status])]), [
-    ["second", [["a", "queued"], ["b", "gone"], ["c", "replied"]]],
+    ["second", [["a", "queued"], ["b", "gone"], ["c", "replied"], ["d", "gone"]]],
     ["first", [["a", "asked"]]],
   ]);
+  assert.notEqual(asks.all()[0].id, asks.all()[1].id);
 });
 
 test("names each agent after its project and role", () => {
   const herdr = {
     workspaces: [],
     panes: [
-      { pane_id: "w1:p1", workspace_id: "w1", cwd: "/p/a", agent: "claude", agent_session: { value: "s1" }, tokens: { role: "main" } },
-      { pane_id: "w1:p2", workspace_id: "w1", cwd: "/home/x/repos/r", agent: "codex" },
+      { pane_id: "w1:p1", workspace_id: "w1", cwd: "/p/a", agent: "claude", agent_status: "idle", agent_session: { value: "s1" },
+        tokens: { role: "main" } },
+      { pane_id: "w1:p2", workspace_id: "w1", cwd: "/home/x/repos/r", agent: "codex", agent_status: "working" },
       { pane_id: "w1:p3", workspace_id: "w1", cwd: "/p/a" },
+      // Without a status, the outbox would never deliver to it.
+      { pane_id: "w1:p4", workspace_id: "w1", cwd: "/p/a", agent: "claude" },
     ],
   };
   assert.deepEqual(askees(herdr, [{ name: "alpha", panes: [{ id: "w1:p1" }] }]), [
