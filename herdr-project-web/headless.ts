@@ -28,8 +28,10 @@ export function run(command: string, args: string[], timeoutMs: number, cwd?: st
 }
 
 /** Returns field of the output, matching schema, of a headless Claude
- * session, command, in stateDir that may only use tools to answer
- * prompt. Raises if it fails. */
+ * session, command, in stateDir that answers prompt. It has no built-in
+ * tools and may use only tools, MCP tools such as a claude.ai
+ * connector's, refused anything else without asking; with no tools, it
+ * has no MCP servers either. Raises if it fails. */
 export async function ask(
   stateDir: string,
   prompt: string,
@@ -41,7 +43,8 @@ export async function ask(
   const out = await run(
     command,
     ["-p", "--no-session-persistence", "--model", "sonnet", "--output-format", "json", "--max-budget-usd", "2",
-     "--json-schema", JSON.stringify(schema), "--allowedTools", ...tools, "--", prompt],
+     "--json-schema", JSON.stringify(schema), "--tools", "", "--permission-mode", "dontAsk",
+     ...(tools.length ? ["--allowedTools", ...tools] : ["--strict-mcp-config"]), "--", prompt],
     900_000,
     stateDir,
   );

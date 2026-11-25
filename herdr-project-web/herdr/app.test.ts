@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { appAgentFree, spaceNames, appHerdrPanes, appOpener, appListedPanes, appPanes, appTerminals, claudeSessions, procParent, psParents, terminalSession } from "./app.ts";
+import { appAgentTakes, spaceNames, appHerdrPanes, appOpener, appListedPanes, appPanes, appTerminals, claudeSessions, procParent, psParents, terminalSession } from "./app.ts";
 import { open } from "../rows.ts";
 
 const terminal = (o: object) => ({
@@ -48,10 +48,12 @@ test("reads the agents of the app's spaces as Herdr's panes", () => {
   ]);
 });
 
-test("tells when an app agent waits for its next message", () => {
-  assert.equal(appAgentFree({ status: { state: "done" } }), true);
-  assert.equal(appAgentFree({ status: { state: "working" } }), false);
-  assert.equal(appAgentFree({ status: null }), false);
+test("tells when an app agent can take a message", () => {
+  assert.equal(appAgentTakes({ status: { state: "done" } }), true);
+  assert.equal(appAgentTakes({ status: { app: "claude-code", state: "working" } }), true);
+  assert.equal(appAgentTakes({ status: { app: "codex", state: "working" } }), false);
+  assert.equal(appAgentTakes({ status: { state: "blocked" } }), false);
+  assert.equal(appAgentTakes({ status: null }), false);
 });
 
 test("leaves out terminals that end while it reads them", async () => {

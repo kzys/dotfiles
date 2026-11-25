@@ -7,7 +7,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { type Backend, type Herdr, type OpenHerdr, isFree } from "./backend.ts";
+import { type Backend, type Herdr, type OpenHerdr, canTake } from "./backend.ts";
 
 // herdr-core names some agents by their app, not their command.
 const AGENTS: Record<string, string> = { "claude-code": "claude" };
@@ -156,10 +156,12 @@ export function appHerdrPanes(
   return spacePanes(terminals, (t) => t.status?.app, sessions, parent);
 }
 
-/** Reports whether the agent in terminal, as hc get describes it, is
- * waiting for its next message. */
-export function appAgentFree(terminal: any): boolean {
-  return isFree(terminal?.status?.state);
+/** Reports whether the agent in terminal, as hc get describes it, can
+ * take a message now, as canTake says. hc send refuses to type into one
+ * blocked on a dialog too. */
+export function appAgentTakes(terminal: any): boolean {
+  const app = terminal?.status?.app;
+  return canTake(terminal?.status?.state, AGENTS[app] ?? app);
 }
 
 /** A space of the Herdr app, as herdr-app ls lists it. */
@@ -222,7 +224,7 @@ export function appBackend(): Backend {
   return {
     async ready(terminal) {
       const now = await json("hc", ["get", terminal, "--json"]);
-      return appAgentFree(now) ? (terminalSession(now, claudeSessions()) ?? "") : null;
+      return appAgentTakes(now) ? (terminalSession(now, claudeSessions()) ?? "") : null;
     },
     // Text starting with "-" would be read as an option.
     send: async (terminal, text) => void (await run("hc", ["send", terminal, "--", text])),

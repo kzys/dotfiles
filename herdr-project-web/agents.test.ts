@@ -11,15 +11,17 @@ const file = () => join(mkdtempSync(join(tmpdir(), "outbox-")), "outbox.json");
 const none = async () => {};
 const yes = async () => "";
 
-test("holds messages until the agent is idle, then sends them as one", async () => {
+test("holds messages while the agent is blocked, then sends them as one", async () => {
   const sent: [string, string][] = [];
   const outbox = new Outbox(file(), async (p, t) => void sent.push([p, t]), yes);
   outbox.add("w1:p1", "first");
   outbox.add("w1:p1", "second");
-  for (const status of ["working", "blocked", "unknown"]) assert.equal(await outbox.deliver({ "w1:p1": status }), false);
+  for (const status of ["blocked", "unknown"]) assert.equal(await outbox.deliver({ "w1:p1": status }), false);
   assert.equal(await outbox.deliver({}), false);
   assert.deepEqual(sent, []);
-  assert.equal(await outbox.deliver({ "w1:p1": "idle" }), true);
+  // Only Claude Code takes what is typed while it works.
+  assert.equal(await outbox.deliver({ "w1:p1": "working" }, { "w1:p1": "codex" }), false);
+  assert.equal(await outbox.deliver({ "w1:p1": "working" }, { "w1:p1": "claude" }), true);
   assert.deepEqual(sent, [["w1:p1", "first\n\nsecond"]]);
   assert.deepEqual(outbox.queued("w1:p1"), []);
 });

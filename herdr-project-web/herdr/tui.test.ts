@@ -51,12 +51,14 @@ test("asks Herdr one request per connection", async (t) => {
     await assert.rejects(ask, (e) => e instanceof Error && !(e instanceof HerdrError));
 });
 
-test("sends only to an idle agent with no permission request open", async () => {
+test("sends only to an agent that isn't blocked, with no permission request open", async () => {
   const panes: Record<string, object> = {
     idle: { agent: "claude", agent_status: "idle", agent_session: { value: "s1" } },
     done: { agent: "claude", agent_status: "done" },
     asking: { agent: "claude", agent_status: "idle" },
     working: { agent: "claude", agent_status: "working" },
+    blocked: { agent: "claude", agent_status: "blocked" },
+    codex: { agent: "codex", agent_status: "working" },
     shell: { agent_status: "idle" },
   };
   const asked: [string, object][] = [];
@@ -66,7 +68,7 @@ test("sends only to an idle agent with no permission request open", async () => 
   };
   const tui = tuiBackend(ask, { asking: (pane) => pane === "asking", title: async () => {} });
   const ready = await Promise.all(Object.keys(panes).map((p) => tui.ready(p)));
-  assert.deepEqual(ready, ["s1", "", null, null, null]);
+  assert.deepEqual(ready, ["s1", "", null, "", null, null, null]);
   asked.length = 0;
   await tui.send("idle", "hello");
   assert.deepEqual(asked, [["pane.send_input", { pane_id: "idle", text: "hello", keys: ["Enter"] }]]);

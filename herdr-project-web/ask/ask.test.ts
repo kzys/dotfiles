@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Asks, askMessage, askViews, askees } from "./ask.ts";
+import { Asks, askMessage, askViews, askees, summarizeAll } from "./ask.ts";
 
 const path = () => join(mkdtempSync(join(tmpdir(), "asks-")), "asks.json");
 
@@ -64,4 +64,66 @@ test("names each agent after its project and role", () => {
     { pane: "w1:p2", label: "r · w1:p2" },
   ]);
   assert.deepEqual(askees(null, []), []);
+});
+
+test("makes one answer from the replies, again when more come", async () => {
+  const asks = new Asks(path(), () => `t${Math.random()}`);
+  let n = 0;
+  asks.ask("Waiting on?", [{ pane: "w1:p1", label: "a · main" }, { pane: "w1:p2", label: "b · main" }], () => `m${++n}`, 1);
+  const [first, second] = asks.all()[0].agents;
+  const prompts: string[] = [];
+  let made = 0;
+  const answer = async (prompt: string) => (prompts.push(prompt), `answer ${prompts.length}`);
+  // Nothing to make an answer from yet.
+  await summarizeAll(asks, answer, () => made++);
+  assert.deepEqual([prompts, made], [[], 0]);
+
+  asks.reply(first.token, "CI on #12", 2);
+  await summarizeAll(asks, answer, () => made++);
+  assert.match(prompts[0], /Waiting on\?/);
+  assert.match(prompts[0], /a · main:\nCI on #12/);
+  assert.equal(made, 1);
+  assert.deepEqual(asks.all()[0].summary?.text, "answer 1");
+  // Made already from every reply there is.
+  await summarizeAll(asks, answer, () => made++);
+  assert.equal(prompts.length, 1);
+
+  asks.reply(second.token, "nothing", 3);
+  let view = askViews(asks.all(), {}, new Set(), () => true)[0];
+  assert.deepEqual([view.summary?.replies, view.stale], [1, true]);
+  await summarizeAll(asks, answer, () => made++);
+  assert.match(prompts[1], /b · main:\nnothing/);
+  view = askViews(asks.all(), {}, new Set(), () => true)[0];
+  assert.deepEqual([view.summary?.text, view.summary?.replies, view.stale], ["answer 2", 2, false]);
+  // One made from older replies, finishing late, doesn't replace it.
+  asks.summarize(asks.all()[0].id, "late", 1, 2);
+  assert.equal(asks.all()[0].summary?.text, "answer 2");
+  // An agent replying again replaces its reply, and the answer is made again.
+  asks.reply(first.token, "merged after all", 4);
+  assert.equal(askViews(asks.all(), {}, new Set(), () => true)[0].stale, true);
+  await summarizeAll(asks, answer, () => made++);
+  assert.match(prompts[2], /a · main:\nmerged after all/);
+});
+
+test("goes on past a question it can't answer, and tries it again only after another reply", async () => {
+  const asks = new Asks(path(), () => `t${Math.random()}`);
+  let n = 0;
+  for (const text of ["old", "new"]) asks.ask(text, [{ pane: "w1:p1", label: "a" }], () => `m${++n}`, n);
+  for (const [i, ask] of asks.all().entries()) asks.reply(ask.agents[0].token, "fine", 10 + i);
+  const tried: string[] = [];
+  const answer = async (prompt: string) => {
+    tried.push(prompt.includes("\n\nold\n\n") ? "old" : "new");
+    if (prompt.includes("\n\nold\n\n")) throw new Error("no answer\nmore");
+    return "ok";
+  };
+  await summarizeAll(asks, answer, () => {});
+  // Newest first, and the failure doesn't stop the others.
+  assert.deepEqual(tried, ["new", "old"]);
+  const views = askViews(asks.all(), {}, new Set(), () => true);
+  assert.deepEqual(views.map((v) => [v.text, v.summary?.text ?? null, v.failed]), [["new", "ok", null], ["old", null, "no answer"]]);
+  await summarizeAll(asks, answer, () => {});
+  assert.equal(tried.length, 2);
+  asks.reply(asks.all()[0].agents[0].token, "still fine", 20);
+  await summarizeAll(asks, answer, () => {});
+  assert.deepEqual(tried, ["new", "old", "old"]);
 });

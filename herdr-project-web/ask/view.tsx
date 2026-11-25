@@ -2,6 +2,7 @@
 
 import { useState } from "preact/hooks";
 import type { State } from "../state.ts";
+import { renderMarkdown } from "../markdown.ts";
 import { Linked, matches, send } from "../ui.tsx";
 import type { AskStatus, AskView } from "./ask.ts";
 
@@ -15,8 +16,27 @@ const STATUS: Record<AskStatus, [string, string]> = {
 
 const clock = (at: number) => new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-/** Returns a question and each agent's reply, or where its question
- * stands. */
+/** Returns one answer from ask's replies, rendered from Markdown, or that
+ * one is being made. */
+function Summary({ ask, replied }: { ask: AskView; replied: number }) {
+  const { summary } = ask;
+  if (!replied) return null;
+  if (!summary && ask.failed) return <p class="ask-summary agent-error">Couldn't put the replies together: {ask.failed}</p>;
+  if (!summary) return <p class="ask-summary empty">Putting the replies together…</p>;
+  return (
+    <div class="ask-summary">
+      {/* Claude writes it in Markdown; markdown-it leaves out raw HTML. */}
+      <div class="markdown" dangerouslySetInnerHTML={{ __html: renderMarkdown(summary.text) }} />
+      <span class="empty">
+        From {summary.replies} {summary.replies === 1 ? "reply" : "replies"} · {clock(summary.at)}
+        {ask.stale && (ask.failed ? ` · couldn't add the newer ones: ${ask.failed}` : " · adding the newer ones…")}
+      </span>
+    </div>
+  );
+}
+
+/** Returns a question, one answer from the replies, and each agent's
+ * reply, or where its question stands. */
 function AskCard({ ask }: { ask: AskView }) {
   const replied = ask.agents.filter((a) => a.reply).length;
   return (
@@ -27,6 +47,7 @@ function AskCard({ ask }: { ask: AskView }) {
           {replied}/{ask.agents.length} replied · <time dateTime={new Date(ask.at).toISOString()}>{clock(ask.at)}</time>
         </span>
       </header>
+      <Summary ask={ask} replied={replied} />
       <ul class="wts">
         {ask.agents.map((a, i) => (
           <li key={i} class="wt">
@@ -47,7 +68,8 @@ function AskCard({ ask }: { ask: AskView }) {
 }
 
 /** Returns the box that asks every agent a question, and the questions
- * asked, newest first, matching query. Busy agents get it once idle. */
+ * asked, newest first, matching query. Busy agents get it once idle;
+ * Claude Code agents, while they work too, but not on a prompt. */
 export function AskAgents({ state, query }: { state: State; query: string }) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -86,7 +108,7 @@ export function AskAgents({ state, query }: { state: State; query: string }) {
           <button class="copy" disabled={!text.trim() || sending} onClick={ask}>
             ask every agent
           </button>
-          <span class="empty">Busy agents get it once they are idle.</span>
+          <span class="empty">Busy agents get it once idle; Claude Code agents, while they work too.</span>
           {error && <span class="agent-error">{error}</span>}
         </div>
       </div>
