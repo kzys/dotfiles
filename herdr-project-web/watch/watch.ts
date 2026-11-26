@@ -105,7 +105,7 @@ function startBackground(env: NodeJS.ProcessEnv) {
   const state = stateDirOf(env);
   mkdirSync(state, { recursive: true });
   const log = openSync(join(state, "watch.log"), "a");
-  const args = [...NODE_FLAGS, join(import.meta.dirname, "watch-main.ts"), "--watch"];
+  const args = [...NODE_FLAGS, join(import.meta.dirname, "main.ts"), "--watch"];
   spawn(process.execPath, args, {
     cwd: env.HOME, detached: true, stdio: ["ignore", log, log], env: { ...backgroundEnv(env), HERDR_PROJECT_BACKGROUND: "1" },
   }).unref();
@@ -119,6 +119,8 @@ export function serverEnv(env: NodeJS.ProcessEnv, orgs: string[], tty: string | 
 }
 
 const NODE_FLAGS = ["--experimental-strip-types", "--disable-warning=ExperimentalWarning"];
+// The server's directory.
+const WEB = dirname(import.meta.dirname);
 
 /** Returns the arguments that run the server from directory web. */
 export const serverArgs = (web: string): string[] => [...NODE_FLAGS, join(web, "main.ts")];
@@ -210,7 +212,7 @@ function supervise() {
   const env = process.env;
   const log = join(stateDirOf(env), "web.log");
   const out = openSync(log, "w");
-  const web = import.meta.dirname;
+  const web = WEB;
   closeSync(openSync(join(web, "restart.stamp"), "a"));
   let child: ChildProcess | null = null;
   let stopping = false;
@@ -279,8 +281,8 @@ function supervise() {
  * itself: Node would accept connections on them here. */
 async function runWatcher(orgs: string[], pane: string | null, tty: string | null) {
   const env = process.env;
-  if (!existsSync(join(import.meta.dirname, "node_modules"))) {
-    console.log(`herdr-project --watch needs its packages: run npm install in ${import.meta.dirname}.`);
+  if (!existsSync(join(WEB, "node_modules"))) {
+    console.log(`herdr-project --watch needs its packages: run npm install in ${WEB}.`);
     // In the background, nobody would see it wait.
     if (env.HERDR_PROJECT_BACKGROUND === "1") process.exit(1);
     process.on("SIGINT", () => process.exit(0));
@@ -297,7 +299,7 @@ async function runWatcher(orgs: string[], pane: string | null, tty: string | nul
   }
   const { socket, page } = bound;
   const fds = { HERDR_PROJECT_SOCKET_FD: "3", ...(page ? { HERDR_PROJECT_PAGE_FD: "4" } : {}) };
-  const supervisor = spawn(process.execPath, [...NODE_FLAGS, join(import.meta.dirname, "watch-main.ts"), "--supervise"], {
+  const supervisor = spawn(process.execPath, [...NODE_FLAGS, join(import.meta.dirname, "main.ts"), "--supervise"], {
     stdio: ["ignore", "inherit", "inherit", fdOf(socket), page ? fdOf(page) : "ignore"],
     env: { ...serverEnv(env, orgs, tty), ...fds },
   });

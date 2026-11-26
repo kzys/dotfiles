@@ -10,7 +10,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { AGENTS } from "../agents/launch.ts";
 import { PickerScreen, columns, listLines, parseKeys } from "./tui.ts";
 import type { Row } from "./rows.ts";
-import { answers } from "../watch.ts";
+import { answers } from "../watch/watch.ts";
 
 const stateHome = process.env.XDG_STATE_HOME || join(homedir(), ".local/state");
 const socketPath = join(stateHome, "herdr-project/run/server.sock");
