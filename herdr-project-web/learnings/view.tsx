@@ -1,8 +1,8 @@
 // The page's view of the LEARNINGS.md files in ~/repos.
 
 import type { Learnings, Topic } from "./learnings.ts";
-import { plainInline, renderInline, renderMarkdown } from "./markdown.ts";
-import { Refresh, matches, useFetched } from "./ui.tsx";
+import { plainInline, renderInline, renderMarkdown } from "../markdown.ts";
+import { Refresh, matches, useFetched } from "../ui.tsx";
 
 /** Returns the topics of l matching query: all of a topic whose heading
  * matches, or else those of its items that do. */

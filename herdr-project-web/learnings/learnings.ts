@@ -3,7 +3,7 @@
 
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { md } from "./markdown.ts";
+import { md } from "../markdown.ts";
 
 // A heading of a LEARNINGS.md and the blocks under it, as Markdown.
 export type Topic = { heading: string; items: string[] };
