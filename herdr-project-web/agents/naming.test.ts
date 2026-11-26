@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AppSpace } from "./herdr/app.ts";
+import type { AppSpace } from "../herdr/app.ts";
 import { Namer } from "./naming.ts";
 
 /** Returns an empty project root and state directory, and named, which

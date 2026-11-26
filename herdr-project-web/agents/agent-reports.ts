@@ -5,7 +5,7 @@ import { execFile } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import type { Ask } from "./herdr/tui.ts";
+import type { Ask } from "../herdr/tui.ts";
 import type { HookHandler } from "./hooks.ts";
 import { agentCommand, instructions, launchDirectory, launchScript, parseAgent, projectDir } from "./launch.ts";
 import { reportTitle } from "./naming.ts";

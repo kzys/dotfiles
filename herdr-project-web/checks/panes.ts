@@ -3,7 +3,7 @@
 
 import { createHash } from "node:crypto";
 import { FULL_AT, type Item } from "../project/inbox.ts";
-import { projectDir } from "../launch.ts";
+import { projectDir } from "../agents/launch.ts";
 import { projectName } from "./owners.ts";
 import { type Herdr, isFree } from "../herdr/backend.ts";
 import { loadState, saveState } from "../statefile.ts";

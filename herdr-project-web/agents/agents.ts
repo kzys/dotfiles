@@ -7,10 +7,10 @@
 
 import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
-import { jsonBody, limit, only } from "./http.ts";
-import { canTake } from "./herdr/backend.ts";
+import { jsonBody, limit, only } from "../http.ts";
+import { canTake } from "../herdr/backend.ts";
 import type { HookEvent } from "./hooks.ts";
-import { loadState, saveState } from "./statefile.ts";
+import { loadState, saveState } from "../statefile.ts";
 
 // A message, for the session in its pane when it was written, if known: a
 // later agent in that pane didn't ask for it.

@@ -2,7 +2,7 @@
 // back with herdr-project --reply, kept across restarts.
 
 import { randomBytes } from "node:crypto";
-import type { Queued } from "../agents.ts";
+import type { Queued } from "../agents/agents.ts";
 import type { Herdr } from "../herdr/backend.ts";
 import { baseName } from "../paths.ts";
 import { loadState, saveState } from "../statefile.ts";

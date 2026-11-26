@@ -64,8 +64,8 @@ export type Watched = { sections: Section[]; inbox: Record<string, Item[]>; urls
 
 export type State = {
   // What the page shows of each agent besides what Herdr says, by pane.
-  controls?: Record<string, import("./agents.ts").AgentView>;
-  undelivered?: import("./agents.ts").Undelivered[];
+  controls?: Record<string, import("./agents/agents.ts").AgentView>;
+  undelivered?: import("./agents/agents.ts").Undelivered[];
   // The watcher's sections, or null if it hasn't reported any.
   sections: Section[] | null;
   // When the watcher last reported them, in ISO 8601.

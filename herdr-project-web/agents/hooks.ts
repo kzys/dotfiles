@@ -9,7 +9,7 @@ import { dirname } from "node:path";
 import { promisify } from "node:util";
 import { getRequestListener } from "@hono/node-server";
 import { type Context, Hono } from "hono";
-import { limit } from "./http.ts";
+import { limit } from "../http.ts";
 
 const AGENTS = new Set(["claude", "codex", "opencode"]);
 

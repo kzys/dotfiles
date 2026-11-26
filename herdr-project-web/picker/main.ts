@@ -7,7 +7,7 @@ import { request } from "node:http";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
-import { AGENTS } from "../launch.ts";
+import { AGENTS } from "../agents/launch.ts";
 import { PickerScreen, columns, listLines, parseKeys } from "./tui.ts";
 import type { Row } from "../rows.ts";
 import { answers } from "../watch.ts";

@@ -9,7 +9,7 @@ import { promisify } from "node:util";
 import { Hono } from "hono";
 import { type HookEvent, ancestors, hookDetail, hookServer, listenOn, ownsPane } from "./hooks.ts";
 
-const shim = join(import.meta.dirname, "../bin/agent-hook");
+const shim = join(import.meta.dirname, "../../bin/agent-hook");
 
 /** Starts a hook server on a socket under a new state directory. */
 async function start(lineage = async (_: number): Promise<string[] | null> => ["claude"]) {

@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { projectDir } from "../launch.ts";
+import { projectDir } from "../agents/launch.ts";
 import { type PaneHerdr, checkPanes, ctx, wakeMessage } from "./panes.ts";
 import type { Herdr } from "../herdr/backend.ts";
 

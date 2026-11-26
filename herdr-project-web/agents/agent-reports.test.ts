@@ -12,7 +12,7 @@ test("gives a resumed session in a project its instructions again", async () => 
   mkdirSync(join(project, "wt"), { recursive: true });
   let changes = 0;
   const reports = new AgentReports({
-    home: root, projectRoot, dotfiles: dirname(import.meta.dirname), stateDir: join(root, "state"),
+    home: root, projectRoot, dotfiles: dirname(dirname(import.meta.dirname)), stateDir: join(root, "state"),
     tryAsk: async () => null, noteCheckout: () => {}, projectsChanged: () => changes++, onError: () => {},
   });
   const resumed = await reports.onHook(null, { agent: "claude", event: "SessionStart" }, { source: "resume", cwd: join(project, "wt") });
