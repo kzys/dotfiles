@@ -3,7 +3,7 @@
 
 import { type AgentView, type Queued, permission, undelivered } from "./agents.ts";
 import { type Ask, askViews } from "./ask/ask.ts";
-import type { Card } from "./board.ts";
+import type { Card } from "./pulls/board.ts";
 import type { Herdr } from "./herdr/backend.ts";
 import type { HookEvent } from "./hooks.ts";
 import { type ProjectRead } from "./project/project.ts";

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { askCopilot, canAskCopilot, cards, isOpen, moveTo, recent, stage, stillAsked, stillMoved, withMove } from "./board.ts";
-import type { PullRequest as Pull } from "./github/pullrequest.ts";
+import type { PullRequest as Pull } from "../github/pullrequest.ts";
 
 function pull(number: number, over: Partial<Pull> = {}): Pull {
   return {

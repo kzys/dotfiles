@@ -2,7 +2,7 @@
 // request to another column and asking Copilot to review it.
 
 import type { Hono } from "hono";
-import * as board from "../board.ts";
+import * as board from "./board.ts";
 import type { BoardStore } from "./board-store.ts";
 import { requestCopilot } from "../github/api.ts";
 import type { PullCheck } from "../github/poll.ts";

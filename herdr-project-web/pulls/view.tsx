@@ -2,9 +2,9 @@
 
 import { useState } from "preact/hooks";
 import { type Card, MINE, MINE_MAX, STAGES, type Stage, canAskCopilot, moveTo, recent } from "./board.ts";
-import { projectHref } from "./pages.ts";
-import type { State } from "./state.ts";
-import { matches } from "./ui.tsx";
+import { projectHref } from "../pages.ts";
+import type { State } from "../state.ts";
+import { matches } from "../ui.tsx";
 
 const COPILOT: Record<Card["copilot"], string> = {
   none: "Copilot not reviewed",

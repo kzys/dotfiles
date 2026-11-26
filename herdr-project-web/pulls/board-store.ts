@@ -4,7 +4,7 @@
 
 import { join } from "node:path";
 import { type Signal, computed, createModel, effect, signal } from "@preact/signals-core";
-import * as board from "../board.ts";
+import * as board from "./board.ts";
 import type { PullCheck } from "../github/poll.ts";
 import { loadState, saveState } from "../statefile.ts";
 

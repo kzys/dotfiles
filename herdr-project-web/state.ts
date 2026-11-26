@@ -79,7 +79,7 @@ export type State = {
   // or null if Herdr couldn't be asked.
   agents: Record<string, string> | null;
   // The board of the user's pull requests, from the watcher's server.
-  board?: import("./board.ts").Card[];
+  board?: import("./pulls/board.ts").Card[];
   // The questions asked of every agent, newest first, from the watcher's
   // server.
   asks?: import("./ask/ask.ts").AskView[];

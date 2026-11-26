@@ -7,7 +7,7 @@ import { FileView } from "./files.tsx";
 import { halMessage } from "./hal.ts";
 import { LearningsView } from "./learnings.tsx";
 import { isPagePath, locationKey, pageTitle, route, tab } from "./pages.ts";
-import { BoardView } from "./board.tsx";
+import { BoardView } from "./pulls/view.tsx";
 import { ProjectList, ProjectView, pressing } from "./projects.tsx";
 import type { State } from "./state.ts";
 import { Links } from "./ui.tsx";
