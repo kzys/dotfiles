@@ -2,7 +2,7 @@
 // panes that have long been idle.
 
 import { createHash } from "node:crypto";
-import { FULL_AT, type Item } from "./inbox.ts";
+import { FULL_AT, type Item } from "./project/inbox.ts";
 import { projectDir } from "./launch.ts";
 import { projectName } from "./owners.ts";
 import { type Herdr, isFree } from "./herdr/backend.ts";

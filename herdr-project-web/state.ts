@@ -2,7 +2,7 @@
 // for the page.
 
 import type { Herdr } from "./herdr/backend.ts";
-import { FULL_AT, type Item } from "./inbox.ts";
+import { FULL_AT, type Item } from "./project/inbox.ts";
 import type { Run } from "./github/pullrequest.ts";
 import { Project, type ProjectRead, type ProjectView } from "./project/project.ts";
 

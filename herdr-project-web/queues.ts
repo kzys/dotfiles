@@ -1,7 +1,7 @@
 // Checking a source that a headless Claude session reads through its
 // claude.ai connector, such as Slack or Linear.
 
-import type { Item } from "./inbox.ts";
+import type { Item } from "./project/inbox.ts";
 import type { Section } from "./state.ts";
 import type { Found } from "./watched.ts";
 

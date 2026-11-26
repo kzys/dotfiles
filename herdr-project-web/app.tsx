@@ -3,12 +3,12 @@ import { AskAgents } from "./ask/view.tsx";
 import { render } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { WorktreeDiffView } from "./diff/view.tsx";
-import { FileView } from "./files.tsx";
+import { FileView } from "./project/files.tsx";
 import { halMessage } from "./hal.ts";
 import { LearningsView } from "./learnings/view.tsx";
 import { isPagePath, locationKey, pageTitle, route, tab } from "./pages.ts";
 import { BoardView } from "./pulls/view.tsx";
-import { ProjectList, ProjectView, pressing } from "./projects.tsx";
+import { ProjectList, ProjectView, pressing } from "./project/view.tsx";
 import type { State } from "./state.ts";
 import { Links } from "./ui.tsx";
 

@@ -3,7 +3,7 @@
 
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
-import type { Item } from "./inbox.ts";
+import type { Item } from "./project/inbox.ts";
 import { projectLabels, readReadme, roleNotes } from "./project/project.ts";
 
 // Who works on something: the project directory, the worktree in it, if

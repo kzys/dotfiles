@@ -4,14 +4,14 @@
 import { useState } from "preact/hooks";
 import { FileSection } from "./files.tsx";
 import { FULL_AT, type Item, uniqueKeys } from "./inbox.ts";
-import { diffHref, fileHref, projectHref } from "./pages.ts";
-import { baseName } from "./paths.ts";
-import { agentCounts, projectSections, statusState } from "./pulls.ts";
-import type { AgentView } from "./agents.ts";
-import type { Pane, ProjectView } from "./project/project.ts";
-import type { State } from "./state.ts";
-import { Linked, matches, send } from "./ui.tsx";
-import { WatchSection } from "./watcher.tsx";
+import { diffHref, fileHref, projectHref } from "../pages.ts";
+import { baseName } from "../paths.ts";
+import { agentCounts, projectSections, statusState } from "../pulls.ts";
+import type { AgentView } from "../agents.ts";
+import type { Pane, ProjectView } from "./project.ts";
+import type { State } from "../state.ts";
+import { Linked, matches, send } from "../ui.tsx";
+import { WatchSection } from "../watcher.tsx";
 
 const MARKS: Record<string, string> = {
   you: "you",

@@ -3,13 +3,13 @@
 
 import { h } from "preact";
 import { useEffect, useMemo, useRef } from "preact/hooks";
-import { CommentAt, type Review, SendReview, type Sender, SentNote, useReview, useSender } from "./review/view.tsx";
-import { type MarkdownNode, commentable, markdownTree } from "./markdown.ts";
-import { projectHref } from "./pages.ts";
-import { baseName } from "./paths.ts";
-import { type Comment, commentKey, displacedFromBlocks } from "./review/review.ts";
-import type { State } from "./state.ts";
-import { Refresh, useFetched } from "./ui.tsx";
+import { CommentAt, type Review, SendReview, type Sender, SentNote, useReview, useSender } from "../review/view.tsx";
+import { type MarkdownNode, commentable, markdownTree } from "../markdown.ts";
+import { projectHref } from "../pages.ts";
+import { baseName } from "../paths.ts";
+import { type Comment, commentKey, displacedFromBlocks } from "../review/review.ts";
+import type { State } from "../state.ts";
+import { Refresh, useFetched } from "../ui.tsx";
 
 type FileText = { text?: string; error?: string };
 

@@ -5,7 +5,7 @@
 import { mkdirSync } from "node:fs";
 import { basename, dirname } from "node:path";
 import * as headless from "./headless.ts";
-import type { Item } from "./inbox.ts";
+import type { Item } from "./project/inbox.ts";
 import {
   type NotesText, type Owner, escapeRegExp, ownedItem, projectName, projectOf,
 } from "./owners.ts";

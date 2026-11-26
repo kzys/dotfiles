@@ -1,7 +1,7 @@
 // Putting together what the watcher's checks found, and the title it
 // gives the watch workspace.
 
-import type { Item } from "./inbox.ts";
+import type { Item } from "./project/inbox.ts";
 import type { Herdr } from "./herdr/backend.ts";
 import type { Section, Watched } from "./state.ts";
 

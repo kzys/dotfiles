@@ -2,7 +2,7 @@
 // section listing the open ones, and inbox items for those that wait on
 // the user.
 
-import type { Item } from "./inbox.ts";
+import type { Item } from "./project/inbox.ts";
 import { type Owner, ownedItem, pad } from "./owners.ts";
 import type { HerdrPane } from "./panes.ts";
 import type { PullRequest } from "./state.ts";
