@@ -2,7 +2,7 @@
 // each returning what follows from the state it is given, with no terminal
 // involved.
 
-import type { Row } from "../rows.ts";
+import type { Row } from "./rows.ts";
 
 /** Returns how many terminal columns the character c takes. */
 function width(c: string): number {

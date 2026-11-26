@@ -4,7 +4,7 @@
 import type { Hono } from "hono";
 import type { Backend } from "../herdr/backend.ts";
 import { jsonBody, limit, only } from "../http.ts";
-import { type PlanDeps, choices, inboxChoices, open, paneRecords, plan, rowNotes } from "../rows.ts";
+import { type PlanDeps, choices, inboxChoices, open, paneRecords, plan, rowNotes } from "./rows.ts";
 import { codexSessions } from "../agents/sessions.ts";
 import type { State } from "../state.ts";
 

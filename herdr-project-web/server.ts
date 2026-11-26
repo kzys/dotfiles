@@ -42,7 +42,7 @@ import { Namer, reportTitle } from "./agents/naming.ts";
 import { everyPane, pageState } from "./page-state.ts";
 import { appBackend, appCommand, appHerdrPanes, appSpaces, claudeSessions } from "./herdr/app.ts";
 import { CoreFeed } from "./herdr/core.ts";
-import { background } from "./rows.ts";
+import { background } from "./picker/rows.ts";
 import { routeDiff } from "./diff/routes.ts";
 import { routeFiles } from "./project/routes.ts";
 import { routeLearnings } from "./learnings/routes.ts";

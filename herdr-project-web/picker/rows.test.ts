@@ -6,9 +6,9 @@ import { test } from "node:test";
 import {
   type PaneRecord, type PlanDeps, choices, inboxChoices, notes, open, paneRecords, plan, rowNotes, workspacesToName,
 } from "./rows.ts";
-import type { OpenHerdr } from "./herdr/backend.ts";
-import { transcriptDir } from "./agents/sessions.ts";
-import type { State } from "./state.ts";
+import type { OpenHerdr } from "../herdr/backend.ts";
+import { transcriptDir } from "../agents/sessions.ts";
+import type { State } from "../state.ts";
 
 const temp = () => mkdtempSync(join(tmpdir(), "rows-"));
 const pane = (o: Partial<PaneRecord>): PaneRecord => ({ agent: "claude", workspace: "w1", cwd: "/x", pane: "w1:p1", session: "", role: "", ...o });

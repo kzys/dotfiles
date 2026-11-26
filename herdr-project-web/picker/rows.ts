@@ -7,13 +7,13 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { frontMatter } from "./project/frontmatter.ts";
-import { type Agent, AGENTS, isProject, newProject, quote } from "./agents/launch.ts";
-import { type CodexSession, codexContext, reportedRole, title, transcriptDir, transcripts } from "./agents/sessions.ts";
-import type { Herdr, OpenHerdr } from "./herdr/backend.ts";
-import { within } from "./paths.ts";
-import { readReadme, readmeName, roleNotes } from "./project/project.ts";
-import type { State } from "./state.ts";
+import { frontMatter } from "../project/frontmatter.ts";
+import { type Agent, AGENTS, isProject, newProject, quote } from "../agents/launch.ts";
+import { type CodexSession, codexContext, reportedRole, title, transcriptDir, transcripts } from "../agents/sessions.ts";
+import type { Herdr, OpenHerdr } from "../herdr/backend.ts";
+import { within } from "../paths.ts";
+import { readReadme, readmeName, roleNotes } from "../project/project.ts";
+import type { State } from "../state.ts";
 
 // Kind, directory, agent:session, and what the picker shows: as one line,
 // and as columns, unpadded, for a picker that lays them out itself.

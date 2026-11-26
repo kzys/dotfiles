@@ -9,7 +9,7 @@ import type { Herdr } from "../herdr/backend.ts";
 import type { Ask } from "../herdr/tui.ts";
 import { projectDir } from "./launch.ts";
 import { projectDirs, projectLabels, readReadme, readmeName } from "../project/project.ts";
-import { workspacesToName } from "../rows.ts";
+import { workspacesToName } from "../picker/rows.ts";
 import { loadState, saveState } from "../statefile.ts";
 
 /** Reports the title in the front matter of the project in directory to
