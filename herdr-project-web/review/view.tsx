@@ -5,8 +5,8 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import {
   type Comment, type Reviewer, clearReviewer, commentKey, receiverStarted, receiverStatus, reviewMessage, reviewers, withComment,
 } from "./review.ts";
-import type { State } from "./state.ts";
-import { send as post } from "./ui.tsx";
+import type { State } from "../state.ts";
+import { send as post } from "../ui.tsx";
 
 /** The comments on a diff or a file, kept in this browser until they are sent, even
  * as they are written, and the one being written. */
