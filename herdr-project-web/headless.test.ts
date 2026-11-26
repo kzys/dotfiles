@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { connected, connectors, run, structured } from "./headless.ts";
-import { checkQueue } from "./queues.ts";
+import { checkQueue } from "./checks/queues.ts";
 
 test("reads structured output", () => {
   const found = [{ channel_id: "C1" }];

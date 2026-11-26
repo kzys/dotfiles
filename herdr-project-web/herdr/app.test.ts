@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { appAgentTakes, spaceNames, appHerdrPanes, appOpener, appListedPanes, appPanes, appTerminals, claudeSessions, procParent, psParents, terminalSession } from "./app.ts";
-import { open } from "../rows.ts";
+import { open } from "../picker/rows.ts";
 
 const terminal = (o: object) => ({
   address: "t1", state: "live", cwd: "/start", agent: "claude-code",

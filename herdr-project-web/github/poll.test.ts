@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { pullRequests } from "./pullrequest.ts";
 import { wakeMessage } from "./changes.ts";
 import { type Snapshot, look, poll } from "./poll.ts";
-import { view } from "../github-section.ts";
+import { view } from "../checks/github-section.ts";
 import { fakeHerdr, gitCheckout, prNode, search, tmp } from "./fixtures.ts";
 
 test("polls pull requests", async () => {

@@ -7,7 +7,7 @@
   },
   "scripts": {
     "start": "node --experimental-strip-types --disable-warning=ExperimentalWarning server.ts",
-    "test": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test \"*.test.ts\" \"github/*.test.ts\" \"herdr/*.test.ts\" \"diff/*.test.ts\" \"ask/*.test.ts\" \"picker/*.test.ts\" \"project/*.test.ts\" \"pulls/*.test.ts\"",
+    "test": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test \"*.test.ts\" \"github/*.test.ts\" \"herdr/*.test.ts\" \"diff/*.test.ts\" \"ask/*.test.ts\" \"picker/*.test.ts\" \"project/*.test.ts\" \"pulls/*.test.ts\" \"learnings/*.test.ts\" \"review/*.test.ts\" \"checks/*.test.ts\" \"agents/*.test.ts\" \"watch/*.test.ts\"",
     "check": "tsc --noEmit"
   },
   "dependencies": {

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { PickerScreen, clip, columns, found, hint, listLines, parseKeys, printable, spans, visible } from "./tui.ts";
-import type { Row } from "../rows.ts";
+import type { Row } from "./rows.ts";
 
 const picker = new PickerScreen(["claude", "codex"]);
 const rows: Row[] = [

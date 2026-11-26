@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Herdr } from "./herdr/backend.ts";
-import { linkParts } from "./inbox.ts";
+import { linkParts } from "./project/inbox.ts";
 import { readProjects } from "./project/project.ts";
 import { type Section, type Watched, pullRequestLinks, stateOf } from "./state.ts";
 

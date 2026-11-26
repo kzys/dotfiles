@@ -2,7 +2,7 @@
 
 import { createContext } from "preact";
 import { useContext, useEffect, useRef, useState } from "preact/hooks";
-import { linkParts } from "./inbox.ts";
+import { linkParts } from "./project/inbox.ts";
 
 // The URLs of the open pull requests by their labels, like name#N.
 export const Links = createContext<Record<string, string>>({});

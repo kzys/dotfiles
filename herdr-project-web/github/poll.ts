@@ -3,9 +3,9 @@
 // checks, review or state change.
 
 import { basename } from "node:path";
-import { type NotesText, type Owner, notesTexts, projectNameIn } from "../owners.ts";
+import { type NotesText, type Owner, notesTexts, projectNameIn } from "../checks/owners.ts";
 import { isFree } from "../herdr/backend.ts";
-import type { HerdrPane } from "../panes.ts";
+import type { HerdrPane } from "../checks/panes.ts";
 import { loadState, saveState } from "../statefile.ts";
 import { fetch } from "./api.ts";
 import { type Seen, events, remember, wakeMessage } from "./changes.ts";

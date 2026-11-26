@@ -3,10 +3,10 @@
 
 import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, readSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
-import { frontMatter } from "../frontmatter.ts";
+import { frontMatter } from "./frontmatter.ts";
 import type { Herdr } from "../herdr/backend.ts";
-import { type Item, projectItems } from "../inbox.ts";
-import { isProject } from "../launch.ts";
+import { type Item, projectItems } from "./inbox.ts";
+import { isProject } from "../agents/launch.ts";
 import { within } from "../paths.ts";
 import { isCheckout, lastSubject, worktreeDirs } from "./worktrees.ts";
 
