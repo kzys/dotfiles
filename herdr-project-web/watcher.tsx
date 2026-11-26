@@ -2,7 +2,7 @@
 // Linear and the rest of its sections.
 
 import { uniqueKeys } from "./project/inbox.ts";
-import { type AgentState, agentState, readiness, runsByState } from "./pulls.ts";
+import { type AgentState, agentState, readiness, runsByState } from "./pulls/pulls.ts";
 import type { Run } from "./github/pullrequest.ts";
 import type { Entry, PullRequest, Section } from "./state.ts";
 import { Linked, matches } from "./ui.tsx";

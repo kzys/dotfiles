@@ -1,8 +1,8 @@
 // What the page says about an open pull request.
 
-import type { Run } from "./github/pullrequest.ts";
-import { isFree } from "./herdr/backend.ts";
-import type { PullRequest, Section } from "./state.ts";
+import type { Run } from "../github/pullrequest.ts";
+import { isFree } from "../herdr/backend.ts";
+import type { PullRequest, Section } from "../state.ts";
 
 // What the agent working on a pull request is doing.
 export type AgentState = "working" | "blocked" | "idle" | "unknown";

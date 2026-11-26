@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { agentCounts, agentState, projectSections, readiness } from "./pulls.ts";
-import { type Entry, type PullRequest, agentStates } from "./state.ts";
+import { type Entry, type PullRequest, agentStates } from "../state.ts";
 
 test("counts agents by state", () => {
   const panes = ["idle", "working", "done", "blocked", "working", null].map((status) => ({ status }));

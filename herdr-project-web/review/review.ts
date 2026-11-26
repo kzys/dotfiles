@@ -3,7 +3,7 @@
 
 import { type FileDiff, filePath } from "../diff/diff.ts";
 import { within } from "../paths.ts";
-import { type AgentState, statusState } from "../pulls.ts";
+import { type AgentState, statusState } from "../pulls/pulls.ts";
 import type { State } from "../state.ts";
 
 // code is what it is on: one line of a diff, or the lines of a Markdown

@@ -6,7 +6,7 @@ import { FileSection } from "./files.tsx";
 import { FULL_AT, type Item, uniqueKeys } from "./inbox.ts";
 import { diffHref, fileHref, projectHref } from "../pages.ts";
 import { baseName } from "../paths.ts";
-import { agentCounts, projectSections, statusState } from "../pulls.ts";
+import { agentCounts, projectSections, statusState } from "../pulls/pulls.ts";
 import type { AgentView } from "../agents.ts";
 import type { Pane, ProjectView } from "./project.ts";
 import type { State } from "../state.ts";
