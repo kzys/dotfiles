@@ -1,11 +1,11 @@
 // The page's view of what the watcher found: pull requests, Slack,
 // Linear and the rest of its sections.
 
-import { uniqueKeys } from "./project/inbox.ts";
-import { type AgentState, agentState, readiness, runsByState } from "./pulls/pulls.ts";
-import type { Run } from "./github/pullrequest.ts";
-import type { Entry, PullRequest, Section } from "./state.ts";
-import { Linked, matches } from "./ui.tsx";
+import { uniqueKeys } from "../project/inbox.ts";
+import { type AgentState, agentState, readiness, runsByState } from "../pulls/pulls.ts";
+import type { Run } from "../github/pullrequest.ts";
+import type { Entry, PullRequest, Section } from "../state.ts";
+import { Linked, matches } from "../ui.tsx";
 
 /** Returns how the checks of a pull request went, for its status dot,
  * from their rollup state. */

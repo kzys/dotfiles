@@ -2,11 +2,11 @@
 // panes that have long been idle.
 
 import { createHash } from "node:crypto";
-import { FULL_AT, type Item } from "./project/inbox.ts";
-import { projectDir } from "./launch.ts";
+import { FULL_AT, type Item } from "../project/inbox.ts";
+import { projectDir } from "../launch.ts";
 import { projectName } from "./owners.ts";
-import { type Herdr, isFree } from "./herdr/backend.ts";
-import { loadState, saveState } from "./statefile.ts";
+import { type Herdr, isFree } from "../herdr/backend.ts";
+import { loadState, saveState } from "../statefile.ts";
 
 // A pane as herdr pane list shows it.
 export type HerdrPane = Herdr["panes"][number];

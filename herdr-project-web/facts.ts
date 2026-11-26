@@ -11,7 +11,7 @@ import type { Herdr } from "./herdr/backend.ts";
 import type { HookEvent } from "./hooks.ts";
 import type { ProjectRead } from "./project/project.ts";
 import { agentStates } from "./state.ts";
-import type { Found } from "./watched.ts";
+import type { Found } from "./checks/watched.ts";
 
 export type FactValues = {
   // Herdr's panes and workspaces, null while it can't be asked.

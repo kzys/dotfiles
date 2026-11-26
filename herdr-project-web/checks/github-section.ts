@@ -2,13 +2,13 @@
 // section listing the open ones, and inbox items for those that wait on
 // the user.
 
-import type { Item } from "./project/inbox.ts";
+import type { Item } from "../project/inbox.ts";
 import { type Owner, ownedItem, pad } from "./owners.ts";
 import type { HerdrPane } from "./panes.ts";
-import type { PullRequest } from "./state.ts";
+import type { PullRequest } from "../state.ts";
 import type { Found } from "./watched.ts";
-import type { PullCheck } from "./github/poll.ts";
-import { FAILED, type PullRequest as Pull, failure, label } from "./github/pullrequest.ts";
+import type { PullCheck } from "../github/poll.ts";
+import { FAILED, type PullRequest as Pull, failure, label } from "../github/pullrequest.ts";
 
 const MARKS: Record<string, string> = { SUCCESS: "✓", FAILURE: "✗", ERROR: "✗", PENDING: "…", EXPECTED: "…" };
 

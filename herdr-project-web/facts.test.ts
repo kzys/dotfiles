@@ -4,7 +4,7 @@ import { effect, signal } from "@preact/signals-core";
 import { Facts } from "./facts.ts";
 import type { Herdr } from "./herdr/backend.ts";
 import type { HookEvent } from "./hooks.ts";
-import type { Found } from "./watched.ts";
+import type { Found } from "./checks/watched.ts";
 
 const asked: HookEvent = { agent: "claude", event: "PermissionRequest", session: "s", detail: "Bash: ls", at: 5 };
 const pane = (pane_id: string, agent_status: string): Herdr["panes"][number] =>

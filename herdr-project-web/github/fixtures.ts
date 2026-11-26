@@ -5,7 +5,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { HerdrPane } from "../panes.ts";
+import type { HerdrPane } from "../checks/panes.ts";
 import type { PollHerdr } from "./poll.ts";
 
 export function prNode(number: number, branch: string, {

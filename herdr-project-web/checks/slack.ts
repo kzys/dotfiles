@@ -4,13 +4,13 @@
 
 import { mkdirSync } from "node:fs";
 import { basename, dirname } from "node:path";
-import * as headless from "./headless.ts";
-import type { Item } from "./project/inbox.ts";
+import * as headless from "../headless.ts";
+import type { Item } from "../project/inbox.ts";
 import {
   type NotesText, type Owner, escapeRegExp, ownedItem, projectName, projectOf,
 } from "./owners.ts";
-import { loadState, saveState } from "./statefile.ts";
-import { day } from "./day.ts";
+import { loadState, saveState } from "../statefile.ts";
+import { day } from "../day.ts";
 
 // The claude.ai connector the headless session needs.
 export const CONNECTOR = "Slack";

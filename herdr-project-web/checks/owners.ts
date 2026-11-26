@@ -3,8 +3,8 @@
 
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
-import type { Item } from "./project/inbox.ts";
-import { projectLabels, readReadme, roleNotes } from "./project/project.ts";
+import type { Item } from "../project/inbox.ts";
+import { projectLabels, readReadme, roleNotes } from "../project/project.ts";
 
 // Who works on something: the project directory, the worktree in it, if
 // known, and the role of the agent, if known.

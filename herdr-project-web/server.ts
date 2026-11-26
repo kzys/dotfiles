@@ -17,7 +17,7 @@ import {
   type AgentActions, type Queued, Outbox, fromPage, permission, routeAgents, undelivered,
 } from "./agents.ts";
 import * as github from "./github/poll.ts";
-import * as pullSection from "./github-section.ts";
+import * as pullSection from "./checks/github-section.ts";
 import { type PullChecked, PullRequests } from "./github/watch.ts";
 import { BoardStore, boardCards } from "./pulls/board-store.ts";
 import { type Herdr, canTake } from "./herdr/backend.ts";
@@ -26,11 +26,11 @@ import { herdrClient, herdrSocket, readHerdr, tuiBackend } from "./herdr/tui.ts"
 import { type HookLog, hookServer, listenOn, speaker } from "./hooks.ts";
 import { jsonBody, limit } from "./http.ts";
 import { ask as headlessAsk, connectors } from "./headless.ts";
-import * as linear from "./linear.ts";
-import { notesTexts } from "./owners.ts";
+import * as linear from "./checks/linear.ts";
+import { notesTexts } from "./checks/owners.ts";
 import { NESTED_PATHS, PAGE_PATHS } from "./pages.ts";
-import { type PaneHerdr, checkPanes } from "./panes.ts";
-import { type Checked, checkQueue } from "./queues.ts";
+import { type PaneHerdr, checkPanes } from "./checks/panes.ts";
+import { type Checked, checkQueue } from "./checks/queues.ts";
 import { Schedule } from "./schedule.ts";
 import { batch } from "@preact/signals-core";
 import { AGAIN, effect } from "./store.ts";
@@ -49,11 +49,11 @@ import { routeLearnings } from "./learnings/routes.ts";
 import { routePulls } from "./pulls/routes.ts";
 import { type PickerServer, routePicker } from "./picker/routes.ts";
 import { claudeSessionDirs, codexSessionDirs, codexSessions } from "./sessions.ts";
-import * as slack from "./slack.ts";
+import * as slack from "./checks/slack.ts";
 import { loadState, saveState } from "./statefile.ts";
 import { checkoutOf, linkCheckout, projectDirs, readProjects } from "./project/project.ts";
 import { type State, type Watched, agentStates } from "./state.ts";
-import { type Found, title, watchWorkspace, watchedFrom } from "./watched.ts";
+import { type Found, title, watchWorkspace, watchedFrom } from "./checks/watched.ts";
 
 const here = import.meta.dirname;
 const home = homedir();

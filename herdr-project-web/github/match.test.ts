@@ -5,8 +5,8 @@ import { test } from "node:test";
 import { pullRequests } from "./pullrequest.ts";
 import { agentPane, checkoutPanes, owner, worktrees } from "./match.ts";
 import { gitCheckout, prNode, search, tmp } from "./fixtures.ts";
-import { notesTexts } from "../owners.ts";
-import type { HerdrPane } from "../panes.ts";
+import { notesTexts } from "../checks/owners.ts";
+import type { HerdrPane } from "../checks/panes.ts";
 
 test("finds agents in checkouts of pull requests", async () => {
   const root = tmp();

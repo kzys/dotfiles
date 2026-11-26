@@ -11,7 +11,7 @@ import type { AgentView } from "../agents.ts";
 import type { Pane, ProjectView } from "./project.ts";
 import type { State } from "../state.ts";
 import { Linked, matches, send } from "../ui.tsx";
-import { WatchSection } from "../watcher.tsx";
+import { WatchSection } from "../checks/view.tsx";
 
 const MARKS: Record<string, string> = {
   you: "you",

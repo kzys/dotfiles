@@ -2,7 +2,7 @@
 // it has come.
 
 import type { CopilotReview, PullRequest as Pull } from "../github/pullrequest.ts";
-import type { Owner } from "../owners.ts";
+import type { Owner } from "../checks/owners.ts";
 
 // The board's columns, in order, each titled by what its pull requests
 // wait for.

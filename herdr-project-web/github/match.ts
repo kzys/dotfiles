@@ -5,8 +5,8 @@ import { execFile } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { type NotesText, type Owner, escapeRegExp } from "../owners.ts";
-import { type HerdrPane, paneCwd } from "../panes.ts";
+import { type NotesText, type Owner, escapeRegExp } from "../checks/owners.ts";
+import { type HerdrPane, paneCwd } from "../checks/panes.ts";
 import { within } from "../paths.ts";
 import { type PullRequest as Pull, byString, repoName } from "./pullrequest.ts";
 

@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { pullRequests } from "./github/pullrequest.ts";
+import { pullRequests } from "../github/pullrequest.ts";
 import { screen, shown, waitingItems } from "./github-section.ts";
-import { prNode, search } from "./github/fixtures.ts";
+import { prNode, search } from "../github/fixtures.ts";
 
 test("lists pull requests waiting on me", () => {
   const prs = pullRequests(search(
